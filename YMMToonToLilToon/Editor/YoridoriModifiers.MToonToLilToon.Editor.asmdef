@@ -3,6 +3,7 @@
     "rootNamespace": "YoridoriModifiers.MToonToLilToon",
     "references": [
         "nadena.dev.ndmf",
+        "YoridoriModifiers.Core.Editor",
         "YoridoriModifiers.MToonToLilToon.Runtime",
         "VRC.SDK3A"
     ],

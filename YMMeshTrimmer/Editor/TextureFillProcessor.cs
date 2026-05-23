@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using YoridoriModifiers.Core.Editor;
 
 namespace YoridoriModifiers.MeshTrimmer
 {
@@ -27,7 +28,7 @@ public static class TexturePostProcessProcessor
 
             if (!processedTextureCache.TryGetValue(target.mainTexture, out Texture2D processedTexture))
             {
-                if (!TryCreateProcessedTexture(target.mainTexture, target.texturePostProcessMode, target.fillColor, trimmer, out processedTexture))
+                if (!TryCreateProcessedTexture(target.mainTexture, target.texturePostProcessMode, target.fillColor, trimmer, true, out processedTexture))
                 {
                     continue;
                 }
@@ -90,6 +91,7 @@ public static class TexturePostProcessProcessor
         MeshTrimmerComponent.TexturePostProcessMode mode,
         Color fillColor,
         MeshTrimmerComponent trimmer,
+        bool compress,
         out Texture2D processed)
     {
         processed = null;
@@ -132,6 +134,10 @@ public static class TexturePostProcessProcessor
         {
             processed.SetPixels(pixels);
             processed.Apply(source.mipmapCount > 1, false);
+            if (compress)
+            {
+                GeneratedTextureUtility.CompressGeneratedTexture(processed, source.name);
+            }
             return true;
         }
         catch (UnityException ex)
@@ -150,7 +156,7 @@ public static class TexturePostProcessProcessor
         MeshTrimmerComponent trimmer,
         out Texture2D processed)
     {
-        return TryCreateProcessedTexture(source, mode, fillColor, trimmer, out processed);
+        return TryCreateProcessedTexture(source, mode, fillColor, trimmer, false, out processed);
     }
 
     private static Texture2D CreateWritableTexture(int width, int height, Texture2D source, bool linear)

@@ -3,6 +3,7 @@ using System.Linq;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
+using YoridoriModifiers.Core.Editor;
 using UnityEngine.Rendering;
 
 namespace YoridoriModifiers.MToonToLilToon
@@ -1260,14 +1261,8 @@ namespace YoridoriModifiers.MToonToLilToon
 
         private static void CompressGeneratedAtlas(Texture2D atlas, string propertyName)
         {
-            if (atlas == null) throw new System.InvalidOperationException($"CompressGeneratedAtlas: atlas is null ({propertyName}).");
             var isNormal = string.Equals(propertyName, "_BumpMap", System.StringComparison.OrdinalIgnoreCase);
-            var targetFormat = isNormal ? TextureFormat.DXT5 : TextureFormat.DXT5;
-            EditorUtility.CompressTexture(atlas, targetFormat, TextureCompressionQuality.Normal);
-            if (atlas.format == TextureFormat.RGBA32)
-            {
-                throw new System.InvalidOperationException($"Generated atlas compression failed for {propertyName}; format is still RGBA32.");
-            }
+            GeneratedTextureUtility.CompressGeneratedTexture(atlas, propertyName, isNormal);
         }
 
         private static void ConfigureAtlasImporter(TextureImporter importer, string propertyName)
@@ -1275,20 +1270,7 @@ namespace YoridoriModifiers.MToonToLilToon
             var isNormal = string.Equals(propertyName, "_BumpMap", System.StringComparison.OrdinalIgnoreCase);
             var isMask = string.Equals(propertyName, "_OutlineTex", System.StringComparison.OrdinalIgnoreCase)
                 || string.Equals(propertyName, "_OutlineMask", System.StringComparison.OrdinalIgnoreCase);
-            importer.textureType = isNormal ? TextureImporterType.NormalMap : TextureImporterType.Default;
-            importer.mipmapEnabled = true;
-            importer.streamingMipmaps = true;
-            importer.streamingMipmapsPriority = 0;
-            importer.textureCompression = TextureImporterCompression.Compressed;
-            importer.alphaSource = TextureImporterAlphaSource.FromInput;
-            importer.sRGBTexture = !isNormal && !isMask;
-            importer.crunchedCompression = false;
-            var settings = importer.GetPlatformTextureSettings("Standalone");
-            settings.overridden = true;
-            settings.format = TextureImporterFormat.Automatic;
-            settings.textureCompression = TextureImporterCompression.Compressed;
-            settings.crunchedCompression = false;
-            importer.SetPlatformTextureSettings(settings);
+            GeneratedTextureUtility.ConfigureGeneratedTextureImporter(importer, isNormal, isMask);
         }
 
         private static Color NeutralNormalColor()

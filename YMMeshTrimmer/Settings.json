@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "trimAlgorithm": "edgeCrossing",
+  "debugEdgeCrossingLogMaterials": ["Iris"],
+  "fillColors": [
+    {
+      "target": ["eyeline", "アイライン"],
+      "source": ["faceskin", "face_00_skin", "顔"],
+      "uv": [0.3242, 0.4902]
+    },
+    {
+      "target": ["iris", "瞳"],
+      "source": ["eyewhite", "whiteeye", "白目"],
+      "uv": [0.2646, 0.6367]
+    },
+    {
+      "target": ["eyehighlight", "ハイライト"],
+      "source": ["iris", "瞳"],
+      "uv": [0.2568, 0.5156]
+    }
+  ],
+  "preSubdivide": [
+    {
+      "target": ["eyelash", "まつげ", "睫毛"],
+      "level": 1
+    }
+  ]
+}

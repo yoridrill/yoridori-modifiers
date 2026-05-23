@@ -1,0 +1,91 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+using VRC.SDKBase;
+
+[AddComponentMenu("yoridrill/NDMF VRoid Mesh Trimmer")]
+public class NDMFVRoidMeshTrimmer : MonoBehaviour, IEditorOnly
+{
+    public enum TrimAlgorithm
+    {
+        EdgeCrossing = 0,
+        LegacyInsidePoint = 1
+    }
+    public enum TexturePostProcessMode
+    {
+        None = 0,
+        FillColor = 1,
+        Solidify = 2
+    }
+
+    [Serializable]
+    public class RendererSubMeshRef
+    {
+        public SkinnedMeshRenderer renderer;
+        public int subMeshIndex;
+        public Material material;
+    }
+
+    [Serializable]
+    public class TextureTargetSettings
+    {
+        public bool enabled = true;
+        public Texture2D mainTexture;
+        public bool enableTextureFill = true;
+        public TexturePostProcessMode texturePostProcessMode = TexturePostProcessMode.Solidify;
+        public Color fillColor = Color.black;
+        public bool enablePreSubdivide = false;
+        [Range(0, 2)] public int preSubdivideLevel = 0;
+        public bool preSubdivideQuadAware = false;
+        public List<RendererSubMeshRef> usages = new List<RendererSubMeshRef>();
+    }
+
+    [Serializable]
+    public class PreviewRecoveryRecord
+    {
+        public SkinnedMeshRenderer renderer;
+        public Mesh originalSharedMesh;
+        public Material[] originalSharedMaterials;
+    }
+
+    public bool enableForWindows = false;
+    public bool enableForAndroid = true;
+    public bool enableForiOS = true;
+    public bool enableTexturePadding = false;
+    public List<TextureTargetSettings> targets = new List<TextureTargetSettings>();
+
+    [Range(0f, 1f)] public float alphaThreshold = 0.5f;
+    [Min(0)] public int maskDilatePixels = 2;
+    [Min(0)] public int maskCleanupPixels = 2;
+
+    [Range(0f, 1f)] public float minIntersectionT = 0.02f;
+
+    [Range(0f, 1f)] public float maxIntersectionT = 0.98f;
+
+    [Range(0.01f, 100.0f)] public float minimumFragmentSizePermille = 0.2f;
+
+    [HideInInspector] [Min(0)] public int maskClosePixels = 1;
+    [HideInInspector] [Min(0)] public int fillSmallHolesPixels = 16;
+    [HideInInspector] [Min(0)] public int removeSmallIslandsPixels = 16;
+    [HideInInspector] [Min(0f)] public float minTriangleUvArea = 1e-10f;
+    [HideInInspector] [Min(0f)] public float minTriangleWorldArea = 1e-12f;
+    [HideInInspector] [Range(0.00001f, 0.1f)] public float edgeCrossingMergeEpsilon = 0.001f;
+    [HideInInspector] [Range(0.00001f, 0.1f)] public float edgeCrossingEndpointSnapEpsilon = 0.001f;
+    [HideInInspector] [Range(0.00001f, 0.1f)] public float edgeCrossingCacheQuantizeStep = 0.001f;
+    [HideInInspector] [Range(0.0001f, 0.1f)] public float edgeCrossingMinPolygonAreaRatio = 0.0002f;
+    [HideInInspector] [Range(0.0001f, 0.2f)] public float edgeCrossingMinChordLengthRatio = 0.014142f;
+
+    [SerializeField] private bool previewActiveSerialized;
+    [SerializeField] private List<PreviewRecoveryRecord> previewRecoveryRecords = new List<PreviewRecoveryRecord>();
+    [HideInInspector] public TrimAlgorithm trimAlgorithm = TrimAlgorithm.EdgeCrossing;
+    [HideInInspector] public bool debugEdgeCrossingRoutes = false;
+    [HideInInspector] public List<string> debugEdgeCrossingRouteMaterialFilters = new List<string>();
+
+    public bool PreviewActiveSerialized
+    {
+        get => previewActiveSerialized;
+        set => previewActiveSerialized = value;
+    }
+
+    public List<PreviewRecoveryRecord> PreviewRecoveryRecords => previewRecoveryRecords;
+}

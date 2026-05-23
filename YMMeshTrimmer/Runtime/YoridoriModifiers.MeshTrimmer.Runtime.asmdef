@@ -1,7 +1,9 @@
 {
-    "name": "NDMFVRoidArmPatch.Runtime",
-    "rootNamespace": "",
-    "references": [],
+    "name": "YoridoriModifiers.MeshTrimmer.Runtime",
+    "rootNamespace": "YoridoriModifiers.MeshTrimmer",
+    "references": [
+        "VRC.SDKBase"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

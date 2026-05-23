@@ -3,13 +3,15 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
+namespace YoridoriModifiers.MeshTrimmer
+{
 public static class MeshTrimProcessor
 {
     private const float DefaultMinPolygonAreaRatio = 0.01f;
     private const float DefaultMinChordLengthRatio = 0.03f;
     private const float LoopDuplicateUvEpsilonSqr = 1e-12f;
 
-    private static bool IsVerbose(NDMFVRoidMeshTrimmer trimmer)
+    private static bool IsVerbose(MeshTrimmerComponent trimmer)
         => trimmer != null && trimmer.debugEdgeCrossingRoutes;
     public struct VertexSource
     {
@@ -96,12 +98,12 @@ public static class MeshTrimProcessor
         public int routeMajorityFallback;
     }
 
-    public static void ApplyTrim(NDMFVRoidMeshTrimmer trimmer)
+    public static void ApplyTrim(MeshTrimmerComponent trimmer)
     {
         ApplyTrim(trimmer, true);
     }
 
-    public static void ApplyTrim(NDMFVRoidMeshTrimmer trimmer, bool preserveBlendShapes)
+    public static void ApplyTrim(MeshTrimmerComponent trimmer, bool preserveBlendShapes)
     {
         if (trimmer == null) return;
 
@@ -157,7 +159,7 @@ public static class MeshTrimProcessor
         }
 
         if (IsVerbose(trimmer))
-            Debug.Log($"[NDMF VRoid Mesh Trimmer] Trim task renderers={tasksByRenderer.Count}, PreSubdivideEnabledTargetCount={preSubdivideEnabledTargetCount}, QuadAwareEnabledTargetCount={quadAwareEnabledTargetCount}, TrimAlgorithm={trimmer.trimAlgorithm}");
+            Debug.Log($"[YM Mesh Trimmer] Trim task renderers={tasksByRenderer.Count}, PreSubdivideEnabledTargetCount={preSubdivideEnabledTargetCount}, QuadAwareEnabledTargetCount={quadAwareEnabledTargetCount}, TrimAlgorithm={trimmer.trimAlgorithm}");
         foreach (var kv in tasksByRenderer)
         {
             ProcessRenderer(kv.Key, kv.Value, trimmer, preserveBlendShapes);
@@ -167,7 +169,7 @@ public static class MeshTrimProcessor
     private static void ProcessRenderer(
         SkinnedMeshRenderer renderer,
         Dictionary<int, SubMeshTask> tasks,
-        NDMFVRoidMeshTrimmer trimmer,
+        MeshTrimmerComponent trimmer,
         bool preserveBlendShapes)
     {
         ApplyDerivedMeshSettings(trimmer);
@@ -203,7 +205,7 @@ public static class MeshTrimProcessor
 
         if (!hasUv)
         {
-            Debug.LogWarning($"[NDMF VRoid Mesh Trimmer] UV missing. Renderer skipped: {renderer.name}");
+            Debug.LogWarning($"[YM Mesh Trimmer] UV missing. Renderer skipped: {renderer.name}");
             return;
         }
 
@@ -270,7 +272,7 @@ public static class MeshTrimProcessor
                 ? $", RouteWholeKeep={stats.routeWholeKeep}, RouteWholeTrim={stats.routeWholeTrim}, RouteOneLine={stats.routeOneLine}, RouteTwoLineOddOddEven={stats.routeTwoLineOddOddEven}, RouteTwoLineEvenEven={stats.routeTwoLineEvenEven}, RouteMajorityFallback={stats.routeMajorityFallback}, MinFragPermille={trimmer.minimumFragmentSizePermille:F3}, MinPolyRatio={trimmer.edgeCrossingMinPolygonAreaRatio:F6}, MinChordRatio={trimmer.edgeCrossingMinChordLengthRatio:F6}"
                 : string.Empty;
             if (IsVerbose(trimmer))
-            Debug.Log($"[NDMF VRoid Mesh Trimmer] Renderer={renderer.name}, SubMesh={sub}, Texture={task.texture.name}, PreSubdivideEnabled={task.enablePreSubdivide}, PreSubdivideLevel={task.preSubdivideLevel}, QuadAware={task.preSubdivideQuadAware}, QuadCandidates={quadCandidates}, AcceptedQuads={acceptedQuads}, RejectedQuadCandidates={rejectedQuads}, TriangleFallbackCount={triFallback}, TrianglesBeforePreSubdivide={triBeforeSub}, TrianglesAfterPreSubdivide={workingIndices.Length / 3}, PreSubdivideAddedVertices={preAddedVertices}, PreSubdivideMs={swPre.ElapsedMilliseconds}, " +
+            Debug.Log($"[YM Mesh Trimmer] Renderer={renderer.name}, SubMesh={sub}, Texture={task.texture.name}, PreSubdivideEnabled={task.enablePreSubdivide}, PreSubdivideLevel={task.preSubdivideLevel}, QuadAware={task.preSubdivideQuadAware}, QuadCandidates={quadCandidates}, AcceptedQuads={acceptedQuads}, RejectedQuadCandidates={rejectedQuads}, TriangleFallbackCount={triFallback}, TrianglesBeforePreSubdivide={triBeforeSub}, TrianglesAfterPreSubdivide={workingIndices.Length / 3}, PreSubdivideAddedVertices={preAddedVertices}, PreSubdivideMs={swPre.ElapsedMilliseconds}, " +
                       $"OriginalTriangles={stats.originalTriangles}, OutputTriangles={stats.outputTriangles}, RemovedTriangles={stats.removedTriangles}, " +
                       $"AddedVertices={stats.addedVertices}, Intersections={stats.intersections}, " +
                       $"AllInsideButInteriorOutside={stats.allInsideButInteriorOutside}, AllOutsideButInteriorInside={stats.allOutsideButInteriorInside}, " +
@@ -282,7 +284,7 @@ public static class MeshTrimProcessor
 
         Mesh dst = new Mesh
         {
-            name = src.name + "_NDMFVRoidTrimmed",
+            name = src.name + "_YoridoriMeshTrimmerTrimmed",
             indexFormat = vertices.Count > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16,
             subMeshCount = src.subMeshCount,
             bindposes = src.bindposes
@@ -312,7 +314,7 @@ public static class MeshTrimProcessor
         RestoreBlendShapeWeights(renderer, dst, savedBlendShapeNames, savedBlendShapeWeights);
     }
 
-    private static void ApplyDerivedMeshSettings(NDMFVRoidMeshTrimmer trimmer)
+    private static void ApplyDerivedMeshSettings(MeshTrimmerComponent trimmer)
     {
         if (trimmer == null) return;
         float minFragmentRatio = Mathf.Clamp(trimmer.minimumFragmentSizePermille, 0.01f, 100.0f) * 0.001f;
@@ -533,7 +535,7 @@ public static class MeshTrimProcessor
     private static TrimStats ProcessSubMesh(
         int[] srcIndices,
         AlphaMaskProcessor.AlphaMaskData maskData,
-        NDMFVRoidMeshTrimmer trimmer,
+        MeshTrimmerComponent trimmer,
         string debugRendererName,
         int debugSubMeshIndex,
         List<Vector3> vertices,
@@ -557,7 +559,7 @@ public static class MeshTrimProcessor
         string debugMaterialName)
     {
         // LegacyInsidePoint = existing advanced inside-point route (not 7-point majority fallback).
-        if (trimmer != null && trimmer.trimAlgorithm == NDMFVRoidMeshTrimmer.TrimAlgorithm.LegacyInsidePoint)
+        if (trimmer != null && trimmer.trimAlgorithm == MeshTrimmerComponent.TrimAlgorithm.LegacyInsidePoint)
         {
             return ProcessSubMeshInsidePoint(srcIndices, maskData, trimmer, vertices, normals, tangents, uv, uv2, uv3, uv4, colors, boneWeights,
                 hasNormals, hasTangents, hasUv2, hasUv3, hasUv4, hasColors, hasBoneWeights, vertexSources, dstIndices);
@@ -573,7 +575,7 @@ public static class MeshTrimProcessor
     private static TrimStats ProcessSubMeshEdgeCrossing(
         int[] srcIndices,
         AlphaMaskProcessor.AlphaMaskData maskData,
-        NDMFVRoidMeshTrimmer trimmer,
+        MeshTrimmerComponent trimmer,
         List<Vector3> vertices,
         List<Vector3> normals,
         List<Vector4> tangents,
@@ -659,7 +661,7 @@ public static class MeshTrimProcessor
                         {
                             LogOneLinePolygonAttempt(i / 3, ctx, result, polyFailReason, polyFailDetail);
                             LogOneLineMajorityBreakdown(i / 3, maskData, ctx, insideCount7);
-                            Debug.Log($"[NDMF VRoid Mesh Trimmer][OneLineDebug] tri={i / 3} fallback_majority7 insideCount={insideCount7} final={(insideCount7 >= 4 ? "WholeKeep" : "WholeTrim")}");
+                            Debug.Log($"[YM Mesh Trimmer][OneLineDebug] tri={i / 3} fallback_majority7 insideCount={insideCount7} final={(insideCount7 >= 4 ? "WholeKeep" : "WholeTrim")}");
                         }
                         finalAction = "FallbackMajority7";
                     }
@@ -728,8 +730,8 @@ public static class MeshTrimProcessor
 
         if (IsVerbose(trimmer))
         {
-            Debug.Log($"[NDMF VRoid Mesh Trimmer][EdgeRouteSummary] renderer={debugRendererName} subMesh={debugSubMeshIndex} material={debugMaterialName} triangles={stats.originalTriangles} routes={FormatCountMap(debugRouteCounts)} fallbacks={FormatCountMap(debugFallbackCounts)} suspiciousCount={suspicious.Count}");
-            for (int i = 0; i < suspicious.Count; i++) Debug.Log($"[NDMF VRoid Mesh Trimmer][EdgeRouteSuspicious] {suspicious[i]}");
+            Debug.Log($"[YM Mesh Trimmer][EdgeRouteSummary] renderer={debugRendererName} subMesh={debugSubMeshIndex} material={debugMaterialName} triangles={stats.originalTriangles} routes={FormatCountMap(debugRouteCounts)} fallbacks={FormatCountMap(debugFallbackCounts)} suspiciousCount={suspicious.Count}");
+            for (int i = 0; i < suspicious.Count; i++) Debug.Log($"[YM Mesh Trimmer][EdgeRouteSuspicious] {suspicious[i]}");
         }
 
         return stats;
@@ -761,7 +763,7 @@ public static class MeshTrimProcessor
         return float.TryParse(text.Substring(idx, end - idx), out value);
     }
 
-    private static bool ShouldEmitEdgeRouteDebugForMaterial(NDMFVRoidMeshTrimmer trimmer, string materialName)
+    private static bool ShouldEmitEdgeRouteDebugForMaterial(MeshTrimmerComponent trimmer, string materialName)
     {
         if (trimmer == null) return false;
         var filters = trimmer.debugEdgeCrossingRouteMaterialFilters;
@@ -777,7 +779,7 @@ public static class MeshTrimProcessor
         return false;
     }
 
-    private static bool IsOneLineDebugEnabled(NDMFVRoidMeshTrimmer trimmer, string materialName)
+    private static bool IsOneLineDebugEnabled(MeshTrimmerComponent trimmer, string materialName)
     {
         return trimmer != null
             && trimmer.debugEdgeCrossingRoutes
@@ -810,7 +812,7 @@ public static class MeshTrimProcessor
             }
             parts[i] = $"e{i}[{s[i]}-{e[i]}] before={beforeCount} after={info.crossings.Count} removed={removedCount} t=[{tlist}]";
         }
-        Debug.Log($"[NDMF VRoid Mesh Trimmer][EdgeRouteDebug] tri={triId} {parts[0]} {parts[1]} {parts[2]} route={result.route} fallback={majorityFallbackReason}");
+        Debug.Log($"[YM Mesh Trimmer][EdgeRouteDebug] tri={triId} {parts[0]} {parts[1]} {parts[2]} route={result.route} fallback={majorityFallbackReason}");
     }
 
     private static void LogOneLineDebug(int triId, EdgeCrossingTrimRouter.TriangleContext ctx, EdgeCrossingTrimRouter.TriangleProcessResult result, bool emitOk, string failReason, string failDetail)
@@ -824,7 +826,7 @@ public static class MeshTrimProcessor
         Vector2 bUv = hasPair ? EdgeCrossingTrimRouter.GetLocalCrossingUv(ctx, c1) : Vector2.zero;
         float d = hasPair ? Vector2.Distance(aUv, bUv) : -1f;
         string kept = result.keptInsideVertices == null ? "null" : $"[{string.Join(",", result.keptInsideVertices)}]";
-        Debug.Log($"[NDMF VRoid Mesh Trimmer][OneLineDebug] tri={triId} route={result.route} {e0} {e1} {e2} " +
+        Debug.Log($"[YM Mesh Trimmer][OneLineDebug] tri={triId} route={result.route} {e0} {e1} {e2} " +
                   $"c0={(hasPair ? $"(edgeIndex={c0.edgeIndex},edge={c0.edgeStart}-{c0.edgeEnd},t={c0.t:F6},before={(c0.isBeforeInside ? 1 : 0)},uv={aUv})" : "none")} " +
                   $"c1={(hasPair ? $"(edgeIndex={c1.edgeIndex},edge={c1.edgeStart}-{c1.edgeEnd},t={c1.t:F6},before={(c1.isBeforeInside ? 1 : 0)},uv={bUv})" : "none")} " +
                   $"keptInsideVertices={kept} splitUvDist={d:F8} emitOk={emitOk} emitFailReason={failReason} emitFailDetail={failDetail}");
@@ -882,7 +884,7 @@ public static class MeshTrimProcessor
             }
             float area = Mathf.Abs(ComputePolygonSignedAreaUvs(uvs));
             float ratio = srcArea > 0f ? area / srcArea : 0f;
-            Debug.Log($"[NDMF VRoid Mesh Trimmer][OneLineDebug] tri={triId} polygonAttempt p={p} c0=edge{c0.edgeIndex}({c0.edgeStart}-{c0.edgeEnd}) t={c0.t:F6} before={(c0.isBeforeInside?1:0)} uv={c0Uv} c1=edge{c1.edgeIndex}({c1.edgeStart}-{c1.edgeEnd}) t={c1.t:F6} before={(c1.isBeforeInside?1:0)} uv={c1Uv} polyUvs=[{string.Join(";", uvs)}] polyArea={area} srcArea={srcArea} areaRatio={ratio} failReason={failReason} failDetail={failDetail}");
+            Debug.Log($"[YM Mesh Trimmer][OneLineDebug] tri={triId} polygonAttempt p={p} c0=edge{c0.edgeIndex}({c0.edgeStart}-{c0.edgeEnd}) t={c0.t:F6} before={(c0.isBeforeInside?1:0)} uv={c0Uv} c1=edge{c1.edgeIndex}({c1.edgeStart}-{c1.edgeEnd}) t={c1.t:F6} before={(c1.isBeforeInside?1:0)} uv={c1Uv} polyUvs=[{string.Join(";", uvs)}] polyArea={area} srcArea={srcArea} areaRatio={ratio} failReason={failReason} failDetail={failDetail}");
         }
     }
 
@@ -931,12 +933,12 @@ public static class MeshTrimProcessor
         bool s12 = AlphaMaskProcessor.SampleMask(maskData, m12);
         bool s20 = AlphaMaskProcessor.SampleMask(maskData, m20);
         bool sc = AlphaMaskProcessor.SampleMask(maskData, c);
-        Debug.Log($"[NDMF VRoid Mesh Trimmer][OneLineDebug] tri={triId} majority7 v0={(v0?1:0)} v1={(v1?1:0)} v2={(v2?1:0)} m01={(s01?1:0)} m12={(s12?1:0)} m20={(s20?1:0)} centroid={(sc?1:0)} insideCount={insideCount} result={(insideCount>=4?"WholeKeep":"WholeTrim")}");
+        Debug.Log($"[YM Mesh Trimmer][OneLineDebug] tri={triId} majority7 v0={(v0?1:0)} v1={(v1?1:0)} v2={(v2?1:0)} m01={(s01?1:0)} m12={(s12?1:0)} m20={(s20?1:0)} centroid={(sc?1:0)} insideCount={insideCount} result={(insideCount>=4?"WholeKeep":"WholeTrim")}");
     }
 
     private static void EmitMajority7PointTriangle(
         AlphaMaskProcessor.AlphaMaskData maskData,
-        NDMFVRoidMeshTrimmer trimmer,
+        MeshTrimmerComponent trimmer,
         int i0, int i1, int i2,
         List<Vector3> vertices,
         List<Vector2> uv,
@@ -962,7 +964,7 @@ public static class MeshTrimProcessor
     private static bool TryEmitOneLineSplit(
         EdgeCrossingTrimRouter.TriangleProcessResult result,
         int i0, int i1, int i2,
-        NDMFVRoidMeshTrimmer trimmer,
+        MeshTrimmerComponent trimmer,
         List<Vector3> vertices, List<Vector3> normals, List<Vector4> tangents, List<Vector2> uv, List<Vector2> uv2, List<Vector2> uv3, List<Vector2> uv4,
         List<Color> colors, List<BoneWeight> boneWeights,
         bool hasNormals, bool hasTangents, bool hasUv2, bool hasUv3, bool hasUv4, bool hasColors, bool hasBoneWeights,
@@ -1028,7 +1030,7 @@ public static class MeshTrimProcessor
     private static int GetOrCreateCrossingVertex(
         EdgeCrossingTrimRouter.LocalCrossing crossing,
         Dictionary<(int, int, float), int> cache,
-        NDMFVRoidMeshTrimmer trimmer,
+        MeshTrimmerComponent trimmer,
         List<Vector3> vertices, List<Vector3> normals, List<Vector4> tangents, List<Vector2> uv, List<Vector2> uv2, List<Vector2> uv3, List<Vector2> uv4,
         List<Color> colors, List<BoneWeight> boneWeights,
         bool hasNormals, bool hasTangents, bool hasUv2, bool hasUv3, bool hasUv4, bool hasColors, bool hasBoneWeights,
@@ -1050,7 +1052,7 @@ public static class MeshTrimProcessor
     private static bool TryEmitInsidePolygons(
         EdgeCrossingTrimRouter.TriangleProcessResult result,
         int i0, int i1, int i2,
-        NDMFVRoidMeshTrimmer trimmer,
+        MeshTrimmerComponent trimmer,
         List<Vector3> vertices, List<Vector3> normals, List<Vector4> tangents, List<Vector2> uv, List<Vector2> uv2, List<Vector2> uv3, List<Vector2> uv4,
         List<Color> colors, List<BoneWeight> boneWeights,
         bool hasNormals, bool hasTangents, bool hasUv2, bool hasUv3, bool hasUv4, bool hasColors, bool hasBoneWeights,
@@ -1090,7 +1092,7 @@ public static class MeshTrimProcessor
                 float srcAreaDbg = Mathf.Abs((uv[i1].x - uv[i0].x) * (uv[i2].y - uv[i0].y) - (uv[i2].x - uv[i0].x) * (uv[i1].y - uv[i0].y)) * 0.5f;
                 float polyAreaDbg = Mathf.Abs(ComputePolygonSignedArea(indices, uv));
                 float ratioDbg = srcAreaDbg > 0f ? polyAreaDbg / srcAreaDbg : 0f;
-                Debug.Log($"[NDMF VRoid Mesh Trimmer][PolySimplify] route={result.route} poly={p} emitBeforeSimplify=[{FormatUvList6(before)}] emitAfterSimplify=[{FormatUvList6(after)}] emitRemovedAdjacentDuplicateCount={removedAdjacent} emitRemovedCollinearCount={removedCollinear} areaRatioAfter={ratioDbg:F8} adjacentDistance=[{FormatAdjacentDistances(after)}] duplicateEpsilon={Mathf.Sqrt(LoopDuplicateUvEpsilonSqr):F8}");
+                Debug.Log($"[YM Mesh Trimmer][PolySimplify] route={result.route} poly={p} emitBeforeSimplify=[{FormatUvList6(before)}] emitAfterSimplify=[{FormatUvList6(after)}] emitRemovedAdjacentDuplicateCount={removedAdjacent} emitRemovedCollinearCount={removedCollinear} areaRatioAfter={ratioDbg:F8} adjacentDistance=[{FormatAdjacentDistances(after)}] duplicateEpsilon={Mathf.Sqrt(LoopDuplicateUvEpsilonSqr):F8}");
             }
             if (indices.Count < 3) { failReason = "polygon_too_small_after_simplify"; failDetail = $"poly={p} polyBeforeSimplify=[{string.Join(";", before)}] polyAfterSimplify=[{string.Join(";", after)}] removedAdjacentDuplicateCount={removedAdjacent} removedCollinearCount={removedCollinear}"; return false; }
             if (!ValidateInsideLoop(indices, i0, i1, i2, uv, trimmer, out failDetail))
@@ -1170,7 +1172,7 @@ public static class MeshTrimProcessor
         }
     }
 
-    private static bool ValidateInsideLoop(List<int> indices, int i0, int i1, int i2, List<Vector2> uv, NDMFVRoidMeshTrimmer trimmer, out string failDetail)
+    private static bool ValidateInsideLoop(List<int> indices, int i0, int i1, int i2, List<Vector2> uv, MeshTrimmerComponent trimmer, out string failDetail)
     {
         failDetail = "none";
         if (indices == null || indices.Count < 3) { failDetail = "polygon_too_small"; return false; }
@@ -1195,7 +1197,7 @@ public static class MeshTrimProcessor
         return true;
     }
 
-    private static bool IsChordLengthValid(int i0, int i1, int i2, int cutA, int cutB, List<Vector2> uv, NDMFVRoidMeshTrimmer trimmer)
+    private static bool IsChordLengthValid(int i0, int i1, int i2, int cutA, int cutB, List<Vector2> uv, MeshTrimmerComponent trimmer)
     {
         float srcArea = Mathf.Abs((uv[i1].x - uv[i0].x) * (uv[i2].y - uv[i0].y) - (uv[i2].x - uv[i0].x) * (uv[i1].y - uv[i0].y)) * 0.5f;
         if (srcArea <= 0f) return false;
@@ -1255,7 +1257,7 @@ public static class MeshTrimProcessor
         int a, int b, int c,
         List<Vector3> vertices,
         List<Vector2> uv,
-        NDMFVRoidMeshTrimmer trimmer)
+        MeshTrimmerComponent trimmer)
     {
         if (a == b || b == c || c == a) return false;
         Vector2 uva = uv[a];
@@ -1277,7 +1279,7 @@ public static class MeshTrimProcessor
         return true;
     }
 
-    private static Dictionary<EdgeCrossingTrimRouter.EdgeKey, List<EdgeCrossingTrimRouter.EdgeCrossing>> BuildSharedCrossings(int[] srcIndices, AlphaMaskProcessor.AlphaMaskData maskData, List<Vector2> uv, NDMFVRoidMeshTrimmer trimmer, out Dictionary<EdgeCrossingTrimRouter.EdgeKey, int> rawCrossingCounts)
+    private static Dictionary<EdgeCrossingTrimRouter.EdgeKey, List<EdgeCrossingTrimRouter.EdgeCrossing>> BuildSharedCrossings(int[] srcIndices, AlphaMaskProcessor.AlphaMaskData maskData, List<Vector2> uv, MeshTrimmerComponent trimmer, out Dictionary<EdgeCrossingTrimRouter.EdgeKey, int> rawCrossingCounts)
     {
         var shared = new Dictionary<EdgeCrossingTrimRouter.EdgeKey, List<EdgeCrossingTrimRouter.EdgeCrossing>>();
         rawCrossingCounts = new Dictionary<EdgeCrossingTrimRouter.EdgeKey, int>();
@@ -1327,7 +1329,7 @@ public static class MeshTrimProcessor
         }
         if (trimmer != null && trimmer.debugEdgeCrossingRoutes)
         {
-            Debug.Log($"[NDMF VRoid Mesh Trimmer][EdgeRouteDebug] CrossingNormalize raw={rawCrossingCount} normalized={normalizedCrossingCount} removedVertexNear={removedVertexNearCrossingCount} removedNearPair={removedNearPairCrossingCount}");
+            Debug.Log($"[YM Mesh Trimmer][EdgeRouteDebug] CrossingNormalize raw={rawCrossingCount} normalized={normalizedCrossingCount} removedVertexNear={removedVertexNearCrossingCount} removedNearPair={removedNearPairCrossingCount}");
         }
         return shared;
     }
@@ -1339,7 +1341,7 @@ public static class MeshTrimProcessor
         int b,
         Dictionary<EdgeCrossingTrimRouter.EdgeKey, List<EdgeCrossingTrimRouter.EdgeCrossing>> shared,
         HashSet<EdgeCrossingTrimRouter.EdgeKey> visited,
-        NDMFVRoidMeshTrimmer trimmer)
+        MeshTrimmerComponent trimmer)
     {
         var key = new EdgeCrossingTrimRouter.EdgeKey(a, b);
         if (!visited.Add(key)) return;
@@ -1394,7 +1396,7 @@ public static class MeshTrimProcessor
     private static TrimStats ProcessSubMeshInsidePoint(
         int[] srcIndices,
         AlphaMaskProcessor.AlphaMaskData maskData,
-        NDMFVRoidMeshTrimmer trimmer,
+        MeshTrimmerComponent trimmer,
         List<Vector3> vertices,
         List<Vector3> normals,
         List<Vector4> tangents,
@@ -1831,7 +1833,7 @@ public static class MeshTrimProcessor
         int insideIndex,
         int outsideIndex,
         AlphaMaskProcessor.AlphaMaskData maskData,
-        NDMFVRoidMeshTrimmer trimmer,
+        MeshTrimmerComponent trimmer,
         List<Vector3> vertices,
         List<Vector3> normals,
         List<Vector4> tangents,
@@ -1899,7 +1901,7 @@ public static class MeshTrimProcessor
 
     private static bool TryCreateIntersectionFromInsideSegment(
         AlphaMaskProcessor.AlphaMaskData maskData,
-        NDMFVRoidMeshTrimmer trimmer,
+        MeshTrimmerComponent trimmer,
         int edgeA,
         int edgeB,
         float insideT,
@@ -2015,13 +2017,13 @@ public static class MeshTrimProcessor
     {
         if (!preserveBlendShapes || sourceMesh.blendShapeCount == 0)
         {
-            if (verboseLog) Debug.Log($"[NDMF VRoid Mesh Trimmer] Renderer={rendererName}, Preserve BlendShapes={preserveBlendShapes}, BlendShapeCount=0, TotalFrameCount=0, ProcessedDeltaVertexCount=0, ElapsedMs=0");
+            if (verboseLog) Debug.Log($"[YM Mesh Trimmer] Renderer={rendererName}, Preserve BlendShapes={preserveBlendShapes}, BlendShapeCount=0, TotalFrameCount=0, ProcessedDeltaVertexCount=0, ElapsedMs=0");
             return;
         }
 
         if (vertexSources.Count != newMesh.vertexCount)
         {
-            Debug.LogWarning($"[NDMF VRoid Mesh Trimmer] Vertex source count mismatch. vertexSources={vertexSources.Count}, newVertexCount={newMesh.vertexCount}");
+            Debug.LogWarning($"[YM Mesh Trimmer] Vertex source count mismatch. vertexSources={vertexSources.Count}, newVertexCount={newMesh.vertexCount}");
             return;
         }
 
@@ -2061,7 +2063,7 @@ public static class MeshTrimProcessor
         }
 
         sw.Stop();
-        if (verboseLog) Debug.Log($"[NDMF VRoid Mesh Trimmer] Renderer={rendererName}, Preserve BlendShapes={preserveBlendShapes}, BlendShapeCount={sourceMesh.blendShapeCount}, TotalFrameCount={totalFrames}, ProcessedDeltaVertexCount={newVertexCount}, ElapsedMs={sw.ElapsedMilliseconds}");
+        if (verboseLog) Debug.Log($"[YM Mesh Trimmer] Renderer={rendererName}, Preserve BlendShapes={preserveBlendShapes}, BlendShapeCount={sourceMesh.blendShapeCount}, TotalFrameCount={totalFrames}, ProcessedDeltaVertexCount={newVertexCount}, ElapsedMs={sw.ElapsedMilliseconds}");
     }
 
 
@@ -2191,7 +2193,7 @@ public static class MeshTrimProcessor
         int c,
         List<Vector3> vertices,
         List<Vector2> uv,
-        NDMFVRoidMeshTrimmer trimmer,
+        MeshTrimmerComponent trimmer,
         ref TrimStats stats)
     {
         Vector3 srcN = Vector3.Cross(vertices[srcB] - vertices[srcA], vertices[srcC] - vertices[srcA]);
@@ -2213,7 +2215,7 @@ public static class MeshTrimProcessor
         int c,
         List<Vector3> vertices,
         List<Vector2> uv,
-        NDMFVRoidMeshTrimmer trimmer,
+        MeshTrimmerComponent trimmer,
         ref TrimStats stats,
         bool skipAreaThresholds = false)
     {
@@ -2250,4 +2252,6 @@ public static class MeshTrimProcessor
         stats.outputTriangles++;
         return true;
     }
+}
+
 }

@@ -2,11 +2,11 @@ using System.Collections.Generic;
 using UnityEngine;
 using VRC.SDKBase;
 
-namespace NdmfMToon10ToLilToon
+namespace YoridoriModifiers.MToonToLilToon
 {
     [DisallowMultipleComponent]
-    [AddComponentMenu("yoridrill/NDMF MToon10 to lilToon")]
-    public sealed class MToonLilToonComponent : MonoBehaviour, IEditorOnly
+    [AddComponentMenu("Yoridori Modifiers/YM MToon to lilToon")]
+    public sealed class MToonToLilToonComponent : MonoBehaviour, IEditorOnly
     {
         public enum FaceShadowMaskType
         {

@@ -5,12 +5,14 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using nadena.dev.ndmf;
 
-[assembly: ExportsPlugin(typeof(NDMFVRoidMeshTrimmerNDMFPlugin))]
+[assembly: ExportsPlugin(typeof(YoridoriModifiers.MeshTrimmer.MeshTrimmerNdmfPlugin))]
 
-[CustomEditor(typeof(NDMFVRoidMeshTrimmer))]
-public class NDMFVRoidMeshTrimmerEditor : Editor
+namespace YoridoriModifiers.MeshTrimmer
 {
-    private const string LanguagePrefKey = "NDMFVRoidMeshTrimmerEditor.Language";
+[CustomEditor(typeof(MeshTrimmerComponent))]
+public class MeshTrimmerComponentEditor : Editor
+{
+    private const string LanguagePrefKey = "MeshTrimmerComponentEditor.Language";
 
     private enum UiLanguage { English = 0, Japanese = 1 }
     private enum PreviewUpdateType { None, MeshOnly, TextureOnly, MeshAndTexture }
@@ -58,12 +60,12 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
         SubscribeEditorEvents();
     }
 
-    private void OnDisable() => ClearPreview((NDMFVRoidMeshTrimmer)target);
+    private void OnDisable() => ClearPreview((MeshTrimmerComponent)target);
 
     public override void OnInspectorGUI()
     {
         serializedObject.Update();
-        var trimmer = (NDMFVRoidMeshTrimmer)target;
+        var trimmer = (MeshTrimmerComponent)target;
         var state = GetPreviewState(trimmer);
 
         if (trimmer.PreviewActiveSerialized && !state.active)
@@ -107,7 +109,7 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
         TryFlushPreviewUpdate(trimmer, state);
     }
 
-    private void DrawBuildTargetEnables(NDMFVRoidMeshTrimmer trimmer)
+    private void DrawBuildTargetEnables(MeshTrimmerComponent trimmer)
     {
         EditorGUILayout.LabelField(T("有効ビルドターゲット", "Enabled Build Targets"), EditorStyles.boldLabel);
         EditorGUILayout.PropertyField(serializedObject.FindProperty("enableForWindows"), new GUIContent("Windows"));
@@ -128,12 +130,12 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
         }
     }
 
-    private static bool HasOverlappingTargetEnabledInHierarchy(NDMFVRoidMeshTrimmer trimmer)
+    private static bool HasOverlappingTargetEnabledInHierarchy(MeshTrimmerComponent trimmer)
     {
         if (trimmer == null || trimmer.transform == null) return false;
         var root = trimmer.transform.root;
         if (root == null) return false;
-        var trimmers = root.GetComponentsInChildren<NDMFVRoidMeshTrimmer>(true);
+        var trimmers = root.GetComponentsInChildren<MeshTrimmerComponent>(true);
         foreach (var other in trimmers)
         {
             if (other == null || other == trimmer) continue;
@@ -147,7 +149,7 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
         return false;
     }
 
-    private void DrawAdvancedSection(NDMFVRoidMeshTrimmer trimmer)
+    private void DrawAdvancedSection(MeshTrimmerComponent trimmer)
     {
         EditorGUILayout.Space();
         _advancedFoldout = EditorGUILayout.Foldout(_advancedFoldout, "Advanced", true);
@@ -168,7 +170,7 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
         EditorGUI.indentLevel--;
     }
 
-    private void DrawTopBar(NDMFVRoidMeshTrimmer trimmer, PreviewState state)
+    private void DrawTopBar(MeshTrimmerComponent trimmer, PreviewState state)
     {
         EditorGUILayout.BeginHorizontal();
         var oldColor = GUI.backgroundColor;
@@ -228,7 +230,7 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
         return triangles;
     }
 
-    private void TryFlushPreviewUpdate(NDMFVRoidMeshTrimmer trimmer, PreviewState state)
+    private void TryFlushPreviewUpdate(MeshTrimmerComponent trimmer, PreviewState state)
     {
         if (!state.active || state.pending == PreviewUpdateType.None) return;
         bool commit = IsPreviewCommitEvent(Event.current);
@@ -326,24 +328,24 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
             EditorGUI.LabelField(materialRect, new GUIContent(materialNames, materialNames));
             EditorGUILayout.EndHorizontal();
 
-            using (new EditorGUI.DisabledScope(!((NDMFVRoidMeshTrimmer)target).enableTexturePadding))
+            using (new EditorGUI.DisabledScope(!((MeshTrimmerComponent)target).enableTexturePadding))
             {
             EditorGUI.BeginChangeCheck();
-            var mode = (NDMFVRoidMeshTrimmer.TexturePostProcessMode)modeProp.enumValueIndex;
+            var mode = (MeshTrimmerComponent.TexturePostProcessMode)modeProp.enumValueIndex;
             EditorGUILayout.BeginHorizontal();
             GUILayout.Label(T("Fill Mode", "Fill Mode"), GUILayout.Width(compactLabelWidth));
             var controlsRect = GUILayoutUtility.GetRect(0f, EditorGUIUtility.singleLineHeight, GUILayout.ExpandWidth(true));
-            if (mode == NDMFVRoidMeshTrimmer.TexturePostProcessMode.FillColor)
+            if (mode == MeshTrimmerComponent.TexturePostProcessMode.FillColor)
             {
                 float half = (controlsRect.width - 4f) * 0.5f;
                 var leftRect = new Rect(controlsRect.x, controlsRect.y, half, controlsRect.height);
                 var rightRect = new Rect(controlsRect.x + half + 4f, controlsRect.y, half, controlsRect.height);
-                mode = (NDMFVRoidMeshTrimmer.TexturePostProcessMode)EditorGUI.EnumPopup(leftRect, mode);
+                mode = (MeshTrimmerComponent.TexturePostProcessMode)EditorGUI.EnumPopup(leftRect, mode);
                 EditorGUI.PropertyField(rightRect, fillColorProp, GUIContent.none);
             }
             else
             {
-                mode = (NDMFVRoidMeshTrimmer.TexturePostProcessMode)EditorGUI.EnumPopup(controlsRect, mode);
+                mode = (MeshTrimmerComponent.TexturePostProcessMode)EditorGUI.EnumPopup(controlsRect, mode);
             }
             EditorGUILayout.EndHorizontal();
 
@@ -376,7 +378,7 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
         return names.Count > 0 ? string.Join(", ", names) : "-";
     }
 
-    private static PreviewState GetPreviewState(NDMFVRoidMeshTrimmer trimmer)
+    private static PreviewState GetPreviewState(MeshTrimmerComponent trimmer)
     {
         int id = trimmer.GetInstanceID();
         if (!PreviewByInstanceId.TryGetValue(id, out var state))
@@ -387,7 +389,7 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
         return state;
     }
 
-    private static bool RequestBuildPreview(NDMFVRoidMeshTrimmer trimmer, PreviewState state, PreviewUpdateType type)
+    private static bool RequestBuildPreview(MeshTrimmerComponent trimmer, PreviewState state, PreviewUpdateType type)
     {
         if (trimmer == null || state.queued || state.processing) return false;
         if (IsAnotherPreviewActiveInAvatar(trimmer)) return false;
@@ -410,13 +412,13 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
     }
 
 
-    private static bool IsAnotherPreviewActiveInAvatar(NDMFVRoidMeshTrimmer trimmer)
+    private static bool IsAnotherPreviewActiveInAvatar(MeshTrimmerComponent trimmer)
     {
         if (trimmer == null || trimmer.transform == null) return false;
         var root = trimmer.transform.root;
         if (root == null) return false;
 
-        var trimmers = root.GetComponentsInChildren<NDMFVRoidMeshTrimmer>(true);
+        var trimmers = root.GetComponentsInChildren<MeshTrimmerComponent>(true);
         foreach (var other in trimmers)
         {
             if (other == null || other == trimmer) continue;
@@ -427,7 +429,7 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
         return false;
     }
 
-    private static void BuildPreview(NDMFVRoidMeshTrimmer trimmer, PreviewState state, PreviewUpdateType type)
+    private static void BuildPreview(MeshTrimmerComponent trimmer, PreviewState state, PreviewUpdateType type)
     {
         if (trimmer == null) return;
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -455,7 +457,7 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
 
             sw.Stop();
             if (trimmer.debugEdgeCrossingRoutes)
-                Debug.Log($"[NDMF VRoid Mesh Trimmer][Preview] UpdateType={type}, Renderers={state.rendererStates.Count}, PreviewMeshes={meshCount}, PreviewTextures={texCount}, ElapsedMs={sw.ElapsedMilliseconds}");
+                Debug.Log($"[YM Mesh Trimmer][Preview] UpdateType={type}, Renderers={state.rendererStates.Count}, PreviewMeshes={meshCount}, PreviewTextures={texCount}, ElapsedMs={sw.ElapsedMilliseconds}");
 
             trimmer.PreviewActiveSerialized = true;
             EditorUtility.SetDirty(trimmer);
@@ -463,7 +465,7 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
         }
         catch (Exception ex)
         {
-            Debug.LogError($"[NDMF VRoid Mesh Trimmer][Preview] Failed and restoring originals. {ex}");
+            Debug.LogError($"[YM Mesh Trimmer][Preview] Failed and restoring originals. {ex}");
             RestoreOriginalsFromRecovery(trimmer);
             state.active = false;
             state.failed = true;
@@ -474,7 +476,7 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
         }
     }
 
-    private static int RebuildPreviewMeshes(NDMFVRoidMeshTrimmer trimmer, PreviewState state)
+    private static int RebuildPreviewMeshes(MeshTrimmerComponent trimmer, PreviewState state)
     {
         int meshCount = 0;
         foreach (var kv in state.rendererStates)
@@ -492,7 +494,7 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
             // Never operate on the original model mesh instance during preview.
             // Prepare a disposable working copy, then let the trim processor build preview output from it.
             var working = UnityEngine.Object.Instantiate(r.originalSharedMesh);
-            working.name = r.originalSharedMesh.name + " (NDMF VRoid Mesh Trimmer Working)";
+            working.name = r.originalSharedMesh.name + " (YM Mesh Trimmer Working)";
             working.hideFlags = HideFlags.HideAndDontSave;
             r.previewRenderer.sharedMesh = working;
             r.previewRenderer.sharedMaterials = r.originalSharedMaterials;
@@ -500,7 +502,7 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
             r.renderer.forceRenderingOff = true;
         }
 
-        var usageRestore = new List<(NDMFVRoidMeshTrimmer.RendererSubMeshRef usage, SkinnedMeshRenderer original)>();
+        var usageRestore = new List<(MeshTrimmerComponent.RendererSubMeshRef usage, SkinnedMeshRenderer original)>();
         try
         {
             foreach (var target in trimmer.targets)
@@ -530,7 +532,7 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
             r.previewMesh = r.previewRenderer.sharedMesh;
             if (r.previewMesh == null) continue;
 
-            r.previewMesh.name = r.originalSharedMesh.name + " (NDMF VRoid Mesh Trimmer Preview)";
+            r.previewMesh.name = r.originalSharedMesh.name + " (YM Mesh Trimmer Preview)";
             r.previewMesh.hideFlags = HideFlags.HideAndDontSave;
             r.previewMesh.MarkDynamic();
             meshCount++;
@@ -570,7 +572,7 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
         r.previewRenderer = dst;
     }
 
-    private static void CaptureOriginals(NDMFVRoidMeshTrimmer trimmer, PreviewState state)
+    private static void CaptureOriginals(MeshTrimmerComponent trimmer, PreviewState state)
     {
         state.rendererStates.Clear();
         trimmer.PreviewRecoveryRecords.Clear();
@@ -590,7 +592,7 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
                     originalForceRenderingOff = usage.renderer.forceRenderingOff
                 };
                 state.rendererStates.Add(usage.renderer, r);
-                trimmer.PreviewRecoveryRecords.Add(new NDMFVRoidMeshTrimmer.PreviewRecoveryRecord
+                trimmer.PreviewRecoveryRecords.Add(new MeshTrimmerComponent.PreviewRecoveryRecord
                 {
                     renderer = usage.renderer,
                     originalSharedMesh = r.originalSharedMesh,
@@ -600,7 +602,7 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
         }
     }
 
-    private static void RebuildPreviewTexturesAndMaterials(NDMFVRoidMeshTrimmer trimmer, PreviewState state, ref int textureFillExecCount)
+    private static void RebuildPreviewTexturesAndMaterials(MeshTrimmerComponent trimmer, PreviewState state, ref int textureFillExecCount)
     {
         bool useToonStandardShaderForPreview = trimmer != null && (trimmer.enableForAndroid || trimmer.enableForiOS);
         Shader toonStandardShader = useToonStandardShaderForPreview ? FindToonStandardShaderForPreview() : null;
@@ -614,7 +616,7 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
         var processedMap = new Dictionary<Texture2D, Texture2D>();
         foreach (var target in trimmer.targets)
         {
-            if (!target.enabled || !target.enableTextureFill || target.mainTexture == null || target.texturePostProcessMode == NDMFVRoidMeshTrimmer.TexturePostProcessMode.None) continue;
+            if (!target.enabled || !target.enableTextureFill || target.mainTexture == null || target.texturePostProcessMode == MeshTrimmerComponent.TexturePostProcessMode.None) continue;
 
             if (!processedMap.TryGetValue(target.mainTexture, out var processed))
             {
@@ -622,7 +624,7 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
                 {
                     continue;
                 }
-                processed.name = target.mainTexture.name + " (NDMF VRoid Mesh Trimmer Preview)";
+                processed.name = target.mainTexture.name + " (YM Mesh Trimmer Preview)";
                 processed.hideFlags = HideFlags.HideAndDontSave;
                 processedMap[target.mainTexture] = processed;
                 state.textureStates[target.mainTexture] = new TexturePreviewState { originalTexture = target.mainTexture, previewTexture = processed };
@@ -642,7 +644,7 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
 
                 var pm = new Material(m)
                 {
-                    name = m.name + " (NDMF VRoid Mesh Trimmer Preview)",
+                    name = m.name + " (YM Mesh Trimmer Preview)",
                     hideFlags = HideFlags.HideAndDontSave
                 };
                 if (toonStandardShader != null)
@@ -706,7 +708,7 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
         }
     }
 
-    private static void ClearPreview(NDMFVRoidMeshTrimmer trimmer)
+    private static void ClearPreview(MeshTrimmerComponent trimmer)
     {
         if (trimmer == null) return;
         var state = GetPreviewState(trimmer);
@@ -743,7 +745,7 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
         EditorUtility.SetDirty(trimmer);
     }
 
-    private static void RestoreOriginalsFromRecovery(NDMFVRoidMeshTrimmer trimmer)
+    private static void RestoreOriginalsFromRecovery(MeshTrimmerComponent trimmer)
     {
         foreach (var rec in trimmer.PreviewRecoveryRecords)
         {
@@ -773,19 +775,19 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
 
     internal static void ClearAllPreviews()
     {
-        foreach (var obj in UnityEngine.Object.FindObjectsOfType<NDMFVRoidMeshTrimmer>())
+        foreach (var obj in UnityEngine.Object.FindObjectsOfType<MeshTrimmerComponent>())
         {
             ClearPreview(obj);
         }
     }
 
-    private static void AutoDetectTargets(NDMFVRoidMeshTrimmer trimmer)
+    private static void AutoDetectTargets(MeshTrimmerComponent trimmer)
     {
-        Undo.RecordObject(trimmer, "Auto Detect NDMF VRoid Mesh Trimmer Targets");
+        Undo.RecordObject(trimmer, "Auto Detect YM Mesh Trimmer Targets");
         trimmer.targets.Clear();
 
-        Dictionary<Texture2D, NDMFVRoidMeshTrimmer.TextureTargetSettings> grouped =
-            new Dictionary<Texture2D, NDMFVRoidMeshTrimmer.TextureTargetSettings>();
+        Dictionary<Texture2D, MeshTrimmerComponent.TextureTargetSettings> grouped =
+            new Dictionary<Texture2D, MeshTrimmerComponent.TextureTargetSettings>();
 
         SkinnedMeshRenderer[] renderers = trimmer.GetComponentsInChildren<SkinnedMeshRenderer>(true);
         foreach (var renderer in renderers)
@@ -802,18 +804,18 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
 
                 if (!grouped.TryGetValue(tex, out var targetSettings))
                 {
-                    targetSettings = new NDMFVRoidMeshTrimmer.TextureTargetSettings
+                    targetSettings = new MeshTrimmerComponent.TextureTargetSettings
                     {
                         enabled = true,
                         mainTexture = tex,
                         enableTextureFill = true,
-                        texturePostProcessMode = NDMFVRoidMeshTrimmer.TexturePostProcessMode.Solidify,
-                        usages = new List<NDMFVRoidMeshTrimmer.RendererSubMeshRef>()
+                        texturePostProcessMode = MeshTrimmerComponent.TexturePostProcessMode.Solidify,
+                        usages = new List<MeshTrimmerComponent.RendererSubMeshRef>()
                     };
                     grouped[tex] = targetSettings;
                 }
 
-                targetSettings.usages.Add(new NDMFVRoidMeshTrimmer.RendererSubMeshRef { renderer = renderer, subMeshIndex = sub, material = mat });
+                targetSettings.usages.Add(new MeshTrimmerComponent.RendererSubMeshRef { renderer = renderer, subMeshIndex = sub, material = mat });
             }
         }
 
@@ -822,7 +824,7 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
         EditorUtility.SetDirty(trimmer);
     }
 
-    internal static void EnsureAutoDetectedTargets(NDMFVRoidMeshTrimmer trimmer, bool forceRefresh)
+    internal static void EnsureAutoDetectedTargets(MeshTrimmerComponent trimmer, bool forceRefresh)
     {
         if (trimmer == null) return;
         if (forceRefresh || trimmer.targets == null || trimmer.targets.Count == 0) AutoDetectTargets(trimmer);
@@ -854,24 +856,24 @@ public class NDMFVRoidMeshTrimmerEditor : Editor
     }
 }
 
-public class NDMFVRoidMeshTrimmerNDMFPlugin : Plugin<NDMFVRoidMeshTrimmerNDMFPlugin>
+public class MeshTrimmerNdmfPlugin : Plugin<MeshTrimmerNdmfPlugin>
 {
-    public override string QualifiedName => "jp.yoridrill.ndmf-vroid-mesh-trimmer";
-    public override string DisplayName => "NDMF VRoid Mesh Trimmer";
+    public override string QualifiedName => "jp.yoridrill.ym-mesh-trimmer";
+    public override string DisplayName => "YM Mesh Trimmer";
 
     protected override void Configure()
     {
         var sequence = InPhase(BuildPhase.Transforming)
-            .AfterPlugin("jp.yoridrill.ndmf-vroid-arm-patch")
-            .BeforePlugin("jp.yoridrill.ndmf-mtoon10-to-liltoon")
+            .AfterPlugin("jp.yoridrill.ym-arm-patch")
+            .BeforePlugin("jp.yoridrill.ym-mtoon-to-liltoon")
             .BeforePlugin("com.github.kurotu.vrc-quest-tools");
 
-        sequence.Run("Run NDMF VRoid Mesh Trimmer", context =>
+        sequence.Run("Run YM Mesh Trimmer", context =>
         {
             var avatarRoot = context.AvatarRootObject;
             if (avatarRoot == null) return;
-            var trimmers = avatarRoot.GetComponentsInChildren<NDMFVRoidMeshTrimmer>(true);
-            NDMFVRoidMeshTrimmerEditor.ClearAllPreviews();
+            var trimmers = avatarRoot.GetComponentsInChildren<MeshTrimmerComponent>(true);
+            MeshTrimmerComponentEditor.ClearAllPreviews();
             bool executedForCurrentPlatform = false;
             foreach (var trimmer in trimmers)
             {
@@ -881,7 +883,7 @@ public class NDMFVRoidMeshTrimmerNDMFPlugin : Plugin<NDMFVRoidMeshTrimmerNDMFPlu
                     continue;
                 }
 
-                NDMFVRoidMeshTrimmerEditor.EnsureAutoDetectedTargets(trimmer, false);
+                MeshTrimmerComponentEditor.EnsureAutoDetectedTargets(trimmer, false);
                 MeshTrimProcessor.ApplyTrim(trimmer, true);
                 if (trimmer.enableTexturePadding)
                 {
@@ -899,7 +901,7 @@ public class NDMFVRoidMeshTrimmerNDMFPlugin : Plugin<NDMFVRoidMeshTrimmerNDMFPlu
         });
     }
 
-    private static bool IsEnabledForCurrentBuildTarget(NDMFVRoidMeshTrimmer trimmer)
+    private static bool IsEnabledForCurrentBuildTarget(MeshTrimmerComponent trimmer)
     {
         switch (EditorUserBuildSettings.activeBuildTarget)
         {
@@ -914,4 +916,6 @@ public class NDMFVRoidMeshTrimmerNDMFPlugin : Plugin<NDMFVRoidMeshTrimmerNDMFPlu
                 return false;
         }
     }
+}
+
 }

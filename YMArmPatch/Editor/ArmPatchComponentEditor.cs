@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace NDMFVRoidArmPatch.Editor
+namespace YoridoriModifiers.ArmPatch
 {
-    [CustomEditor(typeof(NDMFVRoidArmPatchComponent))]
-    public sealed class NDMFVRoidArmPatchComponentEditor : UnityEditor.Editor
+    [CustomEditor(typeof(ArmPatchComponent))]
+    public sealed class ArmPatchComponentEditor : UnityEditor.Editor
     {
         private enum Language
         {
@@ -14,8 +14,8 @@ namespace NDMFVRoidArmPatch.Editor
             English
         }
 
-        private const string PrefKeyLanguage = "NDMFVRoidArmPatchComponentEditor.Language";
-        private const string PrefKeyAdvancedFoldout = "NDMFVRoidArmPatchComponentEditor.AdvancedFoldout";
+        private const string PrefKeyLanguage = "ArmPatchComponentEditor.Language";
+        private const string PrefKeyAdvancedFoldout = "ArmPatchComponentEditor.AdvancedFoldout";
 
         private static readonly string[] ConstraintModeJa =
         {
@@ -109,9 +109,9 @@ namespace NDMFVRoidArmPatch.Editor
 
         public override void OnInspectorGUI()
         {
-            var component = (NDMFVRoidArmPatchComponent)target;
+            var component = (ArmPatchComponent)target;
             var avatarRoot = FindAvatarRootForComponent(component);
-            bool isPreviewing = NDMFVRoidArmPatchPreviewUtility.IsPreviewing(avatarRoot);
+            bool isPreviewing = ArmPatchPreviewUtility.IsPreviewing(avatarRoot);
 
             serializedObject.Update();
             EditorGUI.BeginChangeCheck();
@@ -139,11 +139,11 @@ namespace NDMFVRoidArmPatch.Editor
 
             if (changed && isPreviewing)
             {
-                NDMFVRoidArmPatchPreviewUtility.RestartPreviewIfActive(component);
+                ArmPatchPreviewUtility.RestartPreviewIfActive(component);
             }
         }
 
-        private void DrawTopRow(NDMFVRoidArmPatchComponent component, bool isPreviewing)
+        private void DrawTopRow(ArmPatchComponent component, bool isPreviewing)
         {
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -153,7 +153,7 @@ namespace NDMFVRoidArmPatch.Editor
                 if (GUILayout.Button(T("Preview", "Preview"), GUILayout.Width(90f), GUILayout.Height(20f)))
                 {
                     serializedObject.ApplyModifiedProperties();
-                    NDMFVRoidArmPatchPreviewUtility.TogglePreview(component);
+                    ArmPatchPreviewUtility.TogglePreview(component);
                     GUIUtility.ExitGUI();
                 }
 
@@ -192,11 +192,11 @@ namespace NDMFVRoidArmPatch.Editor
             EditorGUILayout.HelpBox(message, MessageType.Info);
         }
 
-        private void DrawMultipleComponentsWarning(NDMFVRoidArmPatchComponent component, GameObject avatarRoot)
+        private void DrawMultipleComponentsWarning(ArmPatchComponent component, GameObject avatarRoot)
         {
             if (component == null || avatarRoot == null) return;
 
-            var components = avatarRoot.GetComponentsInChildren<NDMFVRoidArmPatchComponent>(true);
+            var components = avatarRoot.GetComponentsInChildren<ArmPatchComponent>(true);
             if (components == null || components.Length <= 1) return;
 
             var selected = SelectPreferredComponentForBuild(components, avatarRoot);
@@ -209,11 +209,11 @@ namespace NDMFVRoidArmPatch.Editor
             EditorGUILayout.HelpBox(message, MessageType.Warning);
         }
 
-        private static NDMFVRoidArmPatchComponent SelectPreferredComponentForBuild(
-            NDMFVRoidArmPatchComponent[] components,
+        private static ArmPatchComponent SelectPreferredComponentForBuild(
+            ArmPatchComponent[] components,
             GameObject avatarRoot)
         {
-            NDMFVRoidArmPatchComponent best = components[0];
+            ArmPatchComponent best = components[0];
             int bestScore = int.MinValue;
             Transform root = avatarRoot != null ? avatarRoot.transform : null;
 
@@ -305,7 +305,7 @@ namespace NDMFVRoidArmPatch.Editor
             }
         }
 
-        private void DrawForearmRows(NDMFVRoidArmPatchComponent component)
+        private void DrawForearmRows(ArmPatchComponent component)
         {
             var forearmScaleAxes = GetForearmScaleAxisLabels();
 
@@ -356,7 +356,7 @@ namespace NDMFVRoidArmPatch.Editor
             }
         }
 
-        private void DrawForearmPitchAxisRow(NDMFVRoidArmPatchComponent component)
+        private void DrawForearmPitchAxisRow(ArmPatchComponent component)
         {
             EnsurePitchAxis(component);
             Rect rect = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
@@ -401,7 +401,7 @@ namespace NDMFVRoidArmPatch.Editor
             tipProp.floatValue = EditorGUI.FloatField(tipFieldRect, tipProp.floatValue);
         }
 
-        private void EnsurePitchAxis(NDMFVRoidArmPatchComponent component)
+        private void EnsurePitchAxis(ArmPatchComponent component)
         {
             if (forearmPitchAxisProp.enumValueIndex == forearmRollAxisProp.enumValueIndex)
             {
@@ -409,7 +409,7 @@ namespace NDMFVRoidArmPatch.Editor
             }
         }
 
-        private int DetectPitchAxis(NDMFVRoidArmPatchComponent component, int rollAxisIndex)
+        private int DetectPitchAxis(ArmPatchComponent component, int rollAxisIndex)
         {
             var avatarRoot = FindAvatarRootForComponent(component);
             var hand = avatarRoot != null ? avatarRoot.GetComponentInChildren<Animator>(true)?.GetBoneTransform(HumanBodyBones.LeftHand) : null;
@@ -443,7 +443,7 @@ namespace NDMFVRoidArmPatch.Editor
             );
         }
 
-        private void DrawTwistTargetRow(NDMFVRoidArmPatchComponent component)
+        private void DrawTwistTargetRow(ArmPatchComponent component)
         {
             var candidates = CollectMaterialCandidates(component);
             var options = new List<string> { "Auto" };
@@ -511,7 +511,7 @@ namespace NDMFVRoidArmPatch.Editor
             axisProperty.enumValueIndex = GUI.Toolbar(rect, axisProperty.enumValueIndex, axisLabels);
         }
 
-        private static List<string> CollectMaterialCandidates(NDMFVRoidArmPatchComponent component)
+        private static List<string> CollectMaterialCandidates(ArmPatchComponent component)
         {
             var results = new List<string>();
             if (component == null) return results;
@@ -529,7 +529,7 @@ namespace NDMFVRoidArmPatch.Editor
             return results;
         }
 
-        private static bool HasForearmWeightsOnMaterial(NDMFVRoidArmPatchComponent component, string materialName)
+        private static bool HasForearmWeightsOnMaterial(ArmPatchComponent component, string materialName)
         {
             var root = FindAvatarRootForComponent(component);
             if (root == null || string.IsNullOrEmpty(materialName)) return false;
@@ -644,7 +644,7 @@ namespace NDMFVRoidArmPatch.Editor
             Rect buttonRect = EditorGUI.IndentedRect(rawButtonRect);
             if (GUI.Button(buttonRect, T("Reset Preview", "Reset Preview")))
             {
-                NDMFVRoidArmPatchPreviewUtility.ResetAllPreviewArtifacts();
+                ArmPatchPreviewUtility.ResetAllPreviewArtifacts();
                 GUIUtility.ExitGUI();
             }
 
@@ -722,7 +722,7 @@ namespace NDMFVRoidArmPatch.Editor
             }
         }
 
-        private static GameObject FindAvatarRootForComponent(NDMFVRoidArmPatchComponent component)
+        private static GameObject FindAvatarRootForComponent(ArmPatchComponent component)
         {
             if (component == null) return null;
 

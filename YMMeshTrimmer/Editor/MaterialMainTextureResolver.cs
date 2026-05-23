@@ -1,5 +1,7 @@
 using UnityEngine;
 
+namespace YoridoriModifiers.MeshTrimmer
+{
 public static class MaterialMainTextureResolver
 {
     private static readonly string[] PropertyPriority =
@@ -35,4 +37,6 @@ public static class MaterialMainTextureResolver
 
         return false;
     }
+}
+
 }

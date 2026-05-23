@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
+namespace YoridoriModifiers.MeshTrimmer
+{
 internal static class EdgeCrossingTrimRouter
 {
     internal enum TriangleRoute
@@ -1264,4 +1266,6 @@ internal static class EdgeCrossingTrimRouter
             });
         }
     }
+}
+
 }

@@ -2,16 +2,16 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-namespace NDMFVRoidArmPatch.Editor
+namespace YoridoriModifiers.ArmPatch
 {
     [InitializeOnLoad]
-    internal static class NDMFVRoidArmPatchPreviewUtility
+    internal static class ArmPatchPreviewUtility
     {
         private const string PreviewRootName = "__NDMF_VRoidArmPatch_PreviewRoot";
         private const string PreviewAvatarName = "__NDMF_VRoidArmPatch_PreviewAvatar";
 
         private static GameObject _sourceAvatarRoot;
-        private static NDMFVRoidArmPatchComponent _sourceComponent;
+        private static ArmPatchComponent _sourceComponent;
         private static GameObject _previewRoot;
         private static GameObject _previewAvatar;
         private static AnimationClip _previewClip;
@@ -33,7 +33,7 @@ namespace NDMFVRoidArmPatch.Editor
             public bool wasEnabled;
         }
 
-        static NDMFVRoidArmPatchPreviewUtility()
+        static ArmPatchPreviewUtility()
         {
             AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
             EditorApplication.quitting += OnEditorQuitting;
@@ -49,14 +49,14 @@ namespace NDMFVRoidArmPatch.Editor
             return _isPlaying && _sourceAvatarRoot == avatarRoot;
         }
 
-        internal static void TogglePreview(NDMFVRoidArmPatchComponent component)
+        internal static void TogglePreview(ArmPatchComponent component)
         {
             if (component == null) return;
 
             var avatarRoot = FindHumanoidAvatarRoot(component.transform);
             if (avatarRoot == null)
             {
-                Debug.LogWarning("[NDMF VRoid Arm Patch] Preview skipped. Humanoid Animator not found.");
+                Debug.LogWarning("[YM Arm Patch] Preview skipped. Humanoid Animator not found.");
                 return;
             }
 
@@ -69,7 +69,7 @@ namespace NDMFVRoidArmPatch.Editor
             StartPreview(avatarRoot, component);
         }
 
-        internal static void RestartPreviewIfActive(NDMFVRoidArmPatchComponent component)
+        internal static void RestartPreviewIfActive(ArmPatchComponent component)
         {
             if (component == null) return;
 
@@ -117,14 +117,14 @@ namespace NDMFVRoidArmPatch.Editor
             SceneView.RepaintAll();
         }
 
-        private static void StartPreview(GameObject avatarRoot, NDMFVRoidArmPatchComponent sourceComponent)
+        private static void StartPreview(GameObject avatarRoot, ArmPatchComponent sourceComponent)
         {
             StopPreview();
 
             _previewClip = LoadPreviewClip();
             if (_previewClip == null)
             {
-                Debug.LogWarning("[NDMF VRoid Arm Patch] Preview clip not found.");
+                Debug.LogWarning("[YM Arm Patch] Preview clip not found.");
                 return;
             }
 
@@ -142,14 +142,14 @@ namespace NDMFVRoidArmPatch.Editor
 
             DisableProblematicComponents(_previewAvatar);
 
-            var previewComponent = _previewAvatar.GetComponentInChildren<NDMFVRoidArmPatchComponent>(true);
+            var previewComponent = _previewAvatar.GetComponentInChildren<ArmPatchComponent>(true);
             if (previewComponent == null)
             {
-                previewComponent = _previewAvatar.AddComponent<NDMFVRoidArmPatchComponent>();
+                previewComponent = _previewAvatar.AddComponent<ArmPatchComponent>();
             }
 
             CopyComponentValues(sourceComponent, previewComponent);
-            NDMFVRoidArmPatchPlugin.BuildPatchRig(_previewAvatar, previewComponent, sourceComponent.verboseLog);
+            ArmPatchNdmfPlugin.BuildPatchRig(_previewAvatar, previewComponent, sourceComponent.verboseLog);
 
             HideSourceRenderers(_sourceAvatarRoot);
 
@@ -355,7 +355,7 @@ namespace NDMFVRoidArmPatch.Editor
             }
         }
 
-        private static void CopyComponentValues(NDMFVRoidArmPatchComponent src, NDMFVRoidArmPatchComponent dst)
+        private static void CopyComponentValues(ArmPatchComponent src, ArmPatchComponent dst)
         {
             dst.enableShoulderFix = src.enableShoulderFix;
             dst.shoulderPositionOffset = src.shoulderPositionOffset;

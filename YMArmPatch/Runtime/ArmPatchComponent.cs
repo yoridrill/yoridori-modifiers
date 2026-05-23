@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.Serialization;
 using VRC.SDKBase;
 
-namespace NDMFVRoidArmPatch
+namespace YoridoriModifiers.ArmPatch
 {
     public enum TwistAxis
     {
@@ -39,8 +39,8 @@ namespace NDMFVRoidArmPatch
     }
 
     [DisallowMultipleComponent]
-    [AddComponentMenu("yoridrill/NDMF VRoid Arm Patch")]
-    public sealed class NDMFVRoidArmPatchComponent : MonoBehaviour, IEditorOnly
+    [AddComponentMenu("Yoridori Modifiers/YM Arm Patch")]
+    public sealed class ArmPatchComponent : MonoBehaviour, IEditorOnly
     {
         [Header("Shoulder")]
         [Tooltip("Enable shoulder correction.")]

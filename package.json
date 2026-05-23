@@ -1,0 +1,14 @@
+{
+    "name": "jp.yoridrill.yoridori-modifiers",
+    "displayName": "Yoridori Modifiers",
+    "version": "1.0.0",
+    "author": {
+        "name": "Yoridori Midori"
+    },
+    "unity": "2022.3",
+    "vpmDependencies": {
+        "com.vrchat.avatars": ">=3.10.0",
+        "nadena.dev.ndmf": ">=1.11.0",
+        "jp.lilxyzw.liltoon": ">=2.3.2"
+    }
+}

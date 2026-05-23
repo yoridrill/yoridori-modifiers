@@ -5,7 +5,7 @@ using UnityEngine;
 using UnityEngine.Serialization;
 using UnityEngine.Rendering;
 
-namespace NdmfMToon10ToLilToon
+namespace YoridoriModifiers.MToonToLilToon
 {
     public enum RenderType
     {

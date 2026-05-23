@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
+namespace YoridoriModifiers.MeshTrimmer
+{
 public static class AutoFillColorResolver
 {
     private const string DefaultConfigGuid = "c4ac5599314e047b6aa3f87adb037542";
@@ -49,7 +51,7 @@ public static class AutoFillColorResolver
         public string sourcePath;
     }
 
-    public static void Apply(NDMFVRoidMeshTrimmer trimmer, List<NDMFVRoidMeshTrimmer.TextureTargetSettings> targets)
+    public static void Apply(MeshTrimmerComponent trimmer, List<MeshTrimmerComponent.TextureTargetSettings> targets)
     {
         if (trimmer == null || targets == null || targets.Count == 0) return;
         bool verbose = trimmer.debugEdgeCrossingRoutes;
@@ -58,14 +60,14 @@ public static class AutoFillColorResolver
         var config = loadResult.config;
         if (config == null || config.fillColors == null || config.fillColors.Length == 0)
         {
-            if (verbose) Debug.Log("[NDMF VRoid Mesh Trimmer] Auto fill-color config is empty or unavailable.");
+            if (verbose) Debug.Log("[YM Mesh Trimmer] Auto fill-color config is empty or unavailable.");
             return;
         }
 
-        if (verbose) Debug.Log($"[NDMF VRoid Mesh Trimmer] Auto fill-color config source: {loadResult.source} ({loadResult.sourcePath})");
+        if (verbose) Debug.Log($"[YM Mesh Trimmer] Auto fill-color config source: {loadResult.source} ({loadResult.sourcePath})");
 
         var materialMap = BuildMaterialMap(trimmer);
-        var appliedTargets = new HashSet<NDMFVRoidMeshTrimmer.TextureTargetSettings>();
+        var appliedTargets = new HashSet<MeshTrimmerComponent.TextureTargetSettings>();
 
         ApplyTrimAlgorithmRule(config, trimmer);
         ApplyEdgeRouteDebugFilterRule(config, trimmer);
@@ -82,17 +84,17 @@ public static class AutoFillColorResolver
             if (!MaterialMainTextureResolver.TryGetMainTexture(sourceMaterial, out var sourceTexture, out _)) continue;
             if (!TrySampleFillColor(sourceTexture, uv, out var fillColor)) continue;
 
-            target.texturePostProcessMode = NDMFVRoidMeshTrimmer.TexturePostProcessMode.FillColor;
+            target.texturePostProcessMode = MeshTrimmerComponent.TexturePostProcessMode.FillColor;
             target.fillColor = fillColor;
             appliedTargets.Add(target);
 
             string targetName = GetFirstUsageMaterialName(target);
             string texName = target.mainTexture != null ? target.mainTexture.name : "(None)";
-            if (verbose) Debug.Log($"[NDMF VRoid Mesh Trimmer] Auto fill-color applied. TargetMaterial={targetName}, TargetTexture={texName}, SourceMaterial={sourceMaterial.name}, UV=({uv.x:F3}, {uv.y:F3}), Color=RGBA({fillColor.r:F3}, {fillColor.g:F3}, {fillColor.b:F3}, {fillColor.a:F3})");
+            if (verbose) Debug.Log($"[YM Mesh Trimmer] Auto fill-color applied. TargetMaterial={targetName}, TargetTexture={texName}, SourceMaterial={sourceMaterial.name}, UV=({uv.x:F3}, {uv.y:F3}), Color=RGBA({fillColor.r:F3}, {fillColor.g:F3}, {fillColor.b:F3}, {fillColor.a:F3})");
         }
     }
 
-    private static void ApplyPreSubdivideRules(FillColorConfig config, List<NDMFVRoidMeshTrimmer.TextureTargetSettings> targets, bool verbose)
+    private static void ApplyPreSubdivideRules(FillColorConfig config, List<MeshTrimmerComponent.TextureTargetSettings> targets, bool verbose)
     {
         if (config.preSubdivide == null) return;
         int matched = 0;
@@ -110,30 +112,30 @@ public static class AutoFillColorResolver
                 target.preSubdivideLevel = Mathf.Clamp(rule.level, 0, 2);
                 target.preSubdivideQuadAware = rule.quadAware;
                 matched++;
-                if (verbose) Debug.Log($"[NDMF VRoid Mesh Trimmer] Auto preSubdivide matched. TargetMaterial={GetFirstUsageMaterialName(target)}, Level={target.preSubdivideLevel}, QuadAware={target.preSubdivideQuadAware}");
+                if (verbose) Debug.Log($"[YM Mesh Trimmer] Auto preSubdivide matched. TargetMaterial={GetFirstUsageMaterialName(target)}, Level={target.preSubdivideLevel}, QuadAware={target.preSubdivideQuadAware}");
                 break;
             }
         }
 
-        if (verbose) Debug.Log($"[NDMF VRoid Mesh Trimmer] Auto preSubdivide rules processed. RuleCount={config.preSubdivide.Length}, MatchedTargetCount={matched}");
+        if (verbose) Debug.Log($"[YM Mesh Trimmer] Auto preSubdivide rules processed. RuleCount={config.preSubdivide.Length}, MatchedTargetCount={matched}");
     }
 
-    private static void ApplyTrimAlgorithmRule(FillColorConfig config, NDMFVRoidMeshTrimmer trimmer)
+    private static void ApplyTrimAlgorithmRule(FillColorConfig config, MeshTrimmerComponent trimmer)
     {
         if (trimmer == null || string.IsNullOrWhiteSpace(config.trimAlgorithm)) return;
         string mode = Normalize(config.trimAlgorithm);
         if (mode == "legacyinsidepoint")
         {
-            trimmer.trimAlgorithm = NDMFVRoidMeshTrimmer.TrimAlgorithm.LegacyInsidePoint;
+            trimmer.trimAlgorithm = MeshTrimmerComponent.TrimAlgorithm.LegacyInsidePoint;
         }
         else
         {
-            trimmer.trimAlgorithm = NDMFVRoidMeshTrimmer.TrimAlgorithm.EdgeCrossing;
+            trimmer.trimAlgorithm = MeshTrimmerComponent.TrimAlgorithm.EdgeCrossing;
         }
-        if (trimmer.debugEdgeCrossingRoutes) Debug.Log($"[NDMF VRoid Mesh Trimmer] Trim algorithm set by config: {trimmer.trimAlgorithm}");
+        if (trimmer.debugEdgeCrossingRoutes) Debug.Log($"[YM Mesh Trimmer] Trim algorithm set by config: {trimmer.trimAlgorithm}");
     }
 
-    private static void ApplyEdgeRouteDebugFilterRule(FillColorConfig config, NDMFVRoidMeshTrimmer trimmer)
+    private static void ApplyEdgeRouteDebugFilterRule(FillColorConfig config, MeshTrimmerComponent trimmer)
     {
         if (trimmer == null) return;
         trimmer.debugEdgeCrossingRouteMaterialFilters.Clear();
@@ -146,7 +148,7 @@ public static class AutoFillColorResolver
         }
     }
 
-    private static bool TryMatchTarget(NDMFVRoidMeshTrimmer.TextureTargetSettings settings, string[] targetCandidates)
+    private static bool TryMatchTarget(MeshTrimmerComponent.TextureTargetSettings settings, string[] targetCandidates)
     {
         foreach (var usage in settings.usages)
         {
@@ -161,7 +163,7 @@ public static class AutoFillColorResolver
         return false;
     }
 
-    private static Dictionary<string, Material> BuildMaterialMap(NDMFVRoidMeshTrimmer trimmer)
+    private static Dictionary<string, Material> BuildMaterialMap(MeshTrimmerComponent trimmer)
     {
         var map = new Dictionary<string, Material>(StringComparer.OrdinalIgnoreCase);
         var renderers = trimmer.GetComponentsInChildren<Renderer>(true);
@@ -205,10 +207,10 @@ public static class AutoFillColorResolver
     }
 
     private static bool TryFindFirstTarget(
-        List<NDMFVRoidMeshTrimmer.TextureTargetSettings> targets,
+        List<MeshTrimmerComponent.TextureTargetSettings> targets,
         string[] targetCandidates,
-        HashSet<NDMFVRoidMeshTrimmer.TextureTargetSettings> alreadyApplied,
-        out NDMFVRoidMeshTrimmer.TextureTargetSettings target)
+        HashSet<MeshTrimmerComponent.TextureTargetSettings> alreadyApplied,
+        out MeshTrimmerComponent.TextureTargetSettings target)
     {
         target = null;
         if (targetCandidates == null) return false;
@@ -346,7 +348,7 @@ public static class AutoFillColorResolver
             return result;
         }
 
-        Debug.LogWarning("[NDMF VRoid Mesh Trimmer] Fill-color config not found. Checked user and default JSON.");
+        Debug.LogWarning("[YM Mesh Trimmer] Fill-color config not found. Checked user and default JSON.");
         return result;
     }
 
@@ -359,13 +361,13 @@ public static class AutoFillColorResolver
         }
         catch (Exception ex)
         {
-            Debug.LogWarning("[NDMF VRoid Mesh Trimmer] Failed to parse fill-color config JSON: " + ex.Message + " (" + path + ")");
+            Debug.LogWarning("[YM Mesh Trimmer] Failed to parse fill-color config JSON: " + ex.Message + " (" + path + ")");
             return null;
         }
 
         if (config == null || config.fillColors == null)
         {
-            Debug.LogWarning("[NDMF VRoid Mesh Trimmer] Failed to parse fill-color config JSON: deserialized object was null or missing fillColors. (" + path + ")");
+            Debug.LogWarning("[YM Mesh Trimmer] Failed to parse fill-color config JSON: deserialized object was null or missing fillColors. (" + path + ")");
             return null;
         }
 
@@ -387,7 +389,7 @@ public static class AutoFillColorResolver
         return asset != null ? asset.text : null;
     }
 
-    private static string GetFirstUsageMaterialName(NDMFVRoidMeshTrimmer.TextureTargetSettings target)
+    private static string GetFirstUsageMaterialName(MeshTrimmerComponent.TextureTargetSettings target)
     {
         if (target == null || target.usages == null) return "(Unknown)";
         foreach (var usage in target.usages)
@@ -402,4 +404,6 @@ public static class AutoFillColorResolver
     {
         return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToLowerInvariant();
     }
+}
+
 }

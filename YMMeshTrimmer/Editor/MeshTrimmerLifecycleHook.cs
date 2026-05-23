@@ -2,12 +2,14 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
+namespace YoridoriModifiers.MeshTrimmer
+{
 [InitializeOnLoad]
-public static class NDMFVRoidMeshTrimmerLifecycleHook
+public static class MeshTrimmerLifecycleHook
 {
     private static readonly HashSet<int> Queued = new HashSet<int>();
 
-    static NDMFVRoidMeshTrimmerLifecycleHook()
+    static MeshTrimmerLifecycleHook()
     {
         ObjectFactory.componentWasAdded += OnComponentWasAdded;
         Undo.postprocessModifications += OnPostprocessModifications;
@@ -15,7 +17,7 @@ public static class NDMFVRoidMeshTrimmerLifecycleHook
 
     private static void OnComponentWasAdded(Component component)
     {
-        var trimmer = component as NDMFVRoidMeshTrimmer;
+        var trimmer = component as MeshTrimmerComponent;
         if (trimmer == null) return;
         QueueDetect(trimmer);
     }
@@ -24,7 +26,7 @@ public static class NDMFVRoidMeshTrimmerLifecycleHook
     {
         for (int i = 0; i < modifications.Length; i++)
         {
-            var target = modifications[i].currentValue.target as NDMFVRoidMeshTrimmer;
+            var target = modifications[i].currentValue.target as MeshTrimmerComponent;
             if (target == null) continue;
             if (target.targets == null || target.targets.Count == 0)
             {
@@ -34,7 +36,7 @@ public static class NDMFVRoidMeshTrimmerLifecycleHook
         return modifications;
     }
 
-    private static void QueueDetect(NDMFVRoidMeshTrimmer trimmer)
+    private static void QueueDetect(MeshTrimmerComponent trimmer)
     {
         if (trimmer == null) return;
         int id = trimmer.GetInstanceID();
@@ -44,8 +46,10 @@ public static class NDMFVRoidMeshTrimmerLifecycleHook
         {
             Queued.Remove(id);
             if (trimmer == null) return;
-            NDMFVRoidMeshTrimmerEditor.EnsureAutoDetectedTargets(trimmer, true);
+            MeshTrimmerComponentEditor.EnsureAutoDetectedTargets(trimmer, true);
             EditorUtility.SetDirty(trimmer);
         };
     }
+}
+
 }

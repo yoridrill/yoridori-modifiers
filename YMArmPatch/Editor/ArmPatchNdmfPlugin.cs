@@ -7,27 +7,27 @@ using UnityEngine.Animations;
 using VRC.Dynamics;
 using VRC.SDK3.Dynamics.Constraint.Components;
 
-[assembly: ExportsPlugin(typeof(NDMFVRoidArmPatch.Editor.NDMFVRoidArmPatchPlugin))]
+[assembly: ExportsPlugin(typeof(YoridoriModifiers.ArmPatch.ArmPatchNdmfPlugin))]
 
-namespace NDMFVRoidArmPatch.Editor
+namespace YoridoriModifiers.ArmPatch
 {
-    public sealed class NDMFVRoidArmPatchPlugin : Plugin<NDMFVRoidArmPatchPlugin>
+    public sealed class ArmPatchNdmfPlugin : Plugin<ArmPatchNdmfPlugin>
     {
-        public override string QualifiedName => "jp.yoridrill.ndmf-vroid-arm-patch";
-        public override string DisplayName => "NDMF VRoid Arm Patch";
+        public override string QualifiedName => "jp.yoridrill.ym-arm-patch";
+        public override string DisplayName => "YM Arm Patch";
 
         protected override void Configure()
         {
             InPhase(BuildPhase.Transforming)
                 .BeforePlugin("nadena.dev.modular-avatar")
-                .Run("Build NDMF VRoid Arm Patch rig (Before MA)", ctx =>
+                .Run("Build YM Arm Patch rig (Before MA)", ctx =>
                 {
                     ApplyFix(ctx, PatchBuildOrder.BeforeModularAvatar);
                 });
 
             InPhase(BuildPhase.Transforming)
                 .AfterPlugin("nadena.dev.modular-avatar")
-                .Run("Build NDMF VRoid Arm Patch rig (After MA)", ctx =>
+                .Run("Build YM Arm Patch rig (After MA)", ctx =>
                 {
                     ApplyFix(ctx, PatchBuildOrder.AfterModularAvatar);
                 });
@@ -36,7 +36,7 @@ namespace NDMFVRoidArmPatch.Editor
                 .BeforePlugin("com.anatawa12.avatar-optimizer")
                 .Run("Reset preview and remove patch components", ctx =>
                 {
-                    NDMFVRoidArmPatchPreviewUtility.ResetAllPreviewArtifacts();
+                    ArmPatchPreviewUtility.ResetAllPreviewArtifacts();
                     RemovePatchComponentsBeforeAO(ctx);
                 });
         }
@@ -45,7 +45,7 @@ namespace NDMFVRoidArmPatch.Editor
         {
             if (ctx == null || ctx.AvatarRootObject == null) return;
 
-            var components = ctx.AvatarRootObject.GetComponentsInChildren<NDMFVRoidArmPatchComponent>(true);
+            var components = ctx.AvatarRootObject.GetComponentsInChildren<ArmPatchComponent>(true);
             if (components == null || components.Length == 0) return;
 
             var settings = Aggregate(components, ctx.AvatarRootObject);
@@ -54,15 +54,15 @@ namespace NDMFVRoidArmPatch.Editor
             var animator = ctx.AvatarRootObject.GetComponentInChildren<Animator>(true);
             if (!IsValidHumanoid(animator))
             {
-                Debug.LogWarning("[NDMF VRoid Arm Patch] Humanoid Animator not found. Skipped.");
+                Debug.LogWarning("[YM Arm Patch] Humanoid Animator not found. Skipped.");
                 return;
             }
 
             var replaceMap = new Dictionary<Transform, Transform>();
             if (settings.verboseLog)
             {
-                Debug.Log("[NDMF VRoid Arm Patch] Build pass started.");
-                Debug.Log($"[NDMF VRoid Arm Patch] Aggregated settings: forearmType={settings.forearmTwistBoneType}, forearmCount={settings.forearmTwistBoneCount}, forearmFix={settings.enableForearmFix}");
+                Debug.Log("[YM Arm Patch] Build pass started.");
+                Debug.Log($"[YM Arm Patch] Aggregated settings: forearmType={settings.forearmTwistBoneType}, forearmCount={settings.forearmTwistBoneCount}, forearmFix={settings.enableForearmFix}");
             }
 
             if (settings.enableShoulderFix)
@@ -86,7 +86,7 @@ namespace NDMFVRoidArmPatch.Editor
             if (settings.verboseLog)
             {
                 Debug.Log(
-                    $"[NDMF VRoid Arm Patch] Finished. replaceMapCount={replaceMap.Count}, " +
+                    $"[YM Arm Patch] Finished. replaceMapCount={replaceMap.Count}, " +
                     $"mode={settings.constraintMode}, order={settings.buildOrder}");
             }
         }
@@ -95,18 +95,18 @@ namespace NDMFVRoidArmPatch.Editor
         {
             if (ctx == null || ctx.AvatarRootObject == null) return;
 
-            var components = ctx.AvatarRootObject.GetComponentsInChildren<NDMFVRoidArmPatchComponent>(true);
+            var components = ctx.AvatarRootObject.GetComponentsInChildren<ArmPatchComponent>(true);
             RemoveComponents(components);
         }
 
-        public static void BuildPatchRig(GameObject avatarRoot, NDMFVRoidArmPatchComponent component, bool verboseLog = false)
+        public static void BuildPatchRig(GameObject avatarRoot, ArmPatchComponent component, bool verboseLog = false)
         {
             if (avatarRoot == null || component == null) return;
 
             var animator = avatarRoot.GetComponentInChildren<Animator>(true);
             if (!IsValidHumanoid(animator))
             {
-                Debug.LogWarning("[NDMF VRoid Arm Patch] Preview skipped. Humanoid Animator not found.");
+                Debug.LogWarning("[YM Arm Patch] Preview skipped. Humanoid Animator not found.");
                 return;
             }
 
@@ -210,7 +210,7 @@ namespace NDMFVRoidArmPatch.Editor
         {
             if (originalShoulder == null || originalUpperArm == null || originalLowerArm == null)
             {
-                Debug.LogWarning($"[NDMF VRoid Arm Patch] [{sideLabel}] Shoulder fix skipped. Required bones not found.");
+                Debug.LogWarning($"[YM Arm Patch] [{sideLabel}] Shoulder fix skipped. Required bones not found.");
                 return;
             }
 
@@ -251,7 +251,7 @@ namespace NDMFVRoidArmPatch.Editor
             if (verboseLog)
             {
                 Debug.Log(
-                    $"[NDMF VRoid Arm Patch] [{sideLabel}] Shoulder fix created. " +
+                    $"[YM Arm Patch] [{sideLabel}] Shoulder fix created. " +
                     $"pos={shoulderPositionOffset}, rot={shoulderEulerOffset}, twistAxis={twistAxis}, twistWeight={twistWeight:F2}");
             }
         }
@@ -340,7 +340,7 @@ namespace NDMFVRoidArmPatch.Editor
 
             if (originalLowerArm == null)
             {
-                Debug.LogWarning($"[NDMF VRoid Arm Patch] [{sideLabel}] Forearm fix skipped. LowerArm not found.");
+                Debug.LogWarning($"[YM Arm Patch] [{sideLabel}] Forearm fix skipped. LowerArm not found.");
                 return;
             }
 
@@ -371,7 +371,7 @@ namespace NDMFVRoidArmPatch.Editor
 
                 if (originalHand == null)
                 {
-                    Debug.LogWarning($"[NDMF VRoid Arm Patch] [{sideLabel}] Forearm rotate part skipped. Hand not found.");
+                    Debug.LogWarning($"[YM Arm Patch] [{sideLabel}] Forearm rotate part skipped. Hand not found.");
                 }
                 else if (constraintMode == ConstraintMode.VRChatConstraints)
                 {
@@ -408,7 +408,7 @@ namespace NDMFVRoidArmPatch.Editor
                 {
                     Vector3 axis = (originalHand.position - originalLowerArm.position).normalized;
                     Debug.Log(
-                        $"[NDMF VRoid Arm Patch] [{sideLabel}] TwistAim created. " +
+                        $"[YM Arm Patch] [{sideLabel}] TwistAim created. " +
                         $"name={twistAim.name}, parent={GetPath(twistAim.parent)}, " +
                         $"lowerArm={originalLowerArm.name}, hand={originalHand.name}, " +
                         $"worldAxis=({axis.x:F4},{axis.y:F4},{axis.z:F4}), " +
@@ -466,7 +466,7 @@ namespace NDMFVRoidArmPatch.Editor
 
                 if (verboseLog)
                 {
-                    Debug.Log($"[NDMF VRoid Arm Patch] [{sideLabel}] Twist bones generated. count={twistCount}, type={twistBoneType}");
+                    Debug.Log($"[YM Arm Patch] [{sideLabel}] Twist bones generated. count={twistCount}, type={twistBoneType}");
                 }
             }
 
@@ -474,11 +474,11 @@ namespace NDMFVRoidArmPatch.Editor
             {
                 if (twistBoneType == ForearmTwistBoneType.None)
                 {
-                    Debug.Log($"[NDMF VRoid Arm Patch] [{sideLabel}] Forearm_Def mode active.");
+                    Debug.Log($"[YM Arm Patch] [{sideLabel}] Forearm_Def mode active.");
                 }
                 else
                 {
-                    Debug.Log($"[NDMF VRoid Arm Patch] [{sideLabel}] Twist mode active. type={twistBoneType}");
+                    Debug.Log($"[YM Arm Patch] [{sideLabel}] Twist mode active. type={twistBoneType}");
                 }
             }
         }
@@ -523,14 +523,14 @@ namespace NDMFVRoidArmPatch.Editor
         {
             if (originalProximal == null || originalIntermediate == null || originalDistal == null)
             {
-                Debug.LogWarning($"[NDMF VRoid Arm Patch] [{sideLabel}] Thumb fix skipped. Required thumb bones not found.");
+                Debug.LogWarning($"[YM Arm Patch] [{sideLabel}] Thumb fix skipped. Required thumb bones not found.");
                 return;
             }
 
             var proximalParent = originalProximal.parent;
             if (proximalParent == null)
             {
-                Debug.LogWarning($"[NDMF VRoid Arm Patch] [{sideLabel}] Thumb fix skipped. Thumb parent not found.");
+                Debug.LogWarning($"[YM Arm Patch] [{sideLabel}] Thumb fix skipped. Thumb parent not found.");
                 return;
             }
 
@@ -557,7 +557,7 @@ namespace NDMFVRoidArmPatch.Editor
 
             if (verboseLog)
             {
-                Debug.Log($"[NDMF VRoid Arm Patch] [{sideLabel}] Thumb constraints created. mode={constraintMode}, rot={eulerOffset}");
+                Debug.Log($"[YM Arm Patch] [{sideLabel}] Thumb constraints created. mode={constraintMode}, rot={eulerOffset}");
             }
         }
 
@@ -1015,14 +1015,14 @@ namespace NDMFVRoidArmPatch.Editor
 
                     if (verboseLog)
                     {
-                        Debug.Log($"[NDMF VRoid Arm Patch] Rebound renderer: {GetPath(smr.transform)}");
+                        Debug.Log($"[YM Arm Patch] Rebound renderer: {GetPath(smr.transform)}");
                     }
                 }
             }
 
             if (verboseLog)
             {
-                Debug.Log($"[NDMF VRoid Arm Patch] Renderer rebinding finished. changedRendererCount={changedRendererCount}");
+                Debug.Log($"[YM Arm Patch] Renderer rebinding finished. changedRendererCount={changedRendererCount}");
             }
         }
 
@@ -1061,7 +1061,7 @@ namespace NDMFVRoidArmPatch.Editor
                 }
                 if (!hasArmWeights)
                 {
-                    if (verboseLog) Debug.Log($"[NDMF VRoid Arm Patch] Twist reweight skipped (no forearm/hand weights): {GetPath(smr.transform)}");
+                    if (verboseLog) Debug.Log($"[YM Arm Patch] Twist reweight skipped (no forearm/hand weights): {GetPath(smr.transform)}");
                     continue;
                 }
 
@@ -1148,7 +1148,7 @@ namespace NDMFVRoidArmPatch.Editor
                 mesh.boneWeights = weights;
                 smr.sharedMesh = mesh;
                 smr.bones = bones.ToArray();
-                if (verboseLog) Debug.Log($"[NDMF VRoid Arm Patch] Twist reweight: {GetPath(smr.transform)}");
+                if (verboseLog) Debug.Log($"[YM Arm Patch] Twist reweight: {GetPath(smr.transform)}");
             }
         }
 
@@ -1278,7 +1278,7 @@ namespace NDMFVRoidArmPatch.Editor
             float t = dist > 1e-6f ? Vector3.Dot(laToTarget, laToHand.normalized) / dist : 0f;
 
             Debug.Log(
-                $"[NDMF VRoid Arm Patch] [{sideLabel}] {label} debug. " +
+                $"[YM Arm Patch] [{sideLabel}] {label} debug. " +
                 $"target={target.name}, parent={GetPath(target.parent)}, " +
                 $"worldPos=({target.position.x:F4},{target.position.y:F4},{target.position.z:F4}), " +
                 $"localPos=({target.localPosition.x:F4},{target.localPosition.y:F4},{target.localPosition.z:F4}), " +
@@ -1286,11 +1286,11 @@ namespace NDMFVRoidArmPatch.Editor
                 $"axis={axis}, weight={weight:F4}, projectedT={t:F4}");
         }
 
-        private static AggregatedSettings Aggregate(NDMFVRoidArmPatchComponent[] components, GameObject avatarRoot)
+        private static AggregatedSettings Aggregate(ArmPatchComponent[] components, GameObject avatarRoot)
         {
             if (components.Length > 1)
             {
-                Debug.LogWarning("[NDMF VRoid Arm Patch] Multiple components found. Last one will be used.");
+                Debug.LogWarning("[YM Arm Patch] Multiple components found. Last one will be used.");
             }
             var c = SelectPreferredComponent(components, avatarRoot);
 
@@ -1321,9 +1321,9 @@ namespace NDMFVRoidArmPatch.Editor
             };
         }
 
-        private static NDMFVRoidArmPatchComponent SelectPreferredComponent(NDMFVRoidArmPatchComponent[] components, GameObject avatarRoot)
+        private static ArmPatchComponent SelectPreferredComponent(ArmPatchComponent[] components, GameObject avatarRoot)
         {
-            NDMFVRoidArmPatchComponent best = components[0];
+            ArmPatchComponent best = components[0];
             int bestScore = int.MinValue;
             Transform root = avatarRoot != null ? avatarRoot.transform : null;
 
@@ -1355,7 +1355,7 @@ namespace NDMFVRoidArmPatch.Editor
             return depth;
         }
 
-        private static void RemoveComponents(NDMFVRoidArmPatchComponent[] components)
+        private static void RemoveComponents(ArmPatchComponent[] components)
         {
             for (int i = 0; i < components.Length; i++)
             {

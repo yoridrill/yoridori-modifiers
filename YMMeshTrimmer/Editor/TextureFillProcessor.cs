@@ -2,9 +2,11 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
+namespace YoridoriModifiers.MeshTrimmer
+{
 public static class TexturePostProcessProcessor
 {
-    public static void ApplyBuildTimeReplacement(NDMFVRoidMeshTrimmer trimmer)
+    public static void ApplyBuildTimeReplacement(MeshTrimmerComponent trimmer)
     {
         if (trimmer == null)
         {
@@ -18,7 +20,7 @@ public static class TexturePostProcessProcessor
         {
             if (target == null || !target.enabled || target.mainTexture == null ||
                 !target.enableTextureFill ||
-                target.texturePostProcessMode == NDMFVRoidMeshTrimmer.TexturePostProcessMode.None)
+                target.texturePostProcessMode == MeshTrimmerComponent.TexturePostProcessMode.None)
             {
                 continue;
             }
@@ -56,7 +58,7 @@ public static class TexturePostProcessProcessor
 
                     replacement = new Material(usage.material)
                     {
-                        name = usage.material.name + "_NDMFVRoidProcessed"
+                        name = usage.material.name + "_YoridoriMeshTrimmerProcessed"
                     };
                     replacement.SetTexture(textureProperty, processedTexture);
                     ReplaceAllMatchingTextureSlots(replacement, sourceMainTexture, processedTexture);
@@ -71,7 +73,7 @@ public static class TexturePostProcessProcessor
             }
 
             if (trimmer != null && trimmer.debugEdgeCrossingRoutes)
-                Debug.Log($"[NDMF VRoid Mesh Trimmer] Build-time replacement applied. Texture={target.mainTexture.name}, Mode={target.texturePostProcessMode}");
+                Debug.Log($"[YM Mesh Trimmer] Build-time replacement applied. Texture={target.mainTexture.name}, Mode={target.texturePostProcessMode}");
         }
     }
 
@@ -85,9 +87,9 @@ public static class TexturePostProcessProcessor
 
     private static bool TryCreateProcessedTexture(
         Texture2D source,
-        NDMFVRoidMeshTrimmer.TexturePostProcessMode mode,
+        MeshTrimmerComponent.TexturePostProcessMode mode,
         Color fillColor,
-        NDMFVRoidMeshTrimmer trimmer,
+        MeshTrimmerComponent trimmer,
         out Texture2D processed)
     {
         processed = null;
@@ -99,18 +101,18 @@ public static class TexturePostProcessProcessor
         }
         catch (UnityException)
         {
-            Debug.LogWarning($"[NDMF VRoid Mesh Trimmer] Texture post-process skipped (non-readable): {source.name}");
+            Debug.LogWarning($"[YM Mesh Trimmer] Texture post-process skipped (non-readable): {source.name}");
             return false;
         }
 
         int width = source.width;
         int height = source.height;
 
-        if (mode == NDMFVRoidMeshTrimmer.TexturePostProcessMode.FillColor)
+        if (mode == MeshTrimmerComponent.TexturePostProcessMode.FillColor)
         {
             ApplyFillColorComposite(pixels, width, height, fillColor);
         }
-        else if (mode == NDMFVRoidMeshTrimmer.TexturePostProcessMode.Solidify)
+        else if (mode == MeshTrimmerComponent.TexturePostProcessMode.Solidify)
         {
             ApplySolidify(pixels, width, height, trimmer.alphaThreshold);
         }
@@ -122,7 +124,7 @@ public static class TexturePostProcessProcessor
         processed = CreateWritableTexture(width, height, source, linear);
         if (processed == null)
         {
-            Debug.LogWarning($"[NDMF VRoid Mesh Trimmer] Texture post-process skipped (failed to create writable texture): {source.name}");
+            Debug.LogWarning($"[YM Mesh Trimmer] Texture post-process skipped (failed to create writable texture): {source.name}");
             return false;
         }
 
@@ -134,7 +136,7 @@ public static class TexturePostProcessProcessor
         }
         catch (UnityException ex)
         {
-            Debug.LogWarning($"[NDMF VRoid Mesh Trimmer] Texture post-process skipped (SetPixels failed): {source.name} - {ex.Message}");
+            Debug.LogWarning($"[YM Mesh Trimmer] Texture post-process skipped (SetPixels failed): {source.name} - {ex.Message}");
             Object.DestroyImmediate(processed);
             processed = null;
             return false;
@@ -143,9 +145,9 @@ public static class TexturePostProcessProcessor
 
     public static bool TryCreateProcessedTextureForPreview(
         Texture2D source,
-        NDMFVRoidMeshTrimmer.TexturePostProcessMode mode,
+        MeshTrimmerComponent.TexturePostProcessMode mode,
         Color fillColor,
-        NDMFVRoidMeshTrimmer trimmer,
+        MeshTrimmerComponent trimmer,
         out Texture2D processed)
     {
         return TryCreateProcessedTexture(source, mode, fillColor, trimmer, out processed);
@@ -169,7 +171,7 @@ public static class TexturePostProcessProcessor
             {
                 tex = new Texture2D(width, height, format, mipChain, linear)
                 {
-                    name = source.name + "_NDMFVRoidProcessed",
+                    name = source.name + "_YoridoriMeshTrimmerProcessed",
                     wrapMode = source.wrapMode,
                     filterMode = source.filterMode,
                     anisoLevel = source.anisoLevel
@@ -319,4 +321,6 @@ public static class TexturePostProcessProcessor
             pixels[i] = dst;
         }
     }
+}
+
 }

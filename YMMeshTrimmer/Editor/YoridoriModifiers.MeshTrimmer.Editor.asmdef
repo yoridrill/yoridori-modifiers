@@ -1,0 +1,19 @@
+{
+    "name": "YoridoriModifiers.MeshTrimmer.Editor",
+    "rootNamespace": "YoridoriModifiers.MeshTrimmer",
+    "references": [
+        "nadena.dev.ndmf",
+        "YoridoriModifiers.MeshTrimmer.Runtime"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using UnityEngine;
 using VRC.SDKBase;
 
-[AddComponentMenu("yoridrill/NDMF VRoid Mesh Trimmer")]
-public class NDMFVRoidMeshTrimmer : MonoBehaviour, IEditorOnly
+namespace YoridoriModifiers.MeshTrimmer
+{
+[AddComponentMenu("Yoridori Modifiers/YM Mesh Trimmer")]
+public class MeshTrimmerComponent : MonoBehaviour, IEditorOnly
 {
     public enum TrimAlgorithm
     {
@@ -88,4 +90,6 @@ public class NDMFVRoidMeshTrimmer : MonoBehaviour, IEditorOnly
     }
 
     public List<PreviewRecoveryRecord> PreviewRecoveryRecords => previewRecoveryRecords;
+}
+
 }

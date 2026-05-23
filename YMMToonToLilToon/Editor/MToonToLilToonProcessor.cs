@@ -5,9 +5,9 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-namespace NdmfMToon10ToLilToon
+namespace YoridoriModifiers.MToonToLilToon
 {
-    internal static class MToonLilToonProcessor
+    internal static class MToonToLilToonProcessor
     {
         private enum TextureBakeKind
         {
@@ -31,7 +31,7 @@ namespace NdmfMToon10ToLilToon
         private static readonly Dictionary<string, HairMergeCacheEntry> HairMergeCache = new();
 
         internal static void ApplyGlobalOverridesToConvertedMaterials(
-            MToonLilToonComponent component,
+            MToonToLilToonComponent component,
             LilToonGlobalOverrides overrides,
             bool disableShadowReceiveForFace = false,
             bool disableBacklightStrengthForFace = false)
@@ -62,7 +62,7 @@ namespace NdmfMToon10ToLilToon
             }
         }
 
-        internal static void ApplyOnBuild(MToonLilToonComponent component, System.Action<string> onProgress = null, ConversionRoute route = ConversionRoute.Build)
+        internal static void ApplyOnBuild(MToonToLilToonComponent component, System.Action<string> onProgress = null, ConversionRoute route = ConversionRoute.Build)
         {
             if (component == null) return;
             EnsureHairSelectionsMatchAvatarMaterials(component);
@@ -216,7 +216,7 @@ namespace NdmfMToon10ToLilToon
             LogVerboseReportIfNeeded(component, report);
         }
 
-        private static void EnsureHairSelectionsMatchAvatarMaterials(MToonLilToonComponent component)
+        private static void EnsureHairSelectionsMatchAvatarMaterials(MToonToLilToonComponent component)
         {
             if (component == null || !component.enableHairMerge || component.hairSelections == null || component.hairSelections.Count == 0) return;
 
@@ -235,7 +235,7 @@ namespace NdmfMToon10ToLilToon
                 avatarMaterials.Where(MToonDetector.IsMToonLike));
         }
 
-        private static void LogVerboseReportIfNeeded(MToonLilToonComponent component, ConversionReport report)
+        private static void LogVerboseReportIfNeeded(MToonToLilToonComponent component, ConversionReport report)
         {
             if (component == null || report == null || !component.verboseLog) return;
 
@@ -396,7 +396,7 @@ namespace NdmfMToon10ToLilToon
             renderer.sharedMaterials = result.ToArray();
         }
 
-        private static Shader ResolveLilToonShader(MToonLilToonComponent component)
+        private static Shader ResolveLilToonShader(MToonToLilToonComponent component)
         {
             if (component.lilToonShader != null) return component.lilToonShader;
 
@@ -750,7 +750,7 @@ namespace NdmfMToon10ToLilToon
         private static void ApplyFaceShadowMaskSettings(
             Material faceMaterial,
             Texture sdfTexture,
-            MToonLilToonComponent.FaceShadowMaskType maskType,
+            MToonToLilToonComponent.FaceShadowMaskType maskType,
             float shadowStrengthMaskLod)
         {
             if (faceMaterial == null) return;
@@ -758,9 +758,9 @@ namespace NdmfMToon10ToLilToon
             SetFloatIfAnyExists(faceMaterial, new[] { "_UseShadowMask", "_UseShadowStrengthMask" }, 1f);
             var shadowMaskTypeValue = maskType switch
             {
-                MToonLilToonComponent.FaceShadowMaskType.Strength => 0f,
-                MToonLilToonComponent.FaceShadowMaskType.Flat => 1f,
-                MToonLilToonComponent.FaceShadowMaskType.Sdf => 2f,
+                MToonToLilToonComponent.FaceShadowMaskType.Strength => 0f,
+                MToonToLilToonComponent.FaceShadowMaskType.Flat => 1f,
+                MToonToLilToonComponent.FaceShadowMaskType.Sdf => 2f,
                 _ => 1f
             };
             SetFloatIfAnyExists(faceMaterial, new[] { "_ShadowMaskType" }, shadowMaskTypeValue);
@@ -1177,7 +1177,7 @@ namespace NdmfMToon10ToLilToon
         {
             if (atlas == null) return null;
             var rendererId = renderer != null ? SanitizePathSegment(renderer.name) : "Renderer";
-            var directory = $"Assets/NdmfMToon10ToLilToon.Generated/{SanitizePathSegment(scopeId)}";
+            var directory = $"Assets/YoridoriModifiers.MToonToLilToon.Generated/{SanitizePathSegment(scopeId)}";
             EnsureAssetFolder(directory);
             var propertyId = SanitizePathSegment(propertyName).TrimStart('_');
             var fileName = $"Hair_{rendererId}_{propertyId}.png";
@@ -1402,7 +1402,7 @@ namespace NdmfMToon10ToLilToon
             }
         }
 
-        private static string BuildGeneratedAssetScopeId(MToonLilToonComponent component)
+        private static string BuildGeneratedAssetScopeId(MToonToLilToonComponent component)
         {
             if (component == null) return "Avatar_Unknown";
             var root = component.transform != null ? component.transform.root : null;
@@ -2070,7 +2070,7 @@ namespace NdmfMToon10ToLilToon
             generatedObject.hideFlags &= ~dontSaveFlags;
         }
 
-        private static void ValidateRendererMaterialTextureReferencesBeforeAao(MToonLilToonComponent component, ConversionReport report)
+        private static void ValidateRendererMaterialTextureReferencesBeforeAao(MToonToLilToonComponent component, ConversionReport report)
         {
             if (component == null) return;
             var verbose = component.verboseLog;

@@ -4,13 +4,13 @@ using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
 
-namespace NdmfMToon10ToLilToon
+namespace YoridoriModifiers.MToonToLilToon
 {
     [InitializeOnLoad]
-    internal static class MToonLilToonPreviewUtility
+    internal static class MToonToLilToonPreviewUtility
     {
-        private const string PreviewRootName = "__MToonLilToonPreviewRoot";
-        private const string PreviewAvatarName = "__MToonLilToonPreviewAvatar";
+        private const string PreviewRootName = "__YoridoriMToonToLilToonPreviewRoot";
+        private const string PreviewAvatarName = "__YoridoriMToonToLilToonPreviewAvatar";
 
         private static GameObject _sourceAvatarRoot;
         private static GameObject _previewRoot;
@@ -27,7 +27,7 @@ namespace NdmfMToon10ToLilToon
             public bool wasEnabled;
         }
 
-        static MToonLilToonPreviewUtility()
+        static MToonToLilToonPreviewUtility()
         {
             AssemblyReloadEvents.beforeAssemblyReload += StopPreview;
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
@@ -35,7 +35,7 @@ namespace NdmfMToon10ToLilToon
             CleanupOrphanPreviewObjects();
         }
 
-        internal static void TogglePreview(MToonLilToonComponent component)
+        internal static void TogglePreview(MToonToLilToonComponent component)
         {
             if (_isProcessingPreview) return;
             var avatarRoot = FindAvatarRoot(component.gameObject);
@@ -50,7 +50,7 @@ namespace NdmfMToon10ToLilToon
             QueueStartPreview(avatarRoot);
         }
 
-        internal static void RestartPreviewIfActive(MToonLilToonComponent component)
+        internal static void RestartPreviewIfActive(MToonToLilToonComponent component)
         {
             if (_isProcessingPreview) return;
             var avatarRoot = FindAvatarRoot(component.gameObject);
@@ -59,7 +59,7 @@ namespace NdmfMToon10ToLilToon
             QueueStartPreview(avatarRoot);
         }
 
-        internal static void ApplyGlobalOverridesIfActive(MToonLilToonComponent sourceComponent)
+        internal static void ApplyGlobalOverridesIfActive(MToonToLilToonComponent sourceComponent)
         {
             if (_isProcessingPreview) return;
             if (sourceComponent == null) return;
@@ -72,10 +72,10 @@ namespace NdmfMToon10ToLilToon
                 : _previewAvatar.transform.Find(sourcePath);
             if (previewTransform == null) return;
 
-            var previewComponent = previewTransform.GetComponent<MToonLilToonComponent>();
+            var previewComponent = previewTransform.GetComponent<MToonToLilToonComponent>();
             if (previewComponent == null) return;
 
-            MToonLilToonProcessor.ApplyGlobalOverridesToConvertedMaterials(
+            MToonToLilToonProcessor.ApplyGlobalOverridesToConvertedMaterials(
                 previewComponent,
                 sourceComponent.globalOverrides,
                 sourceComponent.disableShadowReceiveForFace,
@@ -87,16 +87,16 @@ namespace NdmfMToon10ToLilToon
         internal static bool IsProcessingPreview() => _isProcessingPreview;
 
 
-        internal static bool HasStalePreviewState(MToonLilToonComponent component)
+        internal static bool HasStalePreviewState(MToonToLilToonComponent component)
         {
             if (component == null) return false;
             if (IsPreviewing(component)) return false;
             var avatarRoot = FindAvatarRoot(component.gameObject);
             if (avatarRoot == null) return false;
-            return avatarRoot.GetComponentsInChildren<MToonLilToonComponent>(true).Any(c => c != null && c.isPreviewing);
+            return avatarRoot.GetComponentsInChildren<MToonToLilToonComponent>(true).Any(c => c != null && c.isPreviewing);
         }
 
-        internal static void ResetSavedPreviewState(MToonLilToonComponent component)
+        internal static void ResetSavedPreviewState(MToonToLilToonComponent component)
         {
             if (component == null) return;
 
@@ -120,7 +120,7 @@ namespace NdmfMToon10ToLilToon
             SceneView.RepaintAll();
         }
 
-        internal static bool IsPreviewing(MToonLilToonComponent component)
+        internal static bool IsPreviewing(MToonToLilToonComponent component)
         {
             var avatarRoot = FindAvatarRoot(component.gameObject);
             return avatarRoot != null && IsPreviewing(avatarRoot);
@@ -163,9 +163,9 @@ namespace NdmfMToon10ToLilToon
                 _previewAvatar.name = PreviewAvatarName;
                 _previewAvatar.hideFlags = HideFlags.HideInHierarchy | HideFlags.DontSaveInEditor;
 
-                foreach (var component in _previewAvatar.GetComponentsInChildren<MToonLilToonComponent>(true))
+                foreach (var component in _previewAvatar.GetComponentsInChildren<MToonToLilToonComponent>(true))
                 {
-                    MToonLilToonProcessor.ApplyOnBuild(component, SetProgress, MToonLilToonProcessor.ConversionRoute.Preview);
+                    MToonToLilToonProcessor.ApplyOnBuild(component, SetProgress, MToonToLilToonProcessor.ConversionRoute.Preview);
                     component.isPreviewing = true;
                 }
 
@@ -230,7 +230,7 @@ namespace NdmfMToon10ToLilToon
 
         private static void SyncSourcePreviewFlag(GameObject avatarRoot, bool previewing)
         {
-            foreach (var component in avatarRoot.GetComponentsInChildren<MToonLilToonComponent>(true))
+            foreach (var component in avatarRoot.GetComponentsInChildren<MToonToLilToonComponent>(true))
             {
                 component.isPreviewing = previewing;
                 EditorUtility.SetDirty(component);

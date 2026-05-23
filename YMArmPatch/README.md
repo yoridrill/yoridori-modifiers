@@ -7,10 +7,10 @@ VCCやALCOMで作成したVRChat Avatars Projectでご利用ください。
 実機負荷の少しでも低い構成や、VRM0.0での改善を希望される場合は、VRoid Bone Fix ( https://gsdm0150.booth.pm/items/7175261 ) の使用をご検討ください。
 
 # 使い方
-NDMF VRoid Arm PatchはVCC/ALCOMでの導入が可能です。  
+YM Arm PatchはVCC/ALCOMでの導入が可能です。  
 https://yoridrill.github.io/vpm-repos/redirect.html
 
-PrefabかArmatureのどちらかのルートに「NDMF VRoid Arm Patch」コンポーネントをつけると、ビルド時にオフセットボーンとコンストレイントが追加されます。
+PrefabかArmatureのどちらかのルートに「YM Arm Patch」コンポーネントをつけると、ビルド時にオフセットボーンとコンストレイントが追加されます。
 
 左上の「Preview」ボタンで見え方を確認できます。  
 VRoidは、XAvatarでのインポートを想定しています。  

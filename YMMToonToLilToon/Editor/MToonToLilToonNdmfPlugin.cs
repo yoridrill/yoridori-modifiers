@@ -2,20 +2,20 @@ using System.Linq;
 using nadena.dev.ndmf;
 using UnityEngine;
 
-[assembly: ExportsPlugin(typeof(NdmfMToon10ToLilToon.MToonLilToonNdmfPlugin))]
+[assembly: ExportsPlugin(typeof(YoridoriModifiers.MToonToLilToon.MToonToLilToonNdmfPlugin))]
 
-namespace NdmfMToon10ToLilToon
+namespace YoridoriModifiers.MToonToLilToon
 {
-    public sealed class MToonLilToonNdmfPlugin : Plugin<MToonLilToonNdmfPlugin>
+    public sealed class MToonToLilToonNdmfPlugin : Plugin<MToonToLilToonNdmfPlugin>
     {
-        public override string QualifiedName => "jp.yoridrill.ndmf-mtoon10-to-liltoon";
-        public override string DisplayName => "NDMF MToon10 to lilToon";
+        public override string QualifiedName => "jp.yoridrill.ym-mtoon-to-liltoon";
+        public override string DisplayName => "YM MToon to lilToon";
 
         protected override void Configure()
         {
             InPhase(BuildPhase.Transforming)
-                .AfterPlugin("jp.yoridrill.ndmf-vroid-arm-patch")
-                .AfterPlugin("jp.yoridrill.ndmf-vroid-mesh-trimmer")
+                .AfterPlugin("jp.yoridrill.ym-arm-patch")
+                .AfterPlugin("jp.yoridrill.ym-mesh-trimmer")
                 .BeforePlugin("com.github.kurotu.vrc-quest-tools")
                 .Run("Convert MToon10 Materials to lilToon", Execute);
         }
@@ -25,12 +25,12 @@ namespace NdmfMToon10ToLilToon
             var root = ResolveAvatarRoot(context);
             if (root == null) return;
 
-            var components = root.GetComponentsInChildren<MToonLilToonComponent>(true);
+            var components = root.GetComponentsInChildren<MToonToLilToonComponent>(true);
             try
             {
                 if (components.Any(c => c != null && c.isPreviewing))
                 {
-                    MToonLilToonPreviewUtility.StopPreview();
+                    MToonToLilToonPreviewUtility.StopPreview();
                     foreach (var component in components.Where(c => c != null))
                     {
                         component.isPreviewing = false;
@@ -59,12 +59,12 @@ namespace NdmfMToon10ToLilToon
             return avatarRootTransform != null ? avatarRootTransform.gameObject : null;
         }
 
-        private static void ApplyOnBuild(MToonLilToonComponent component)
+        private static void ApplyOnBuild(MToonToLilToonComponent component)
         {
-            MToonLilToonProcessor.ApplyOnBuild(component);
+            MToonToLilToonProcessor.ApplyOnBuild(component);
         }
 
-        private static void RemoveComponents(MToonLilToonComponent[] components)
+        private static void RemoveComponents(MToonToLilToonComponent[] components)
         {
             if (components == null) return;
             for (var i = 0; i < components.Length; i++)

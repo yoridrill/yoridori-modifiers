@@ -1,10 +1,10 @@
 {
-    "name": "NDMFMToon10tolilToon.Editor",
-    "rootNamespace": "",
+    "name": "YoridoriModifiers.ArmPatch.Editor",
+    "rootNamespace": "YoridoriModifiers.ArmPatch",
     "references": [
-        "GUID:62ced99b048af7f4d8dfe4bed8373d76",
-        "GUID:c50cccb1b0d5b4000b98ebc19ed8d48e",
-        "GUID:5718fb738711cd34ea54e9553040911d"
+        "nadena.dev.ndmf",
+        "YoridoriModifiers.ArmPatch.Runtime",
+        "VRC.SDK3A"
     ],
     "includePlatforms": [
         "Editor"

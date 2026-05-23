@@ -2,6 +2,8 @@ using System;
 using UnityEditor;
 using UnityEngine;
 
+namespace YoridoriModifiers.MeshTrimmer
+{
 public class UvPickerPopup : PopupWindowContent
 {
     private readonly Texture2D _texture;
@@ -112,4 +114,6 @@ public class UvPickerPopup : PopupWindowContent
         float x = outer.x + (outer.width - w) * 0.5f;
         return new Rect(x, outer.y, w, outer.height);
     }
+}
+
 }

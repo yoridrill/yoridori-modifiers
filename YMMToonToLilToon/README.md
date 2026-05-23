@@ -1,4 +1,4 @@
-# NDMF MToon1.0 → lilToon Converter
+# YM MToon → lilToon Converter
 
 MToon 1.0 / 互換 MToon マテリアルを lilToon へ変換するための Unity + NDMF 向けツールです。
 
@@ -20,7 +20,7 @@ MToon 1.0 / 互換 MToon マテリアルを lilToon へ変換するための Uni
 
 ## 使い方
 
-1. 対象アバターの Renderer を持つオブジェクトに `MToonLilToonComponent` を追加
+1. 対象アバターの Renderer を持つオブジェクトに `MToonToLilToonComponent` を追加
 2. `lilToon Shader` を設定
 3. `髪周りのルック調整` を ON にすると候補が自動スキャンされる
 4. 必要に応じて `対象マテリアル` のチェックを調整

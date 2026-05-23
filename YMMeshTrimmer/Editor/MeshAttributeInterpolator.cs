@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
+namespace YoridoriModifiers.MeshTrimmer
+{
 public static class MeshAttributeInterpolator
 {
     public static Vector3 Lerp(Vector3 a, Vector3 b, float t) => Vector3.LerpUnclamped(a, b, t);
@@ -71,4 +73,6 @@ public static class MeshAttributeInterpolator
             map[boneIndex] = weight;
         }
     }
+}
+
 }

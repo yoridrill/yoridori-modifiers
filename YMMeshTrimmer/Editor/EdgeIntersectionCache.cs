@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 
+namespace YoridoriModifiers.MeshTrimmer
+{
 public class EdgeIntersectionCache
 {
     private readonly Dictionary<EdgeKey, int> _cache = new Dictionary<EdgeKey, int>();
@@ -44,4 +46,6 @@ public class EdgeIntersectionCache
             }
         }
     }
+}
+
 }

@@ -1,14 +1,10 @@
 {
-    "name": "NDMFVRoidArmPatch.Editor",
-    "rootNamespace": "",
+    "name": "YoridoriModifiers.ArmPatch.Runtime",
+    "rootNamespace": "YoridoriModifiers.ArmPatch",
     "references": [
-        "nadena.dev.ndmf",
-        "NDMFVRoidArmPatch.Runtime",
-        "VRC.SDK3A"
+        "VRC.SDKBase"
     ],
-    "includePlatforms": [
-        "Editor"
-    ],
+    "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,

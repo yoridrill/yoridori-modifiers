@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+namespace YoridoriModifiers.MeshTrimmer
+{
 public static class AlphaMaskProcessor
 {
     public class AlphaMaskData
@@ -12,7 +14,7 @@ public static class AlphaMaskProcessor
         public TextureWrapMode wrapMode;
     }
 
-    public static bool TryBuildMask(Texture2D texture, NDMFVRoidMeshTrimmer settings, out AlphaMaskData data)
+    public static bool TryBuildMask(Texture2D texture, MeshTrimmerComponent settings, out AlphaMaskData data)
     {
         data = null;
         if (texture == null)
@@ -27,7 +29,7 @@ public static class AlphaMaskProcessor
         }
         catch (UnityException)
         {
-            Debug.LogWarning($"[NDMF VRoid Mesh Trimmer] Texture is not readable and will be skipped: {texture.name}");
+            Debug.LogWarning($"[YM Mesh Trimmer] Texture is not readable and will be skipped: {texture.name}");
             return false;
         }
 
@@ -273,4 +275,6 @@ public static class AlphaMaskProcessor
             }
         }
     }
+}
+
 }

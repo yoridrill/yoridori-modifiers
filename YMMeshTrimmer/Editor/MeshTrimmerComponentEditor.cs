@@ -67,6 +67,8 @@ public class MeshTrimmerComponentEditor : Editor
 
     static MeshTrimmerComponentEditor()
     {
+        SceneIconUtility.HideComponentIcon<MeshTrimmerComponent>();
+
         SubscribeEditorEvents();
         ScheduleOrphanPreviewCleanup();
     }

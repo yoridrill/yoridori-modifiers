@@ -31,6 +31,8 @@ namespace YoridoriModifiers.MToonToLilToon
 
         static MToonToLilToonPreviewUtility()
         {
+            SceneIconUtility.HideComponentIcon<MToonToLilToonComponent>();
+
             AssemblyReloadEvents.beforeAssemblyReload += StopPreview;
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
             EditorApplication.quitting += StopPreview;

@@ -1,49 +1,89 @@
-VRoidのなで肩、手首のねじれ、開き過ぎる親指をコンポーネントを1つ付けるだけで、まとめて非破壊で抑えることができます。  
-VRoid用の初期値を入れてありますが、他のモデルでも使用可能です。  
-VCCやALCOMで作成したVRChat Avatars Projectでご利用ください。
+# YM Arm Patch
 
-オフセットした追加ボーンをコンストレイントで連動させています。  
-コンストレイントの使用数上限はかなり高いので、引っかかることはないと思いますが、このツールを使うと最大で12個増えるため、ご留意ください。  
-実機負荷の少しでも低い構成や、VRM0.0での改善を希望される場合は、VRoid Bone Fix ( https://gsdm0150.booth.pm/items/7175261 ) の使用をご検討ください。
+肩、前腕、親指の見た目をビルド時に非破壊で補正する NDMF ツールです。  
+オフセットした追加ボーンを Constraint で連動させ、VRoid で起きやすいなで肩、手首まわりのねじれ、開きすぎる親指を抑えます。
 
-# 使い方
-YM Arm PatchはVCC/ALCOMでの導入が可能です。  
-https://yoridrill.github.io/vpm-repos/redirect.html
+通常の Add Component では、非VRoidモデルでも使いやすいようにニュートラルな初期値になっています。  
+VRoid 向けの値をまとめて入れたい場合は、Hierarchy のアバター右クリックメニューから `Yoridori Modifiers/Add VRoid Preset` を使ってください。
 
-PrefabかArmatureのどちらかのルートに「YM Arm Patch」コンポーネントをつけると、ビルド時にオフセットボーンとコンストレイントが追加されます。
+## 使い方
 
-左上の「Preview」ボタンで見え方を確認できます。  
-VRoidは、XAvatarでのインポートを想定しています。  
-VRM0.0経由だったり、非VRoidモデルだと軸が異なる可能性があるので、もし補正がおかしい場合は、初期値を全てゼロ（Thickness/Widthは1）にしてから改めて調整してください。
+1. アバターの Prefab ルート、Armature ルート、または補正したい階層に `Yoridori Modifiers/YM Arm Patch` を追加します。
+2. 必要な Fix だけ左端のチェックを有効にします。
+3. `Preview` で見え方を確認します。
+4. Build 時に NDMF が補正用ボーンと Constraint を追加します。
 
-Preview状態のままだと、このツール以外の変更が確認できなくなるため、微調整が終わったら速やかに解除してください。  
-Preview状態のままSceneを保存すると、次回開いたときモデルが表示されないことがあります。  
-その際は、このツールのAdvanced内の「Reset Preview」を押して復旧させてください。
+`Preview` では VRChat SDK 内の Idle モーションを再生して、腕まわりの見え方を確認できます。  
+Preview 表示が残ったり、モデルが見えなくなった場合は、`Advanced` の `Reset Preview` を押してください。
 
-初期状態だと肩、手首、親指の全てが補正対象になります。  
-補正が不要な箇所がある場合は、左端のチェックを外してください。
+## 初期値
 
-# 注意事項
-VRChat SDK内のサンプルアニメーションを参照しています。  
-このアニメーションは実機でのポーズとは僅かに異なるようです。  
-アップデートでパスが変わるとPreview機能は使えなくなります。  
-動かない場合はご連絡いただけると助かります。
+通常追加時は以下のように、補正量が入らない状態です。
 
-このツールの補正は、全体的に肘付近へしわ寄せする仕様となっています。  
-ご了承ください。
+- `Shoulder Fix`: 無効
+- `Forearm Fix`: 無効
+- `Thumb Fix`: 無効
+- `Euler Offset`: すべて `0`
+- `Thickness` / `Width`: すべて `1`
 
-# 高度な使い方
-◆ Constraint Mode  
-VRChat ConstraintとUnity Constraintが選べます。  
-VRChat用途では、VRChat Constraintを推奨します。
+VRoid 向けの推奨値はプリセットから追加できます。
 
-◆ Build Order  
-Modular Avatarの前か後かが選べます。
+## VRoid プリセット
 
-＜前の場合＞  
-このツールで生成されたConstraintをMA側の処理で変換できます。  
-（MAがResonite用変換に対応した場合での使用を想定しています）
+Hierarchy でアバターを右クリックし、以下から選択できます。
 
-＜後の場合＞  
-MAで着用した衣装にも補正を入れることができます。  
-こちらが初期値になっています。
+- `Yoridori Modifiers/Add VRoid Preset/Long Sleeves`
+- `Yoridori Modifiers/Add VRoid Preset/Short Sleeves`
+- `Yoridori Modifiers/Add VRoid Preset/Kimono`
+- `Yoridori Modifiers/Add VRoid Preset from VRM 0.0/Long Sleeves`
+- `Yoridori Modifiers/Add VRoid Preset from VRM 0.0/Short Sleeves`
+- `Yoridori Modifiers/Add VRoid Preset from VRM 0.0/Kimono`
+
+プリセットでは `Shoulder Fix`、`Forearm Fix`、`Thumb Fix` が有効になります。  
+VRM 0.0 用プリセットは親指の初期角度が異なります。
+
+`Kimono` では、名前に `body` と `skin` の両方を含むマテリアルを大文字小文字無視で探し、見つかれば Twist Target に設定します。見つからない場合は `Auto` になります。
+
+## 設定
+
+### Shoulder Fix
+
+肩ボーンの見た目を補正します。  
+肩の位置自体を大きく変えるものではなく、腕まわりの見え方を整える目的です。
+
+### Forearm Fix
+
+前腕の見た目骨にスケール補正と手首 twist 補正を適用します。  
+半袖など腕が見える衣装では `Twist Bone Count` を増やすと安定しやすくなります。
+
+### Thumb Fix
+
+親指の初期姿勢を補正します。  
+右手は内部で自動反転して適用されます。
+
+### Constraint Mode
+
+`VRChat Constraints` と `Unity Constraints` を選べます。  
+VRChat 用途では `VRChat Constraints` を推奨します。
+
+### Build Order
+
+Modular Avatar の前後どちらで処理するかを選べます。
+
+- `After Modular Avatar`
+  - MA で着せた衣装にも補正を入れやすい設定です。
+- `Before Modular Avatar`
+  - 生成された Constraint を MA 側の処理に渡したい場合に使います。
+
+## 注意
+
+Constraint の使用数が増えます。設定内容によっては30ほど増加します。 
+VRChatでの使用数上限は高いため、基本引っかかることはないと思いますが、ご留意ください。 
+補正の都合上、肘付近へしわ寄せが出る場合があります。
+
+VRChat SDK 内のサンプル Idle モーションは、実機でのポーズと完全には一致しない可能性があります。  
+Preview が動かない場合は、SDK 側のアセットパス変更が原因の可能性があります。
+
+## ライセンス
+
+このプロジェクトは MIT License で提供されています。詳細は [../LICENSE](../LICENSE) を参照してください。

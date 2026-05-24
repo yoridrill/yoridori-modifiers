@@ -36,6 +36,8 @@ namespace YoridoriModifiers.ArmPatch
 
         static ArmPatchPreviewUtility()
         {
+            SceneIconUtility.HideComponentIcon<ArmPatchComponent>();
+
             AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
             EditorApplication.quitting += OnEditorQuitting;
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;

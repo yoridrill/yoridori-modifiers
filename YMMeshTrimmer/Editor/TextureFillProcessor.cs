@@ -116,7 +116,7 @@ public static class TexturePostProcessProcessor
         }
         else if (mode == MeshTrimmerComponent.TexturePostProcessMode.Solidify)
         {
-            ApplySolidify(pixels, width, height, trimmer.alphaThreshold);
+            ApplySolidify(pixels, width, height);
         }
 
         bool linear = false;
@@ -246,7 +246,7 @@ public static class TexturePostProcessProcessor
         }
     }
 
-    private static void ApplySolidify(Color[] pixels, int width, int height, float alphaThreshold)
+    private static void ApplySolidify(Color[] pixels, int width, int height)
     {
         int size = width * height;
         bool[] isSeed = new bool[size];
@@ -263,7 +263,7 @@ public static class TexturePostProcessProcessor
             for (int x = 0; x < width; x++)
             {
                 int index = y * width + x;
-                if (pixels[index].a >= alphaThreshold)
+                if (pixels[index].a > 0f)
                 {
                     isSeed[index] = true;
                     nearest[index] = index;

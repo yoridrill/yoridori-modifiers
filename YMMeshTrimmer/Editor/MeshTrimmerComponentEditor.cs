@@ -95,13 +95,23 @@ public class MeshTrimmerComponentEditor : Editor
 
         EditorGUI.BeginChangeCheck();
         DrawBuildTargetEnables(trimmer);
+        if (EditorGUI.EndChangeCheck())
+        {
+            QueuePreviewUpdate(state, PreviewUpdateType.MeshAndTexture);
+        }
 
         EditorGUILayout.Space(6f);
+        EditorGUI.BeginChangeCheck();
         DrawSetting("alphaThreshold");
+        if (EditorGUI.EndChangeCheck())
+        {
+            QueuePreviewUpdate(state, PreviewUpdateType.MeshOnly);
+        }
+
+        EditorGUI.BeginChangeCheck();
         DrawSetting("maskDilatePixels");
         DrawSetting("maskCleanupPixels");
         DrawSetting("minimumFragmentSizePermille");
-
         if (EditorGUI.EndChangeCheck())
         {
             QueuePreviewUpdate(state, PreviewUpdateType.MeshOnly);
@@ -719,10 +729,17 @@ public class MeshTrimmerComponentEditor : Editor
             r.previewMesh.name = r.originalSharedMesh.name + " (YM Mesh Trimmer Preview)";
             r.previewMesh.hideFlags = HideFlags.HideAndDontSave;
             r.previewMesh.MarkDynamic();
+            ApplyPreviewMaterials(r);
             meshCount++;
         }
 
         return meshCount;
+    }
+
+    private static void ApplyPreviewMaterials(RendererPreviewState state)
+    {
+        if (state?.previewRenderer == null) return;
+        state.previewRenderer.sharedMaterials = state.previewMaterials ?? state.originalSharedMaterials;
     }
 
     private static void EnsurePreviewRenderer(RendererPreviewState r)

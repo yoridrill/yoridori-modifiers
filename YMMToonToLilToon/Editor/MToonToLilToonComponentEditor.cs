@@ -33,15 +33,20 @@ namespace YoridoriModifiers.MToonToLilToon
             _language = (Language)EditorPrefs.GetInt(PrefKeyLanguage, 0);
             var component = (MToonToLilToonComponent)target;
             _cachedRendererMaterials = GetRendererMaterials(component);
+            var undoGroup = Undo.GetCurrentGroup();
+            serializedObject.Update();
             if (ShouldAutoScanHairSelectionsOnEnable(component, _cachedRendererMaterials))
             {
-                ScanMaterials(component);
+                ScanMaterials(serializedObject, component);
                 _cachedRendererMaterials = GetRendererMaterials(component);
-                EditorUtility.SetDirty(component);
             }
-            if (EnsureFaceMaterialsDetected(component))
+            else
             {
-                EditorUtility.SetDirty(component);
+                EnsureFaceMaterialsDetected(serializedObject, _cachedRendererMaterials);
+            }
+            if (serializedObject.ApplyModifiedProperties())
+            {
+                Undo.CollapseUndoOperations(undoGroup);
             }
         }
 
@@ -70,12 +75,18 @@ namespace YoridoriModifiers.MToonToLilToon
             directValueChanged |= DrawAdvancedSection(component);
             var advancedSettingsChanged = EditorGUI.EndChangeCheck();
 
+            var undoGroup = Undo.GetCurrentGroup();
             var serializedChanged = serializedObject.ApplyModifiedProperties();
             if (requestHairScan)
             {
-                ScanMaterials(component);
+                serializedObject.Update();
+                ScanMaterials(serializedObject, component);
                 _cachedRendererMaterials = GetRendererMaterials(component);
-                EditorUtility.SetDirty(component);
+                serializedChanged |= serializedObject.ApplyModifiedProperties();
+                if (serializedChanged)
+                {
+                    Undo.CollapseUndoOperations(undoGroup);
+                }
                 directValueChanged = true;
             }
             if (directValueChanged)
@@ -411,7 +422,7 @@ namespace YoridoriModifiers.MToonToLilToon
                 }
                 else
                 {
-                    component.hairSelections = new List<HairMaterialSelection>();
+                    serializedObject.FindProperty(nameof(MToonToLilToonComponent.hairSelections)).ClearArray();
                 }
                 EditorUtility.SetDirty(component);
             }
@@ -537,14 +548,14 @@ namespace YoridoriModifiers.MToonToLilToon
 
         private void DrawFaceShadowMaskSettings(MToonToLilToonComponent component)
         {
-            if (component.faceShadowSdfTexture == null)
+            var textureProperty = serializedObject.FindProperty(nameof(MToonToLilToonComponent.faceShadowSdfTexture));
+            if (textureProperty.objectReferenceValue == null)
             {
-                component.faceShadowSdfTexture = LoadDefaultFaceShadowMaskTexture();
+                textureProperty.objectReferenceValue = LoadDefaultFaceShadowMaskTexture();
             }
 
             DrawFaceShadowMaskTypePopup();
 
-            var textureProperty = serializedObject.FindProperty(nameof(MToonToLilToonComponent.faceShadowSdfTexture));
             EditorGUILayout.PropertyField(
                 textureProperty,
                 TT(
@@ -613,21 +624,24 @@ namespace YoridoriModifiers.MToonToLilToon
                 return false;
             }
 
-            if (component.eyebrowStencilMaterial == null || !candidates.Contains(component.eyebrowStencilMaterial))
+            var eyebrowProp = serializedObject.FindProperty(nameof(MToonToLilToonComponent.eyebrowStencilMaterial));
+            var currentEyebrowMaterial = eyebrowProp.objectReferenceValue as Material;
+            if (currentEyebrowMaterial == null || !candidates.Contains(currentEyebrowMaterial))
             {
-                component.eyebrowStencilMaterial = DetectDefaultEyebrowMaterial(candidates);
+                eyebrowProp.objectReferenceValue = DetectDefaultEyebrowMaterial(candidates);
+                currentEyebrowMaterial = eyebrowProp.objectReferenceValue as Material;
             }
 
             var labels = new[] { T("未設定", "None") }.Concat(candidates.Select(m => m != null ? m.name : "(null)")).ToArray();
-            var currentIndex = component.eyebrowStencilMaterial != null
-                ? candidates.IndexOf(component.eyebrowStencilMaterial) + 1
+            var currentIndex = currentEyebrowMaterial != null
+                ? candidates.IndexOf(currentEyebrowMaterial) + 1
                 : 0;
 
             var nextIndex = EditorGUI.Popup(valueRect, currentIndex, labels);
             var nextMaterial = nextIndex <= 0 ? null : candidates[nextIndex - 1];
-            if (nextMaterial == component.eyebrowStencilMaterial) return false;
+            if (nextMaterial == currentEyebrowMaterial) return false;
 
-            component.eyebrowStencilMaterial = nextMaterial;
+            eyebrowProp.objectReferenceValue = nextMaterial;
             return true;
         }
 
@@ -642,11 +656,12 @@ namespace YoridoriModifiers.MToonToLilToon
                     "この機能が有効な場合は髪マテリアルを結合します。\n結合されたくないマテリアルは対象から外してください。",
                     "When this feature is enabled, hair materials are merged.\nExclude any materials you do not want to merge."),
                 MessageType.Info);
-            component.showHairMaterials = EditorGUILayout.Foldout(
-                component.showHairMaterials,
+            var showHairMaterialsProp = serializedObject.FindProperty(nameof(MToonToLilToonComponent.showHairMaterials));
+            showHairMaterialsProp.boolValue = EditorGUILayout.Foldout(
+                showHairMaterialsProp.boolValue,
                 T("結合対象", "Merge Targets"),
                 true);
-            if (!component.showHairMaterials) return false;
+            if (!showHairMaterialsProp.boolValue) return false;
 
             if (hairSelectionsProp == null || hairSelectionsProp.arraySize == 0)
             {
@@ -832,28 +847,41 @@ namespace YoridoriModifiers.MToonToLilToon
             return HasExternalHairSelectionReference(component, scannedMaterials);
         }
 
-        private static void ScanMaterials(MToonToLilToonComponent component)
+        private static void ScanMaterials(SerializedObject serializedComponent, MToonToLilToonComponent component)
         {
+            if (serializedComponent == null || component == null) return;
             var scannedMaterials = GetRendererMaterials(component);
+            var hairSelectionsProp = serializedComponent.FindProperty(nameof(MToonToLilToonComponent.hairSelections));
+            hairSelectionsProp.ClearArray();
+
             if (scannedMaterials.Count == 0)
             {
-                component.hairSelections = new List<HairMaterialSelection>();
                 return;
             }
 
-            component.hairSelections = HairMaterialSelector.BuildDefaultSelections(
+            var selections = HairMaterialSelector.BuildDefaultSelections(
                 scannedMaterials.Where(m => m != null && MToonDetector.IsMToonLike(m)));
-
-            EnsureFaceMaterialsDetected(component, scannedMaterials);
-
-            if (component.faceShadowSdfTexture == null)
+            for (var i = 0; i < selections.Count; i++)
             {
-                component.faceShadowSdfTexture = LoadDefaultFaceShadowMaskTexture();
+                hairSelectionsProp.InsertArrayElementAtIndex(i);
+                var entryProp = hairSelectionsProp.GetArrayElementAtIndex(i);
+                entryProp.FindPropertyRelative(nameof(HairMaterialSelection.material)).objectReferenceValue = selections[i].material;
+                entryProp.FindPropertyRelative(nameof(HairMaterialSelection.selected)).boolValue = selections[i].selected;
             }
 
-            if (component.eyebrowStencilMaterial == null || !scannedMaterials.Contains(component.eyebrowStencilMaterial))
+            EnsureFaceMaterialsDetected(serializedComponent, scannedMaterials);
+
+            var textureProp = serializedComponent.FindProperty(nameof(MToonToLilToonComponent.faceShadowSdfTexture));
+            if (textureProp.objectReferenceValue == null)
             {
-                component.eyebrowStencilMaterial = DetectDefaultEyebrowMaterial(scannedMaterials);
+                textureProp.objectReferenceValue = LoadDefaultFaceShadowMaskTexture();
+            }
+
+            var eyebrowProp = serializedComponent.FindProperty(nameof(MToonToLilToonComponent.eyebrowStencilMaterial));
+            var eyebrowMaterial = eyebrowProp.objectReferenceValue as Material;
+            if (eyebrowMaterial == null || !scannedMaterials.Contains(eyebrowMaterial))
+            {
+                eyebrowProp.objectReferenceValue = DetectDefaultEyebrowMaterial(scannedMaterials);
             }
         }
 
@@ -932,8 +960,10 @@ namespace YoridoriModifiers.MToonToLilToon
             var candidates = _cachedRendererMaterials ?? GetRendererMaterials(component);
             if (candidates.Count == 0) return false;
 
+            var faceMaterialProp = serializedObject.FindProperty(nameof(MToonToLilToonComponent.faceShadowFaceMaterial));
+            var fakeShadowMaterialProp = serializedObject.FindProperty(nameof(MToonToLilToonComponent.fakeShadowFaceMaterial));
             var labels = new[] { T("未設定", "None") }.Concat(candidates.Select(m => m != null ? m.name : "(null)")).ToArray();
-            var currentFaceMaterial = component.faceShadowFaceMaterial;
+            var currentFaceMaterial = faceMaterialProp.objectReferenceValue as Material;
             var currentIndex = currentFaceMaterial != null ? candidates.IndexOf(currentFaceMaterial) + 1 : 0;
 
             EditorGUI.BeginChangeCheck();
@@ -948,32 +978,36 @@ namespace YoridoriModifiers.MToonToLilToon
             if (!EditorGUI.EndChangeCheck()) return false;
 
             var nextMaterial = nextIndex <= 0 ? null : candidates[nextIndex - 1];
-            component.faceShadowFaceMaterial = nextMaterial;
-            component.fakeShadowFaceMaterial = nextMaterial;
-            EditorUtility.SetDirty(component);
+            faceMaterialProp.objectReferenceValue = nextMaterial;
+            fakeShadowMaterialProp.objectReferenceValue = nextMaterial;
             return true;
         }
 
-        private static bool EnsureFaceMaterialsDetected(MToonToLilToonComponent component)
+        private bool EnsureFaceMaterialsDetected(MToonToLilToonComponent component)
         {
-            return EnsureFaceMaterialsDetected(component, GetRendererMaterials(component));
+            return EnsureFaceMaterialsDetected(serializedObject, GetRendererMaterials(component));
         }
 
-        private static bool EnsureFaceMaterialsDetected(MToonToLilToonComponent component, IReadOnlyList<Material> scannedMaterials)
+        private static bool EnsureFaceMaterialsDetected(SerializedObject serializedComponent, IReadOnlyList<Material> scannedMaterials)
         {
-            if (component == null || scannedMaterials == null || scannedMaterials.Count == 0) return false;
+            if (serializedComponent == null || scannedMaterials == null || scannedMaterials.Count == 0) return false;
 
             var changed = false;
             var defaultFaceMaterial = DetectDefaultFaceMaterial(scannedMaterials);
-            if (component.faceShadowFaceMaterial == null || !scannedMaterials.Contains(component.faceShadowFaceMaterial))
+            var faceMaterialProp = serializedComponent.FindProperty(nameof(MToonToLilToonComponent.faceShadowFaceMaterial));
+            var faceMaterial = faceMaterialProp.objectReferenceValue as Material;
+            if (faceMaterial == null || !scannedMaterials.Contains(faceMaterial))
             {
-                component.faceShadowFaceMaterial = defaultFaceMaterial;
+                faceMaterialProp.objectReferenceValue = defaultFaceMaterial;
+                faceMaterial = defaultFaceMaterial;
                 changed = true;
             }
 
-            if (component.fakeShadowFaceMaterial == null || !scannedMaterials.Contains(component.fakeShadowFaceMaterial))
+            var fakeShadowMaterialProp = serializedComponent.FindProperty(nameof(MToonToLilToonComponent.fakeShadowFaceMaterial));
+            var fakeShadowMaterial = fakeShadowMaterialProp.objectReferenceValue as Material;
+            if (fakeShadowMaterial == null || !scannedMaterials.Contains(fakeShadowMaterial))
             {
-                component.fakeShadowFaceMaterial = component.faceShadowFaceMaterial;
+                fakeShadowMaterialProp.objectReferenceValue = faceMaterial;
                 changed = true;
             }
 

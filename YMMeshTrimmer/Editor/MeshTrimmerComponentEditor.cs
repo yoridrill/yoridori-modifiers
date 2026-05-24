@@ -89,11 +89,6 @@ public class MeshTrimmerComponentEditor : Editor
         var trimmer = (MeshTrimmerComponent)target;
         var state = GetPreviewState(trimmer);
 
-        if (trimmer.PreviewActiveSerialized && !state.active)
-        {
-            EditorGUILayout.HelpBox(T("前回のPreview状態が残っています。復旧してください。", "Preview state was left over. Please restore originals."), MessageType.Warning);
-        }
-
         DrawTopBar(trimmer, state);
         EditorGUILayout.Space(6f);
 
@@ -580,14 +575,11 @@ public class MeshTrimmerComponentEditor : Editor
                 "Preview",
                 $"UpdateType={type}, Renderers={state.rendererStates.Count}, PreviewMeshes={meshCount}, PreviewTextures={texCount}, ElapsedMs={sw.ElapsedMilliseconds}");
 
-            trimmer.PreviewActiveSerialized = true;
-            EditorUtility.SetDirty(trimmer);
             state.failed = false;
         }
         catch (Exception ex)
         {
             LogUtility.Error(ToolName, "Preview", $"Failed and restoring originals. {ex}");
-            RestoreOriginalsFromRecovery(trimmer);
             ClearPreview(trimmer);
             state.active = false;
             state.failed = true;
@@ -622,36 +614,7 @@ public class MeshTrimmerComponentEditor : Editor
             state.previewComponent = state.previewAvatar.AddComponent<MeshTrimmerComponent>();
         }
 
-        CaptureSourceRecovery(trimmer, state);
         state.hiddenSourceRenderers.Hide(state.sourceAvatarRoot);
-    }
-
-    private static void CaptureSourceRecovery(MeshTrimmerComponent trimmer, PreviewState state)
-    {
-        trimmer.PreviewRecoveryRecords.Clear();
-        if (state.sourceAvatarRoot == null) return;
-
-        foreach (var target in trimmer.targets)
-        {
-            if (target == null || target.usages == null) continue;
-            foreach (var usage in target.usages)
-            {
-                var renderer = usage?.renderer;
-                if (renderer == null) continue;
-                if (trimmer.PreviewRecoveryRecords.Exists(r => r.renderer == renderer)) continue;
-                trimmer.PreviewRecoveryRecords.Add(new MeshTrimmerComponent.PreviewRecoveryRecord
-                {
-                    renderer = renderer,
-                    originalSharedMesh = renderer.sharedMesh,
-                    originalSharedMaterials = renderer.sharedMaterials,
-                    originalEnabled = renderer.enabled,
-                    originalForceRenderingOff = renderer.forceRenderingOff
-                });
-            }
-        }
-
-        trimmer.PreviewActiveSerialized = true;
-        EditorUtility.SetDirty(trimmer);
     }
 
     private static void SyncPreviewComponent(MeshTrimmerComponent source, PreviewState state)
@@ -834,7 +797,6 @@ public class MeshTrimmerComponentEditor : Editor
     private static void CaptureOriginals(MeshTrimmerComponent trimmer, PreviewState state)
     {
         state.rendererStates.Clear();
-        trimmer.PreviewRecoveryRecords.Clear();
         foreach (var target in trimmer.targets)
         {
             foreach (var usage in target.usages)
@@ -851,14 +813,6 @@ public class MeshTrimmerComponentEditor : Editor
                     originalForceRenderingOff = usage.renderer.forceRenderingOff
                 };
                 state.rendererStates.Add(usage.renderer, r);
-                trimmer.PreviewRecoveryRecords.Add(new MeshTrimmerComponent.PreviewRecoveryRecord
-                {
-                    renderer = usage.renderer,
-                    originalSharedMesh = r.originalSharedMesh,
-                    originalSharedMaterials = r.originalSharedMaterials,
-                    originalEnabled = r.originalEnabled,
-                    originalForceRenderingOff = r.originalForceRenderingOff
-                });
             }
         }
     }
@@ -973,7 +927,6 @@ public class MeshTrimmerComponentEditor : Editor
     {
         if (trimmer == null) return;
         var state = GetPreviewState(trimmer);
-        RestoreOriginalsFromRecovery(trimmer);
         foreach (var r in state.rendererStates.Values)
         {
             if (r.renderer != null)
@@ -1012,26 +965,6 @@ public class MeshTrimmerComponentEditor : Editor
         state.sourceAvatarRoot = null;
         state.failureMessage = string.Empty;
         PreviewCoordinator.End(GetPreviewOwnerKey(trimmer));
-
-        trimmer.PreviewRecoveryRecords.Clear();
-        trimmer.PreviewActiveSerialized = false;
-        EditorUtility.SetDirty(trimmer);
-    }
-
-    private static void RestoreOriginalsFromRecovery(MeshTrimmerComponent trimmer)
-    {
-        foreach (var rec in trimmer.PreviewRecoveryRecords)
-        {
-            if (rec.renderer == null) continue;
-            rec.renderer.sharedMesh = rec.originalSharedMesh;
-            rec.renderer.sharedMaterials = rec.originalSharedMaterials;
-            rec.renderer.enabled = rec.originalEnabled;
-            rec.renderer.forceRenderingOff = rec.originalForceRenderingOff;
-        }
-        trimmer.PreviewRecoveryRecords.Clear();
-        trimmer.PreviewActiveSerialized = false;
-        EditorUtility.SetDirty(trimmer);
-        if (trimmer.gameObject.scene.IsValid()) EditorSceneManager.MarkSceneDirty(trimmer.gameObject.scene);
     }
 
     private static bool _subscribed;
@@ -1136,7 +1069,12 @@ public class MeshTrimmerComponentEditor : Editor
     internal static void EnsureAutoDetectedTargets(MeshTrimmerComponent trimmer, bool forceRefresh)
     {
         if (trimmer == null) return;
-        if (forceRefresh || trimmer.targets == null || trimmer.targets.Count == 0) AutoDetectTargets(trimmer);
+        if (forceRefresh || trimmer.targets == null || trimmer.targets.Count == 0)
+        {
+            var undoGroup = Undo.GetCurrentGroup();
+            AutoDetectTargets(trimmer);
+            Undo.CollapseUndoOperations(undoGroup);
+        }
     }
 
     private static bool ShouldProcessMaterial(Material mat)

@@ -42,16 +42,6 @@ public class MeshTrimmerComponent : MonoBehaviour, IEditorOnly
         public List<RendererSubMeshRef> usages = new List<RendererSubMeshRef>();
     }
 
-    [Serializable]
-    public class PreviewRecoveryRecord
-    {
-        public SkinnedMeshRenderer renderer;
-        public Mesh originalSharedMesh;
-        public Material[] originalSharedMaterials;
-        public bool originalEnabled;
-        public bool originalForceRenderingOff;
-    }
-
     public bool enableForWindows = false;
     public bool enableForAndroid = true;
     public bool enableForiOS = true;
@@ -79,18 +69,8 @@ public class MeshTrimmerComponent : MonoBehaviour, IEditorOnly
     [HideInInspector] [Range(0.0001f, 0.1f)] public float edgeCrossingMinPolygonAreaRatio = 0.0002f;
     [HideInInspector] [Range(0.0001f, 0.2f)] public float edgeCrossingMinChordLengthRatio = 0.014142f;
 
-    [SerializeField] private bool previewActiveSerialized;
-    [SerializeField] private List<PreviewRecoveryRecord> previewRecoveryRecords = new List<PreviewRecoveryRecord>();
     [HideInInspector] public TrimAlgorithm trimAlgorithm = TrimAlgorithm.EdgeCrossing;
     [HideInInspector] public bool debugEdgeCrossingRoutes = false;
-
-    public bool PreviewActiveSerialized
-    {
-        get => previewActiveSerialized;
-        set => previewActiveSerialized = value;
-    }
-
-    public List<PreviewRecoveryRecord> PreviewRecoveryRecords => previewRecoveryRecords;
 }
 
 }

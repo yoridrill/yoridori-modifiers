@@ -7,7 +7,7 @@ namespace YoridoriModifiers.MeshTrimmer
 [InitializeOnLoad]
 public static class MeshTrimmerLifecycleHook
 {
-    private static readonly HashSet<int> Queued = new HashSet<int>();
+    private static readonly Dictionary<int, int> QueuedUndoGroups = new Dictionary<int, int>();
 
     static MeshTrimmerLifecycleHook()
     {
@@ -40,14 +40,22 @@ public static class MeshTrimmerLifecycleHook
     {
         if (trimmer == null) return;
         int id = trimmer.GetInstanceID();
-        if (!Queued.Add(id)) return;
+        int undoGroup = Undo.GetCurrentGroup();
+        if (QueuedUndoGroups.ContainsKey(id))
+        {
+            QueuedUndoGroups[id] = Mathf.Min(QueuedUndoGroups[id], undoGroup);
+            return;
+        }
+        QueuedUndoGroups[id] = undoGroup;
 
         EditorApplication.delayCall += () =>
         {
-            Queued.Remove(id);
+            if (!QueuedUndoGroups.TryGetValue(id, out var queuedUndoGroup)) return;
+            QueuedUndoGroups.Remove(id);
             if (trimmer == null) return;
             MeshTrimmerComponentEditor.EnsureAutoDetectedTargets(trimmer, true);
             EditorUtility.SetDirty(trimmer);
+            Undo.CollapseUndoOperations(queuedUndoGroup);
         };
     }
 }

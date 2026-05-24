@@ -644,7 +644,7 @@ namespace YoridoriModifiers.MToonToLilToon
                 MessageType.Info);
             component.showHairMaterials = EditorGUILayout.Foldout(
                 component.showHairMaterials,
-                T("対象マテリアル", "Target Materials"),
+                T("結合対象", "Merge Targets"),
                 true);
             if (!component.showHairMaterials) return false;
 
@@ -719,7 +719,7 @@ namespace YoridoriModifiers.MToonToLilToon
             if (selectedCandidates == null || selectedCandidates.Count == 0)
             {
                 representativeProp.objectReferenceValue = null;
-                EditorGUILayout.HelpBox(T("代表マテリアル候補がありません。対象マテリアルにチェックを入れてください。", "No representative candidates. Check target materials."), MessageType.Info);
+                EditorGUILayout.HelpBox(T("代表マテリアル候補がありません。結合対象にチェックを入れてください。", "No representative candidates. Check merge targets."), MessageType.Info);
                 return false;
             }
 
@@ -734,7 +734,14 @@ namespace YoridoriModifiers.MToonToLilToon
 
             var labels = selectedCandidates.Select(m => m != null ? m.name : "(null)").ToArray();
             var currentIndex = Mathf.Max(0, IndexOfMaterial(selectedCandidates, currentMaterial));
-            var nextIndex = EditorGUILayout.Popup(T("代表マテリアル", "Representative Material"), currentIndex, labels);
+            var nextIndex = EditorGUILayout.Popup(
+                TT(
+                    "代表マテリアル",
+                    "ここで指定したマテリアルの影色やアウトライン色などを結合後のマテリアルで使用します。",
+                    "Representative Material",
+                    "The merged material uses values such as shadow color and outline color from the material selected here."),
+                currentIndex,
+                labels);
             nextIndex = Mathf.Clamp(nextIndex, 0, selectedCandidates.Count - 1);
             var nextMaterial = selectedCandidates[nextIndex];
             if (nextMaterial != currentMaterial)
@@ -930,7 +937,14 @@ namespace YoridoriModifiers.MToonToLilToon
             var currentIndex = currentFaceMaterial != null ? candidates.IndexOf(currentFaceMaterial) + 1 : 0;
 
             EditorGUI.BeginChangeCheck();
-            var nextIndex = EditorGUILayout.Popup(T("顔マテリアル", "Face Material"), currentIndex, labels);
+            var nextIndex = EditorGUILayout.Popup(
+                TT(
+                    "顔マテリアル",
+                    "顔だけ除外する設定やFakeShadow、顔の影を整える機能などの対象を指定します。",
+                    "Face Material",
+                    "Specifies the target for face-only exclusions, FakeShadow, face shadow tuning, and related features."),
+                currentIndex,
+                labels);
             if (!EditorGUI.EndChangeCheck()) return false;
 
             var nextMaterial = nextIndex <= 0 ? null : candidates[nextIndex - 1];

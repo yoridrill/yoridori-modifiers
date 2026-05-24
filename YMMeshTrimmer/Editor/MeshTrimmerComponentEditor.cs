@@ -49,6 +49,7 @@ public class MeshTrimmerComponentEditor : Editor
         public bool processing;
         public bool queued;
         public bool failed;
+        public bool flushPendingImmediately;
         public string failureMessage;
         public GameObject sourceAvatarRoot;
         public GameObject previewRoot;
@@ -168,36 +169,49 @@ public class MeshTrimmerComponentEditor : Editor
             EditorGUILayout.HelpBox(T("すべてのビルドターゲットで無効です。", "All build targets are disabled."), MessageType.Warning);
         }
 
-        if (HasOverlappingTargetEnabledInHierarchy(trimmer, enableForWindows, enableForAndroid, enableForiOS))
+        if (TryGetOverlappingTargetStatus(trimmer, enableForWindows, enableForAndroid, enableForiOS, out var thisWillBeUsed))
         {
+            var message = thisWillBeUsed
+                ? T("同一アバター内で同じビルドターゲット向けに複数のTrimmerが有効です。 ビルド時はこのコンポーネントの設定値が使用されます。",
+                    "Multiple Trimmers are enabled for the same build target in this avatar. This component will be used for the build.")
+                : T("同一アバター内で同じビルドターゲット向けに複数のTrimmerが有効です。 ビルド時、このコンポーネントでの設定は無視されます。",
+                    "Multiple Trimmers are enabled for the same build target in this avatar. This component will be ignored for the build.");
             EditorGUILayout.HelpBox(
-                T("同一アバター内で同じビルドターゲット向けに複数のTrimmerが有効です。重複適用に注意してください。",
-                  "Multiple Trimmers are enabled for the same build target in this avatar. Check for accidental overlap."),
+                message,
                 MessageType.Warning);
         }
     }
 
-    private static bool HasOverlappingTargetEnabledInHierarchy(
+    private static bool TryGetOverlappingTargetStatus(
         MeshTrimmerComponent trimmer,
         bool enableForWindows,
         bool enableForAndroid,
-        bool enableForiOS)
+        bool enableForiOS,
+        out bool thisWillBeUsed)
     {
+        thisWillBeUsed = false;
         if (trimmer == null || trimmer.transform == null) return false;
         var root = trimmer.transform.root;
         if (root == null) return false;
         var trimmers = root.GetComponentsInChildren<MeshTrimmerComponent>(true);
+        MeshTrimmerComponent firstOverlapping = null;
+        bool hasOverlap = false;
         foreach (var other in trimmers)
         {
-            if (other == null || other == trimmer) continue;
+            if (other == null) continue;
             if ((enableForWindows && other.enableForWindows) ||
                 (enableForAndroid && other.enableForAndroid) ||
                 (enableForiOS && other.enableForiOS))
             {
-                return true;
+                firstOverlapping ??= other;
+                if (other != trimmer)
+                {
+                    hasOverlap = true;
+                }
             }
         }
-        return false;
+        thisWillBeUsed = firstOverlapping == trimmer;
+        return hasOverlap;
     }
 
     private void DrawAdvancedSection(MeshTrimmerComponent trimmer)
@@ -234,7 +248,7 @@ public class MeshTrimmerComponentEditor : Editor
     private void DrawTopBar(MeshTrimmerComponent trimmer, PreviewState state)
     {
         EditorGUILayout.BeginHorizontal();
-        if (PreviewInspectorGui.DrawPreviewButton(state.active, "Preview", 100f))
+        if (PreviewInspectorGui.DrawPreviewButton(state.active, "Preview"))
         {
             if (state.active)
             {
@@ -255,12 +269,13 @@ public class MeshTrimmerComponentEditor : Editor
         EditorGUILayout.EndHorizontal();
     }
 
-    private void QueuePreviewUpdate(PreviewState state, PreviewUpdateType type)
+    private void QueuePreviewUpdate(PreviewState state, PreviewUpdateType type, bool immediate = false)
     {
         if (!state.active) return;
         if (type == PreviewUpdateType.None) return;
         if (state.pending == PreviewUpdateType.None) state.pending = type;
         else if (state.pending != type) state.pending = PreviewUpdateType.MeshAndTexture;
+        state.flushPendingImmediately |= immediate;
     }
 
     private static int GetPreviewPolygonCount(PreviewState state)
@@ -280,7 +295,7 @@ public class MeshTrimmerComponentEditor : Editor
     private void TryFlushPreviewUpdate(MeshTrimmerComponent trimmer, PreviewState state)
     {
         if (!state.active || state.pending == PreviewUpdateType.None) return;
-        bool commit = IsPreviewCommitEvent(Event.current);
+        bool commit = state.flushPendingImmediately || IsPreviewCommitEvent(Event.current);
         if (!commit) return;
 
         if (!RequestBuildPreview(trimmer, state, state.pending))
@@ -290,6 +305,7 @@ public class MeshTrimmerComponentEditor : Editor
         }
         state.failed = false;
         state.pending = PreviewUpdateType.None;
+        state.flushPendingImmediately = false;
     }
 
     private bool IsPreviewCommitEvent(Event e)
@@ -313,22 +329,58 @@ public class MeshTrimmerComponentEditor : Editor
         return e.type == EventType.MouseUp || enterCommit || commandEnterCommit || focusLostCommit || hotControlReleasedCommit;
     }
 
-    private void DrawSetting(string name) => EditorGUILayout.PropertyField(serializedObject.FindProperty(name), new GUIContent(GetSettingLabel(name)));
+    private void DrawSetting(string name)
+    {
+        var prop = serializedObject.FindProperty(name);
+        var content = GetSettingContent(name);
+        var rect = EditorGUILayout.GetControlRect(true, EditorGUI.GetPropertyHeight(prop, GUIContent.none));
+        var labelRect = new Rect(rect.x, rect.y, EditorGUIUtility.labelWidth, rect.height);
+        var fieldRect = new Rect(labelRect.xMax, rect.y, rect.xMax - labelRect.xMax, rect.height);
+
+        EditorGUI.LabelField(labelRect, content);
+        EditorGUI.PropertyField(fieldRect, prop, GUIContent.none);
+
+        if (Event.current.type == EventType.Repaint && rect.Contains(Event.current.mousePosition))
+        {
+            GUI.tooltip = labelRect.Contains(Event.current.mousePosition) ? content.tooltip : string.Empty;
+        }
+    }
     private string T(string ja, string en) => _language == UiLanguage.Japanese ? ja : en;
 
-    private string GetSettingLabel(string name)
+    private GUIContent GetSettingContent(string name)
     {
         switch (name)
         {
-            case "alphaThreshold": return T("アルファしきい値", "Alpha Threshold");
-            case "maskDilatePixels": return T("マスク拡張 (px)", "Mask Expansion (px)");
-            case "maskCleanupPixels": return T("マスククリーンアップ (px)", "Mask Cleanup (px)");
-            case "minimumFragmentSizePermille": return T("微小ポリゴン除去 (‰)", "Minimum Fragment Size (‰)");
-            case "minIntersectionT": return T("最小交点t", "Min Intersection t");
-            case "maxIntersectionT": return T("最大交点t", "Max Intersection t");
-            case "minTriangleUvArea": return T("最小UV三角形面積", "Min Triangle UV Area");
-            case "minTriangleWorldArea": return T("最小3D三角形面積", "Min Triangle World Area");
-            default: return name;
+            case "alphaThreshold":
+                return new GUIContent(
+                    T("アルファしきい値", "Alpha Threshold"),
+                    T("この値以上のアルファを残す領域として扱います。テクスチャの塗り足し色には影響しません。",
+                      "Pixels with alpha at or above this value are treated as kept. This does not affect texture fill colors."));
+            case "maskDilatePixels":
+                return new GUIContent(
+                    T("マスク拡張 (px)", "Mask Expansion (px)"),
+                    T("残す領域をピクセル単位で外側に広げます。境界が削れすぎる場合に大きくします。",
+                      "Expands the kept mask outward in pixels. Increase this when edges are trimmed too aggressively."));
+            case "maskCleanupPixels":
+                return new GUIContent(
+                    T("マスククリーンアップ (px)", "Mask Cleanup (px)"),
+                    T("小さな孤立領域の削除、隙間埋め、小さい穴埋めをまとめて調整します。",
+                      "Controls small island removal, gap closing, and small hole filling together."));
+            case "minimumFragmentSizePermille":
+                return new GUIContent(
+                    T("微小ポリゴン除去 (‰)", "Minimum Fragment Size (‰)"),
+                    T("トリミング後に残る極端に小さい破片を削除します。大きくすると細い部分も削れやすくなります。",
+                      "Removes tiny fragments after trimming. Higher values can also remove narrow details."));
+            case "minIntersectionT":
+                return new GUIContent(T("最小交点t", "Min Intersection t"));
+            case "maxIntersectionT":
+                return new GUIContent(T("最大交点t", "Max Intersection t"));
+            case "minTriangleUvArea":
+                return new GUIContent(T("最小UV三角形面積", "Min Triangle UV Area"));
+            case "minTriangleWorldArea":
+                return new GUIContent(T("最小3D三角形面積", "Min Triangle World Area"));
+            default:
+                return new GUIContent(name);
         }
     }
 
@@ -384,7 +436,7 @@ public class MeshTrimmerComponentEditor : Editor
                 {
                     preSubdivideLevelProp.intValue = 1;
                 }
-                QueuePreviewUpdate(state, PreviewUpdateType.MeshOnly);
+                QueuePreviewUpdate(state, PreviewUpdateType.MeshOnly, immediate: true);
             }
             GUILayout.FlexibleSpace();
             EditorGUILayout.EndHorizontal();
@@ -409,7 +461,7 @@ public class MeshTrimmerComponentEditor : Editor
             EditorGUILayout.EndHorizontal();
 
             modeProp.enumValueIndex = (int)mode;
-            if (EditorGUI.EndChangeCheck()) QueuePreviewUpdate(state, PreviewUpdateType.TextureOnly);
+            if (EditorGUI.EndChangeCheck()) QueuePreviewUpdate(state, PreviewUpdateType.TextureOnly, immediate: true);
 
             EditorGUILayout.EndVertical();
             EditorGUILayout.EndHorizontal();
@@ -947,6 +999,7 @@ public class MeshTrimmerComponentEditor : Editor
         state.textureStates.Clear();
         state.active = false;
         state.pending = PreviewUpdateType.None;
+        state.flushPendingImmediately = false;
         state.processing = false;
         state.queued = false;
         state.previewRoot = null;

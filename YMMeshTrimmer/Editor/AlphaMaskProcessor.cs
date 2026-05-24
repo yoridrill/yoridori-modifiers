@@ -46,15 +46,20 @@ public static class AlphaMaskProcessor
             }
         }
 
-        if (settings.maskDilatePixels > 0)
-        {
-            Dilate(mask, width, height, settings.maskDilatePixels);
-        }
-
         int cleanup = Mathf.Max(0, settings.maskCleanupPixels);
         int closePx = cleanup <= 1 ? cleanup : Mathf.Max(1, cleanup / 4);
         int fillHolesPx = cleanup;
         int removeIslandsPx = cleanup;
+
+        if (removeIslandsPx > 0)
+        {
+            RemoveSmallIslands(mask, width, height, removeIslandsPx);
+        }
+
+        if (settings.maskDilatePixels > 0)
+        {
+            Dilate(mask, width, height, settings.maskDilatePixels);
+        }
 
         if (closePx > 0)
         {
@@ -64,11 +69,6 @@ public static class AlphaMaskProcessor
         if (fillHolesPx > 0)
         {
             FillSmallHoles(mask, width, height, fillHolesPx);
-        }
-
-        if (removeIslandsPx > 0)
-        {
-            RemoveSmallIslands(mask, width, height, removeIslandsPx);
         }
 
         data = new AlphaMaskData

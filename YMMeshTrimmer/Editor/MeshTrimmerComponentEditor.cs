@@ -511,7 +511,6 @@ public class MeshTrimmerComponentEditor : Editor
         state.sourceAvatarRoot = avatarRoot;
         state.queued = true;
         state.processing = true;
-        EditorUtility.SetDirty(trimmer);
         UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
         EditorApplication.delayCall += () =>
         {

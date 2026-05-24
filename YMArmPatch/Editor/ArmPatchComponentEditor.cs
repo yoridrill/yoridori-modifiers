@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using YoridoriModifiers.Core.Editor;
 
 namespace YoridoriModifiers.ArmPatch
 {
@@ -69,6 +70,7 @@ namespace YoridoriModifiers.ArmPatch
 
         private Language language;
         private bool advancedFoldout;
+        private bool previewFailed;
 
         private const float MainLabelWidth = 84f;
         private const float SubLabelWidth = 110f;
@@ -147,17 +149,14 @@ namespace YoridoriModifiers.ArmPatch
         {
             using (new EditorGUILayout.HorizontalScope())
             {
-                var oldColor = GUI.backgroundColor;
-                GUI.backgroundColor = isPreviewing ? new Color(0.4f, 0.85f, 0.4f) : oldColor;
-
-                if (GUILayout.Button(T("Preview", "Preview"), GUILayout.Width(90f), GUILayout.Height(20f)))
+                if (PreviewInspectorGui.DrawPreviewButton(isPreviewing, T("Preview", "Preview")))
                 {
                     serializedObject.ApplyModifiedProperties();
-                    ArmPatchPreviewUtility.TogglePreview(component);
+                    previewFailed = !ArmPatchPreviewUtility.TogglePreview(component);
                     GUIUtility.ExitGUI();
                 }
 
-                GUI.backgroundColor = oldColor;
+                PreviewInspectorGui.DrawStatus(false, previewFailed);
 
                 GUILayout.FlexibleSpace();
 

@@ -58,9 +58,9 @@ public static class AutoFillColorResolver
 
         var loadResult = LoadConfig();
         var config = loadResult.config;
-        if (config == null || config.fillColors == null || config.fillColors.Length == 0)
+        if (config == null)
         {
-            if (verbose) Debug.Log("[YM Mesh Trimmer] Auto fill-color config is empty or unavailable.");
+            if (verbose) Debug.Log("[YM Mesh Trimmer] Auto config is empty or unavailable.");
             return;
         }
 
@@ -73,6 +73,12 @@ public static class AutoFillColorResolver
         ApplyEdgeRouteDebugFilterRule(config, trimmer);
 
         ApplyPreSubdivideRules(config, targets, verbose);
+
+        if (config.fillColors == null || config.fillColors.Length == 0)
+        {
+            if (verbose) Debug.Log("[YM Mesh Trimmer] Auto fill-color config is empty or unavailable.");
+            return;
+        }
 
         foreach (var rule in config.fillColors)
         {

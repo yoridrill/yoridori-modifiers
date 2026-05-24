@@ -4,14 +4,18 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using nadena.dev.ndmf;
+using YoridoriModifiers.Core.Editor;
 
 [assembly: ExportsPlugin(typeof(YoridoriModifiers.MeshTrimmer.MeshTrimmerNdmfPlugin))]
 
 namespace YoridoriModifiers.MeshTrimmer
 {
+[InitializeOnLoad]
 [CustomEditor(typeof(MeshTrimmerComponent))]
 public class MeshTrimmerComponentEditor : Editor
 {
+    private const string PreviewRootName = "__YoridoriMeshTrimmerPreviewRoot";
+    private const string PreviewAvatarName = "__YoridoriMeshTrimmerPreviewAvatar";
     private const string LanguagePrefKey = "MeshTrimmerComponentEditor.Language";
 
     private enum UiLanguage { English = 0, Japanese = 1 }
@@ -45,6 +49,12 @@ public class MeshTrimmerComponentEditor : Editor
         public bool processing;
         public bool queued;
         public bool failed;
+        public string failureMessage;
+        public GameObject sourceAvatarRoot;
+        public GameObject previewRoot;
+        public GameObject previewAvatar;
+        public MeshTrimmerComponent previewComponent;
+        public readonly PreviewRendererVisibilityScope hiddenSourceRenderers = new PreviewRendererVisibilityScope();
     }
 
     private static readonly Dictionary<int, PreviewState> PreviewByInstanceId = new Dictionary<int, PreviewState>();
@@ -52,7 +62,14 @@ public class MeshTrimmerComponentEditor : Editor
     private UiLanguage _language;
     private string _lastFocusedControl;
     private bool _advancedFoldout;
+    private bool _targetsFoldout = true;
     private int _lastHotControl;
+
+    static MeshTrimmerComponentEditor()
+    {
+        SubscribeEditorEvents();
+        ScheduleOrphanPreviewCleanup();
+    }
 
     private void OnEnable()
     {
@@ -60,7 +77,7 @@ public class MeshTrimmerComponentEditor : Editor
         SubscribeEditorEvents();
     }
 
-    private void OnDisable() => ClearPreview((MeshTrimmerComponent)target);
+    private void OnDisable() { }
 
     public override void OnInspectorGUI()
     {
@@ -74,34 +91,25 @@ public class MeshTrimmerComponentEditor : Editor
         }
 
         DrawTopBar(trimmer, state);
+        EditorGUILayout.Space(6f);
 
         EditorGUI.BeginChangeCheck();
         DrawBuildTargetEnables(trimmer);
 
-        EditorGUILayout.Space();
-        EditorGUILayout.LabelField(T("基本設定", "Basic Settings"), EditorStyles.boldLabel);
+        EditorGUILayout.Space(6f);
         DrawSetting("alphaThreshold");
         DrawSetting("maskDilatePixels");
         DrawSetting("maskCleanupPixels");
         DrawSetting("minimumFragmentSizePermille");
-        bool oldPadding = trimmer.enableTexturePadding;
-        EditorGUILayout.PropertyField(serializedObject.FindProperty("enableTexturePadding"), new GUIContent(T("テクスチャの余白を塗り足す", "Pad Texture Transparent Areas")));
 
         if (EditorGUI.EndChangeCheck())
         {
             QueuePreviewUpdate(state, PreviewUpdateType.MeshOnly);
         }
 
-        if (oldPadding != trimmer.enableTexturePadding)
-        {
-            QueuePreviewUpdate(state, PreviewUpdateType.TextureOnly);
-        }
-
         EnsureAutoDetectedTargets(trimmer, false);
-        if (trimmer.enableTexturePadding)
-        {
-            DrawTargets(serializedObject.FindProperty("targets"), state);
-        }
+        EditorGUILayout.Space(6f);
+        DrawTargets(serializedObject.FindProperty("targets"), state);
 
         DrawAdvancedSection(trimmer);
         serializedObject.ApplyModifiedProperties();
@@ -111,17 +119,44 @@ public class MeshTrimmerComponentEditor : Editor
 
     private void DrawBuildTargetEnables(MeshTrimmerComponent trimmer)
     {
-        EditorGUILayout.LabelField(T("有効ビルドターゲット", "Enabled Build Targets"), EditorStyles.boldLabel);
-        EditorGUILayout.PropertyField(serializedObject.FindProperty("enableForWindows"), new GUIContent("Windows"));
-        EditorGUILayout.PropertyField(serializedObject.FindProperty("enableForAndroid"), new GUIContent("Android"));
-        EditorGUILayout.PropertyField(serializedObject.FindProperty("enableForiOS"), new GUIContent("iOS"));
+        var windowsProp = serializedObject.FindProperty("enableForWindows");
+        var androidProp = serializedObject.FindProperty("enableForAndroid");
+        var iosProp = serializedObject.FindProperty("enableForiOS");
 
-        if (!trimmer.enableForWindows && !trimmer.enableForAndroid && !trimmer.enableForiOS)
+        Rect rect = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
+        const float labelWidth = 128f;
+        const float gap = 6f;
+        var labelRect = new Rect(rect.x, rect.y, labelWidth, rect.height);
+        var buttonsRect = new Rect(labelRect.xMax + gap, rect.y, rect.width - labelWidth - gap, rect.height);
+        float buttonWidth = buttonsRect.width / 3f;
+
+        EditorGUI.LabelField(labelRect, T("有効ビルドターゲット", "Build Targets"));
+        windowsProp.boolValue = GUI.Toggle(
+            new Rect(buttonsRect.x, buttonsRect.y, buttonWidth, buttonsRect.height),
+            windowsProp.boolValue,
+            "Windows",
+            EditorStyles.miniButtonLeft);
+        androidProp.boolValue = GUI.Toggle(
+            new Rect(buttonsRect.x + buttonWidth, buttonsRect.y, buttonWidth, buttonsRect.height),
+            androidProp.boolValue,
+            "Android",
+            EditorStyles.miniButtonMid);
+        iosProp.boolValue = GUI.Toggle(
+            new Rect(buttonsRect.x + buttonWidth * 2f, buttonsRect.y, buttonWidth, buttonsRect.height),
+            iosProp.boolValue,
+            "iOS",
+            EditorStyles.miniButtonRight);
+
+        bool enableForWindows = windowsProp.boolValue;
+        bool enableForAndroid = androidProp.boolValue;
+        bool enableForiOS = iosProp.boolValue;
+
+        if (!enableForWindows && !enableForAndroid && !enableForiOS)
         {
             EditorGUILayout.HelpBox(T("すべてのビルドターゲットで無効です。", "All build targets are disabled."), MessageType.Warning);
         }
 
-        if (HasOverlappingTargetEnabledInHierarchy(trimmer))
+        if (HasOverlappingTargetEnabledInHierarchy(trimmer, enableForWindows, enableForAndroid, enableForiOS))
         {
             EditorGUILayout.HelpBox(
                 T("同一アバター内で同じビルドターゲット向けに複数のTrimmerが有効です。重複適用に注意してください。",
@@ -130,7 +165,11 @@ public class MeshTrimmerComponentEditor : Editor
         }
     }
 
-    private static bool HasOverlappingTargetEnabledInHierarchy(MeshTrimmerComponent trimmer)
+    private static bool HasOverlappingTargetEnabledInHierarchy(
+        MeshTrimmerComponent trimmer,
+        bool enableForWindows,
+        bool enableForAndroid,
+        bool enableForiOS)
     {
         if (trimmer == null || trimmer.transform == null) return false;
         var root = trimmer.transform.root;
@@ -139,9 +178,9 @@ public class MeshTrimmerComponentEditor : Editor
         foreach (var other in trimmers)
         {
             if (other == null || other == trimmer) continue;
-            if ((trimmer.enableForWindows && other.enableForWindows) ||
-                (trimmer.enableForAndroid && other.enableForAndroid) ||
-                (trimmer.enableForiOS && other.enableForiOS))
+            if ((enableForWindows && other.enableForWindows) ||
+                (enableForAndroid && other.enableForAndroid) ||
+                (enableForiOS && other.enableForiOS))
             {
                 return true;
             }
@@ -162,20 +201,28 @@ public class MeshTrimmerComponentEditor : Editor
         EditorGUILayout.PropertyField(
             serializedObject.FindProperty("debugEdgeCrossingRoutes"),
             new GUIContent(T("Verbose Log", "Verbose Log")));
-        EditorGUILayout.HelpBox(T("Preview復旧用: 元参照へ戻します。", "Preview recovery: restore original renderer references."), MessageType.None);
-        if (GUILayout.Button(T("Restore Originals", "Restore Originals")))
+        EditorGUILayout.Space(4f);
+
+        var rawButtonRect = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
+        var buttonRect = EditorGUI.IndentedRect(rawButtonRect);
+        if (GUI.Button(buttonRect, T("Reset Preview", "Reset Preview")))
         {
-            RestoreOriginalsFromRecovery(trimmer);
+            ClearPreview(trimmer);
+            CleanupOrphanPreviewObjects();
         }
+
+        EditorGUILayout.HelpBox(
+            T(
+                "モデルが重複したり、見えない場合に押してください。\nPreview オブジェクトを削除し、Renderer を再表示します。",
+                "Use this if the avatar stays hidden, frozen, or stuck after Preview.\nThis removes temporary Preview objects and re-enables renderers."),
+            MessageType.Warning);
         EditorGUI.indentLevel--;
     }
 
     private void DrawTopBar(MeshTrimmerComponent trimmer, PreviewState state)
     {
         EditorGUILayout.BeginHorizontal();
-        var oldColor = GUI.backgroundColor;
-        if (state.active) GUI.backgroundColor = Color.green;
-        if (GUILayout.Button("Preview", GUILayout.Width(100f)))
+        if (PreviewInspectorGui.DrawPreviewButton(state.active, "Preview", 100f))
         {
             if (state.active)
             {
@@ -187,23 +234,11 @@ public class MeshTrimmerComponentEditor : Editor
                 state.failed = !RequestBuildPreview(trimmer, state, PreviewUpdateType.MeshAndTexture);
             }
         }
-        if (state.processing)
-        {
-            EditorGUILayout.LabelField("Processing...", GUILayout.Width(90f));
-        }
-        else if (state.failed)
-        {
-            EditorGUILayout.LabelField("Failed", GUILayout.Width(90f));
-        }
-        else if (state.active)
-        {
-            EditorGUILayout.LabelField($"Polygons: {GetPreviewPolygonCount(state)}", GUILayout.Width(130f));
-        }
-        GUI.backgroundColor = oldColor;
+        PreviewInspectorGui.DrawStatus(state.processing, state.failed, state.active ? $"Polygons: {GetPreviewPolygonCount(state)}" : null, 150f);
 
         GUILayout.FlexibleSpace();
         EditorGUI.BeginChangeCheck();
-        _language = (UiLanguage)EditorGUILayout.EnumPopup(_language, GUILayout.Width(140f));
+        _language = (UiLanguage)EditorGUILayout.EnumPopup(_language, GUILayout.Width(90f));
         if (EditorGUI.EndChangeCheck()) EditorPrefs.SetInt(LanguagePrefKey, (int)_language);
         EditorGUILayout.EndHorizontal();
     }
@@ -287,7 +322,9 @@ public class MeshTrimmerComponentEditor : Editor
 
     private void DrawTargets(SerializedProperty targetsProp, PreviewState state)
     {
-        EditorGUILayout.LabelField(T("テクスチャ対象", "Texture Targets"), EditorStyles.boldLabel);
+        _targetsFoldout = EditorGUILayout.Foldout(_targetsFoldout, T("トリミング対象", "Trimming Targets"), true);
+        if (!_targetsFoldout) return;
+
         const float previewSize = 64f;
         const float compactLabelWidth = 90f;
 
@@ -297,10 +334,11 @@ public class MeshTrimmerComponentEditor : Editor
             var texProp = targetProp.FindPropertyRelative("mainTexture");
             var modeProp = targetProp.FindPropertyRelative("texturePostProcessMode");
             var fillColorProp = targetProp.FindPropertyRelative("fillColor");
+            var enablePreSubdivideProp = targetProp.FindPropertyRelative("enablePreSubdivide");
+            var preSubdivideLevelProp = targetProp.FindPropertyRelative("preSubdivideLevel");
             var usagesProp = targetProp.FindPropertyRelative("usages");
 
             Texture2D tex = texProp.objectReferenceValue as Texture2D;
-            string textureName = tex ? tex.name : "(None)";
             string materialNames = BuildMaterialNamesText(usagesProp);
 
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
@@ -321,19 +359,28 @@ public class MeshTrimmerComponentEditor : Editor
             else EditorGUI.HelpBox(previewRect, "No Tex", MessageType.None);
 
             EditorGUILayout.BeginVertical();
-            EditorGUILayout.LabelField($"{textureName} ({T("使用箇所", "Usages")}: {usagesProp.arraySize})", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(new GUIContent(materialNames, materialNames), EditorStyles.boldLabel);
+            EditorGUILayout.Space(1f);
             EditorGUILayout.BeginHorizontal();
-            GUILayout.Label(T("マテリアル", "Materials"), GUILayout.Width(compactLabelWidth));
-            var materialRect = GUILayoutUtility.GetRect(GUIContent.none, EditorStyles.label, GUILayout.ExpandWidth(true));
-            EditorGUI.LabelField(materialRect, new GUIContent(materialNames, materialNames));
+            GUILayout.Label(T("事前細分化", "Pre Subdivide"), GUILayout.Width(compactLabelWidth));
+            EditorGUI.BeginChangeCheck();
+            var enablePreSubdivide = EditorGUILayout.Toggle(enablePreSubdivideProp.boolValue, GUILayout.Width(18f));
+            if (EditorGUI.EndChangeCheck())
+            {
+                enablePreSubdivideProp.boolValue = enablePreSubdivide;
+                if (enablePreSubdivide && preSubdivideLevelProp.intValue <= 0)
+                {
+                    preSubdivideLevelProp.intValue = 1;
+                }
+                QueuePreviewUpdate(state, PreviewUpdateType.MeshOnly);
+            }
+            GUILayout.FlexibleSpace();
             EditorGUILayout.EndHorizontal();
 
-            using (new EditorGUI.DisabledScope(!((MeshTrimmerComponent)target).enableTexturePadding))
-            {
             EditorGUI.BeginChangeCheck();
             var mode = (MeshTrimmerComponent.TexturePostProcessMode)modeProp.enumValueIndex;
             EditorGUILayout.BeginHorizontal();
-            GUILayout.Label(T("Fill Mode", "Fill Mode"), GUILayout.Width(compactLabelWidth));
+            GUILayout.Label(T("塗り足し", "Fill Mode"), GUILayout.Width(compactLabelWidth));
             var controlsRect = GUILayoutUtility.GetRect(0f, EditorGUIUtility.singleLineHeight, GUILayout.ExpandWidth(true));
             if (mode == MeshTrimmerComponent.TexturePostProcessMode.FillColor)
             {
@@ -351,7 +398,6 @@ public class MeshTrimmerComponentEditor : Editor
 
             modeProp.enumValueIndex = (int)mode;
             if (EditorGUI.EndChangeCheck()) QueuePreviewUpdate(state, PreviewUpdateType.TextureOnly);
-            }
 
             EditorGUILayout.EndVertical();
             EditorGUILayout.EndHorizontal();
@@ -392,9 +438,16 @@ public class MeshTrimmerComponentEditor : Editor
     private static bool RequestBuildPreview(MeshTrimmerComponent trimmer, PreviewState state, PreviewUpdateType type)
     {
         if (trimmer == null || state.queued || state.processing) return false;
-        if (IsAnotherPreviewActiveInAvatar(trimmer)) return false;
-        EnsureAutoDetectedTargets(trimmer, !trimmer.enableTexturePadding);
+        var avatarRoot = PreviewCoordinator.FindAvatarRoot(trimmer.gameObject);
+        if (!PreviewCoordinator.TryBegin(GetPreviewOwnerKey(trimmer), "YM Mesh Trimmer", avatarRoot, false, out var failure))
+        {
+            state.failureMessage = failure;
+            return false;
+        }
+        EnsureAutoDetectedTargets(trimmer, false);
         state.failed = false;
+        state.failureMessage = string.Empty;
+        state.sourceAvatarRoot = avatarRoot;
         state.queued = true;
         state.processing = true;
         EditorUtility.SetDirty(trimmer);
@@ -411,35 +464,34 @@ public class MeshTrimmerComponentEditor : Editor
         return true;
     }
 
-
-    private static bool IsAnotherPreviewActiveInAvatar(MeshTrimmerComponent trimmer)
+    private static string GetPreviewOwnerKey(MeshTrimmerComponent trimmer)
     {
-        if (trimmer == null || trimmer.transform == null) return false;
-        var root = trimmer.transform.root;
-        if (root == null) return false;
-
-        var trimmers = root.GetComponentsInChildren<MeshTrimmerComponent>(true);
-        foreach (var other in trimmers)
-        {
-            if (other == null || other == trimmer) continue;
-            var otherState = GetPreviewState(other);
-            if (otherState.active || otherState.processing || otherState.queued) return true;
-        }
-
-        return false;
+        return trimmer == null ? "ym-mesh-trimmer:null" : $"ym-mesh-trimmer:{trimmer.GetInstanceID()}";
     }
 
     private static void BuildPreview(MeshTrimmerComponent trimmer, PreviewState state, PreviewUpdateType type)
     {
         if (trimmer == null) return;
+        if (state.sourceAvatarRoot == null)
+        {
+            state.sourceAvatarRoot = PreviewCoordinator.FindAvatarRoot(trimmer.gameObject);
+        }
         var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
 
             if (!state.active)
             {
+                CreatePreviewAvatar(trimmer, state);
+                SyncPreviewComponent(trimmer, state);
+                if (state.previewComponent == null) throw new InvalidOperationException("Preview component is missing.");
+                CaptureOriginals(state.previewComponent, state);
                 state.active = true;
-                CaptureOriginals(trimmer, state);
+            }
+            else
+            {
+                SyncPreviewComponent(trimmer, state);
+                if (state.previewComponent == null) throw new InvalidOperationException("Preview component is missing.");
             }
 
             int meshCount = 0;
@@ -447,12 +499,12 @@ public class MeshTrimmerComponentEditor : Editor
 
             if (type == PreviewUpdateType.MeshOnly || type == PreviewUpdateType.MeshAndTexture)
             {
-                meshCount = RebuildPreviewMeshes(trimmer, state);
+                meshCount = RebuildPreviewMeshes(state.previewComponent, state);
             }
 
             if (type == PreviewUpdateType.TextureOnly || type == PreviewUpdateType.MeshAndTexture)
             {
-                RebuildPreviewTexturesAndMaterials(trimmer, state, ref texCount);
+                RebuildPreviewTexturesAndMaterials(state.previewComponent, state, ref texCount);
             }
 
             sw.Stop();
@@ -467,6 +519,7 @@ public class MeshTrimmerComponentEditor : Editor
         {
             Debug.LogError($"[YM Mesh Trimmer][Preview] Failed and restoring originals. {ex}");
             RestoreOriginalsFromRecovery(trimmer);
+            ClearPreview(trimmer);
             state.active = false;
             state.failed = true;
         }
@@ -474,6 +527,137 @@ public class MeshTrimmerComponentEditor : Editor
         {
             state.processing = false;
         }
+    }
+
+    private static void CreatePreviewAvatar(MeshTrimmerComponent trimmer, PreviewState state)
+    {
+        if (state.sourceAvatarRoot == null) throw new InvalidOperationException("Preview avatar root is missing.");
+
+        state.previewRoot = new GameObject(PreviewRootName)
+        {
+            hideFlags = HideFlags.HideInHierarchy | HideFlags.DontSaveInEditor
+        };
+        state.previewAvatar = UnityEngine.Object.Instantiate(state.sourceAvatarRoot, state.previewRoot.transform);
+        state.previewAvatar.name = PreviewAvatarName;
+        state.previewAvatar.hideFlags = HideFlags.HideInHierarchy | HideFlags.DontSaveInEditor;
+        state.previewAvatar.transform.SetPositionAndRotation(state.sourceAvatarRoot.transform.position, state.sourceAvatarRoot.transform.rotation);
+        state.previewAvatar.transform.localScale = state.sourceAvatarRoot.transform.localScale;
+
+        var path = PreviewCoordinator.BuildRelativePath(state.sourceAvatarRoot.transform, trimmer.transform);
+        var previewTransform = string.IsNullOrEmpty(path) ? state.previewAvatar.transform : state.previewAvatar.transform.Find(path);
+        state.previewComponent = previewTransform != null
+            ? previewTransform.GetComponent<MeshTrimmerComponent>()
+            : state.previewAvatar.GetComponentInChildren<MeshTrimmerComponent>(true);
+        if (state.previewComponent == null)
+        {
+            state.previewComponent = state.previewAvatar.AddComponent<MeshTrimmerComponent>();
+        }
+
+        CaptureSourceRecovery(trimmer, state);
+        state.hiddenSourceRenderers.Hide(state.sourceAvatarRoot);
+    }
+
+    private static void CaptureSourceRecovery(MeshTrimmerComponent trimmer, PreviewState state)
+    {
+        trimmer.PreviewRecoveryRecords.Clear();
+        if (state.sourceAvatarRoot == null) return;
+
+        foreach (var target in trimmer.targets)
+        {
+            if (target == null || target.usages == null) continue;
+            foreach (var usage in target.usages)
+            {
+                var renderer = usage?.renderer;
+                if (renderer == null) continue;
+                if (trimmer.PreviewRecoveryRecords.Exists(r => r.renderer == renderer)) continue;
+                trimmer.PreviewRecoveryRecords.Add(new MeshTrimmerComponent.PreviewRecoveryRecord
+                {
+                    renderer = renderer,
+                    originalSharedMesh = renderer.sharedMesh,
+                    originalSharedMaterials = renderer.sharedMaterials,
+                    originalEnabled = renderer.enabled,
+                    originalForceRenderingOff = renderer.forceRenderingOff
+                });
+            }
+        }
+
+        trimmer.PreviewActiveSerialized = true;
+        EditorUtility.SetDirty(trimmer);
+    }
+
+    private static void SyncPreviewComponent(MeshTrimmerComponent source, PreviewState state)
+    {
+        var preview = state.previewComponent;
+        if (source == null || preview == null || state.sourceAvatarRoot == null || state.previewAvatar == null) return;
+
+        preview.enableForWindows = source.enableForWindows;
+        preview.enableForAndroid = source.enableForAndroid;
+        preview.enableForiOS = source.enableForiOS;
+        preview.enableTexturePadding = source.enableTexturePadding;
+        preview.alphaThreshold = source.alphaThreshold;
+        preview.maskDilatePixels = source.maskDilatePixels;
+        preview.maskCleanupPixels = source.maskCleanupPixels;
+        preview.minimumFragmentSizePermille = source.minimumFragmentSizePermille;
+        preview.maskClosePixels = source.maskClosePixels;
+        preview.fillSmallHolesPixels = source.fillSmallHolesPixels;
+        preview.removeSmallIslandsPixels = source.removeSmallIslandsPixels;
+        preview.minTriangleUvArea = source.minTriangleUvArea;
+        preview.minTriangleWorldArea = source.minTriangleWorldArea;
+        preview.edgeCrossingMergeEpsilon = source.edgeCrossingMergeEpsilon;
+        preview.edgeCrossingEndpointSnapEpsilon = source.edgeCrossingEndpointSnapEpsilon;
+        preview.edgeCrossingCacheQuantizeStep = source.edgeCrossingCacheQuantizeStep;
+        preview.edgeCrossingMinPolygonAreaRatio = source.edgeCrossingMinPolygonAreaRatio;
+        preview.edgeCrossingMinChordLengthRatio = source.edgeCrossingMinChordLengthRatio;
+        preview.trimAlgorithm = source.trimAlgorithm;
+        preview.debugEdgeCrossingRoutes = source.debugEdgeCrossingRoutes;
+        preview.debugEdgeCrossingRouteMaterialFilters = new List<string>(source.debugEdgeCrossingRouteMaterialFilters ?? new List<string>());
+        preview.targets = CloneTargetsForPreview(source, state);
+    }
+
+    private static List<MeshTrimmerComponent.TextureTargetSettings> CloneTargetsForPreview(MeshTrimmerComponent source, PreviewState state)
+    {
+        var result = new List<MeshTrimmerComponent.TextureTargetSettings>();
+        if (source.targets == null) return result;
+
+        foreach (var target in source.targets)
+        {
+            if (target == null) continue;
+            var clone = new MeshTrimmerComponent.TextureTargetSettings
+            {
+                enabled = target.enabled,
+                mainTexture = target.mainTexture,
+                enableTextureFill = target.enableTextureFill,
+                texturePostProcessMode = target.texturePostProcessMode,
+                fillColor = target.fillColor,
+                enablePreSubdivide = target.enablePreSubdivide,
+                preSubdivideLevel = target.preSubdivideLevel,
+                preSubdivideQuadAware = target.preSubdivideQuadAware,
+                usages = new List<MeshTrimmerComponent.RendererSubMeshRef>()
+            };
+
+            foreach (var usage in target.usages)
+            {
+                if (usage == null) continue;
+                clone.usages.Add(new MeshTrimmerComponent.RendererSubMeshRef
+                {
+                    renderer = FindPreviewRenderer(usage.renderer, state),
+                    subMeshIndex = usage.subMeshIndex,
+                    material = usage.material
+                });
+            }
+
+            result.Add(clone);
+        }
+
+        return result;
+    }
+
+    private static SkinnedMeshRenderer FindPreviewRenderer(SkinnedMeshRenderer sourceRenderer, PreviewState state)
+    {
+        if (sourceRenderer == null || state.sourceAvatarRoot == null || state.previewAvatar == null) return null;
+        var path = PreviewCoordinator.BuildRelativePath(state.sourceAvatarRoot.transform, sourceRenderer.transform);
+        var previewTransform = string.IsNullOrEmpty(path) ? state.previewAvatar.transform : state.previewAvatar.transform.Find(path);
+        return previewTransform != null ? previewTransform.GetComponent<SkinnedMeshRenderer>() : null;
     }
 
     private static int RebuildPreviewMeshes(MeshTrimmerComponent trimmer, PreviewState state)
@@ -596,7 +780,9 @@ public class MeshTrimmerComponentEditor : Editor
                 {
                     renderer = usage.renderer,
                     originalSharedMesh = r.originalSharedMesh,
-                    originalSharedMaterials = r.originalSharedMaterials
+                    originalSharedMaterials = r.originalSharedMaterials,
+                    originalEnabled = r.originalEnabled,
+                    originalForceRenderingOff = r.originalForceRenderingOff
                 });
             }
         }
@@ -712,6 +898,7 @@ public class MeshTrimmerComponentEditor : Editor
     {
         if (trimmer == null) return;
         var state = GetPreviewState(trimmer);
+        RestoreOriginalsFromRecovery(trimmer);
         foreach (var r in state.rendererStates.Values)
         {
             if (r.renderer != null)
@@ -729,6 +916,8 @@ public class MeshTrimmerComponentEditor : Editor
             }
             if (r.previewObject != null) UnityEngine.Object.DestroyImmediate(r.previewObject);
         }
+        if (state.previewRoot != null) UnityEngine.Object.DestroyImmediate(state.previewRoot);
+        state.hiddenSourceRenderers.Restore();
 
         foreach (var t in state.textureStates.Values)
         {
@@ -739,6 +928,14 @@ public class MeshTrimmerComponentEditor : Editor
         state.textureStates.Clear();
         state.active = false;
         state.pending = PreviewUpdateType.None;
+        state.processing = false;
+        state.queued = false;
+        state.previewRoot = null;
+        state.previewAvatar = null;
+        state.previewComponent = null;
+        state.sourceAvatarRoot = null;
+        state.failureMessage = string.Empty;
+        PreviewCoordinator.End(GetPreviewOwnerKey(trimmer));
 
         trimmer.PreviewRecoveryRecords.Clear();
         trimmer.PreviewActiveSerialized = false;
@@ -752,6 +949,8 @@ public class MeshTrimmerComponentEditor : Editor
             if (rec.renderer == null) continue;
             rec.renderer.sharedMesh = rec.originalSharedMesh;
             rec.renderer.sharedMaterials = rec.originalSharedMaterials;
+            rec.renderer.enabled = rec.originalEnabled;
+            rec.renderer.forceRenderingOff = rec.originalForceRenderingOff;
         }
         trimmer.PreviewRecoveryRecords.Clear();
         trimmer.PreviewActiveSerialized = false;
@@ -760,6 +959,8 @@ public class MeshTrimmerComponentEditor : Editor
     }
 
     private static bool _subscribed;
+    private static bool _cleanupScheduled;
+
     private static void SubscribeEditorEvents()
     {
         if (_subscribed) return;
@@ -773,11 +974,43 @@ public class MeshTrimmerComponentEditor : Editor
         };
     }
 
+    private static void ScheduleOrphanPreviewCleanup()
+    {
+        if (_cleanupScheduled) return;
+        _cleanupScheduled = true;
+        EditorApplication.delayCall += RunScheduledOrphanPreviewCleanup;
+    }
+
+    private static void RunScheduledOrphanPreviewCleanup()
+    {
+        _cleanupScheduled = false;
+        if (EditorApplication.isCompiling || EditorApplication.isUpdating)
+        {
+            ScheduleOrphanPreviewCleanup();
+            return;
+        }
+
+        CleanupOrphanPreviewObjects();
+    }
+
     internal static void ClearAllPreviews()
     {
-        foreach (var obj in UnityEngine.Object.FindObjectsOfType<MeshTrimmerComponent>())
+        foreach (var obj in UnityEngine.Object.FindObjectsByType<MeshTrimmerComponent>(FindObjectsInactive.Include, FindObjectsSortMode.None))
         {
             ClearPreview(obj);
+        }
+        CleanupOrphanPreviewObjects();
+    }
+
+    private static void CleanupOrphanPreviewObjects()
+    {
+        foreach (var go in UnityEngine.Object.FindObjectsByType<GameObject>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+        {
+            if (go == null) continue;
+            if (go.name == PreviewRootName || go.name == PreviewAvatarName)
+            {
+                UnityEngine.Object.DestroyImmediate(go);
+            }
         }
     }
 
@@ -885,10 +1118,7 @@ public class MeshTrimmerNdmfPlugin : Plugin<MeshTrimmerNdmfPlugin>
 
                 MeshTrimmerComponentEditor.EnsureAutoDetectedTargets(trimmer, false);
                 MeshTrimProcessor.ApplyTrim(trimmer, true);
-                if (trimmer.enableTexturePadding)
-                {
-                    TexturePostProcessProcessor.ApplyBuildTimeReplacement(trimmer);
-                }
+                TexturePostProcessProcessor.ApplyBuildTimeReplacement(trimmer);
                 executedForCurrentPlatform = true;
             }
 

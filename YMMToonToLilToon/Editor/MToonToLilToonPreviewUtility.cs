@@ -3,6 +3,7 @@ using System.Linq;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
+using YoridoriModifiers.Core.Editor;
 
 namespace YoridoriModifiers.MToonToLilToon
 {
@@ -18,6 +19,7 @@ namespace YoridoriModifiers.MToonToLilToon
         private static GameObject _pendingAvatarRoot;
         private static string _previewProgress = string.Empty;
         private static bool _isProcessingPreview;
+        private static bool _previewFailed;
         private static int _progressVersion;
         private static readonly List<RendererState> HiddenRenderers = new();
 
@@ -38,7 +40,7 @@ namespace YoridoriModifiers.MToonToLilToon
         internal static void TogglePreview(MToonToLilToonComponent component)
         {
             if (_isProcessingPreview) return;
-            var avatarRoot = FindAvatarRoot(component.gameObject);
+            var avatarRoot = PreviewCoordinator.FindAvatarRoot(component.gameObject);
             if (avatarRoot == null) return;
 
             if (IsPreviewing(avatarRoot))
@@ -53,7 +55,7 @@ namespace YoridoriModifiers.MToonToLilToon
         internal static void RestartPreviewIfActive(MToonToLilToonComponent component)
         {
             if (_isProcessingPreview) return;
-            var avatarRoot = FindAvatarRoot(component.gameObject);
+            var avatarRoot = PreviewCoordinator.FindAvatarRoot(component.gameObject);
             if (avatarRoot == null || !IsPreviewing(avatarRoot)) return;
 
             QueueStartPreview(avatarRoot);
@@ -63,7 +65,7 @@ namespace YoridoriModifiers.MToonToLilToon
         {
             if (_isProcessingPreview) return;
             if (sourceComponent == null) return;
-            var avatarRoot = FindAvatarRoot(sourceComponent.gameObject);
+            var avatarRoot = PreviewCoordinator.FindAvatarRoot(sourceComponent.gameObject);
             if (avatarRoot == null || !IsPreviewing(avatarRoot) || _previewAvatar == null) return;
 
             var sourcePath = BuildRelativePath(avatarRoot.transform, sourceComponent.transform);
@@ -85,13 +87,14 @@ namespace YoridoriModifiers.MToonToLilToon
 
         internal static string GetPreviewProgressMessage() => _previewProgress;
         internal static bool IsProcessingPreview() => _isProcessingPreview;
+        internal static bool HasPreviewFailed() => _previewFailed;
 
 
         internal static bool HasStalePreviewState(MToonToLilToonComponent component)
         {
             if (component == null) return false;
             if (IsPreviewing(component)) return false;
-            var avatarRoot = FindAvatarRoot(component.gameObject);
+            var avatarRoot = PreviewCoordinator.FindAvatarRoot(component.gameObject);
             if (avatarRoot == null) return false;
             return avatarRoot.GetComponentsInChildren<MToonToLilToonComponent>(true).Any(c => c != null && c.isPreviewing);
         }
@@ -100,7 +103,7 @@ namespace YoridoriModifiers.MToonToLilToon
         {
             if (component == null) return;
 
-            var avatarRoot = FindAvatarRoot(component.gameObject);
+            var avatarRoot = PreviewCoordinator.FindAvatarRoot(component.gameObject);
             if (avatarRoot == null) return;
 
             if (IsPreviewing(avatarRoot))
@@ -122,7 +125,7 @@ namespace YoridoriModifiers.MToonToLilToon
 
         internal static bool IsPreviewing(MToonToLilToonComponent component)
         {
-            var avatarRoot = FindAvatarRoot(component.gameObject);
+            var avatarRoot = PreviewCoordinator.FindAvatarRoot(component.gameObject);
             return avatarRoot != null && IsPreviewing(avatarRoot);
         }
 
@@ -134,8 +137,15 @@ namespace YoridoriModifiers.MToonToLilToon
         private static void QueueStartPreview(GameObject avatarRoot)
         {
             StopPreview();
+            if (!PreviewCoordinator.TryBegin("ym-mtoon-to-liltoon", "YM MToon to lilToon", avatarRoot, false, out var failure))
+            {
+                _previewFailed = true;
+                SetProgress(failure);
+                return;
+            }
             _pendingAvatarRoot = avatarRoot;
             _isProcessingPreview = true;
+            _previewFailed = false;
             SetProgress("Processing...");
             EditorApplication.delayCall += StartPendingPreview;
         }
@@ -171,6 +181,13 @@ namespace YoridoriModifiers.MToonToLilToon
 
                 HideSourceRenderers(avatarRoot);
                 SyncSourcePreviewFlag(avatarRoot, true);
+                _previewFailed = false;
+            }
+            catch
+            {
+                _previewFailed = true;
+                PreviewCoordinator.End("ym-mtoon-to-liltoon");
+                throw;
             }
             finally
             {
@@ -198,7 +215,9 @@ namespace YoridoriModifiers.MToonToLilToon
             _sourceAvatarRoot = null;
             _pendingAvatarRoot = null;
             _isProcessingPreview = false;
+            _previewFailed = false;
             SetProgress(string.Empty);
+            PreviewCoordinator.End("ym-mtoon-to-liltoon");
             CleanupOrphanPreviewObjects();
             SceneView.RepaintAll();
         }
@@ -247,37 +266,9 @@ namespace YoridoriModifiers.MToonToLilToon
             }
         }
 
-        private static GameObject FindAvatarRoot(GameObject from)
-        {
-            var animator = from.GetComponentsInParent<Animator>(true)
-                .FirstOrDefault(a => a.avatar != null && a.avatar.isHuman);
-            if (animator != null) return animator.gameObject;
-
-            var transform = from.transform;
-            while (transform.parent != null)
-            {
-                transform = transform.parent;
-            }
-
-            return transform.gameObject;
-        }
-
         private static string BuildRelativePath(Transform root, Transform target)
         {
-            if (root == null || target == null) return string.Empty;
-            if (root == target) return string.Empty;
-
-            var segments = new List<string>();
-            var current = target;
-            while (current != null && current != root)
-            {
-                segments.Add(current.name);
-                current = current.parent;
-            }
-
-            if (current != root) return string.Empty;
-            segments.Reverse();
-            return string.Join("/", segments);
+            return PreviewCoordinator.BuildRelativePath(root, target);
         }
 
         private static void OnPlayModeStateChanged(PlayModeStateChange change)

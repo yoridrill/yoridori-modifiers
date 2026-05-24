@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
+using YoridoriModifiers.Core.Editor;
 
 namespace YoridoriModifiers.MToonToLilToon
 {
@@ -103,24 +104,21 @@ namespace YoridoriModifiers.MToonToLilToon
         private void DrawPreviewButton(MToonToLilToonComponent component)
         {
             using var horizontal = new EditorGUILayout.HorizontalScope();
-            var previous = GUI.backgroundColor;
             var previewing = MToonToLilToonPreviewUtility.IsPreviewing(component);
-            GUI.backgroundColor = previewing ? new Color(0.4f, 0.85f, 0.4f) : previous;
 
-            if (GUILayout.Button("Preview", GUILayout.Width(90f), GUILayout.Height(20f)))
+            if (PreviewInspectorGui.DrawPreviewButton(previewing))
             {
                 MToonToLilToonPreviewUtility.TogglePreview(component);
                 EditorUtility.SetDirty(component);
             }
 
-            GUI.backgroundColor = previous;
             var progressMessage = MToonToLilToonPreviewUtility.IsProcessingPreview()
                 ? "Processing..."
                 : MToonToLilToonPreviewUtility.GetPreviewProgressMessage();
-            if (!string.IsNullOrEmpty(progressMessage))
-            {
-                EditorGUILayout.LabelField(progressMessage, EditorStyles.miniLabel);
-            }
+            PreviewInspectorGui.DrawStatus(
+                MToonToLilToonPreviewUtility.IsProcessingPreview(),
+                MToonToLilToonPreviewUtility.HasPreviewFailed(),
+                progressMessage);
             GUILayout.FlexibleSpace();
             EditorGUI.BeginChangeCheck();
             var nextLanguage = (Language)EditorGUILayout.EnumPopup(_language, GUILayout.Width(90f));
@@ -782,7 +780,9 @@ namespace YoridoriModifiers.MToonToLilToon
                             "Toon Standard does not support Cutout or Transparent. You need to trim meshes and remove blush-like transparent effects beforehand.\nToon Standard fallback does not support double-sided rendering."),
                         MessageType.Warning);
                 }
-                EditorGUILayout.Space();
+                var verboseLogProp = serializedObject.FindProperty(nameof(MToonToLilToonComponent.verboseLog));
+                verboseLogProp.boolValue = EditorGUILayout.ToggleLeft("Verbose Log", verboseLogProp.boolValue);
+                EditorGUILayout.Space(4f);
 
                 var rawButtonRect = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
                 var buttonRect = EditorGUI.IndentedRect(rawButtonRect);
@@ -798,11 +798,6 @@ namespace YoridoriModifiers.MToonToLilToon
                         "モデルが重複したり、見えない場合に押してください。\nPreview オブジェクトを削除し、Renderer を再表示します。",
                         "Use this if the avatar stays hidden, frozen, or stuck after Preview.\nThis removes temporary Preview objects and re-enables renderers."),
                     MessageType.Warning);
-                EditorGUILayout.Space();
-
-                var verboseLogProp = serializedObject.FindProperty(nameof(MToonToLilToonComponent.verboseLog));
-                verboseLogProp.boolValue = EditorGUILayout.ToggleLeft("Verbose Log", verboseLogProp.boolValue);
-                EditorGUILayout.Space(4f);
             }
 
             return changed;

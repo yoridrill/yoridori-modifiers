@@ -3,6 +3,7 @@
     "rootNamespace": "YoridoriModifiers.ArmPatch",
     "references": [
         "nadena.dev.ndmf",
+        "YoridoriModifiers.Core.Editor",
         "YoridoriModifiers.ArmPatch.Runtime",
         "VRC.SDK3A"
     ],

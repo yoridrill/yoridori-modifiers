@@ -48,6 +48,8 @@ public class MeshTrimmerComponent : MonoBehaviour, IEditorOnly
         public SkinnedMeshRenderer renderer;
         public Mesh originalSharedMesh;
         public Material[] originalSharedMaterials;
+        public bool originalEnabled;
+        public bool originalForceRenderingOff;
     }
 
     public bool enableForWindows = false;

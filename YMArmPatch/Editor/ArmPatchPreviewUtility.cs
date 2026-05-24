@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using YoridoriModifiers.Core.Editor;
 
 namespace YoridoriModifiers.ArmPatch
 {
@@ -49,24 +50,24 @@ namespace YoridoriModifiers.ArmPatch
             return _isPlaying && _sourceAvatarRoot == avatarRoot;
         }
 
-        internal static void TogglePreview(ArmPatchComponent component)
+        internal static bool TogglePreview(ArmPatchComponent component)
         {
-            if (component == null) return;
+            if (component == null) return false;
 
             var avatarRoot = FindHumanoidAvatarRoot(component.transform);
             if (avatarRoot == null)
             {
                 Debug.LogWarning("[YM Arm Patch] Preview skipped. Humanoid Animator not found.");
-                return;
+                return false;
             }
 
             if (IsPreviewing(avatarRoot))
             {
                 StopPreview();
-                return;
+                return true;
             }
 
-            StartPreview(avatarRoot, component);
+            return StartPreview(avatarRoot, component);
         }
 
         internal static void RestartPreviewIfActive(ArmPatchComponent component)
@@ -112,20 +113,27 @@ namespace YoridoriModifiers.ArmPatch
             _previewClip = null;
             _sourceAvatarRoot = null;
             _sourceComponent = null;
+            PreviewCoordinator.End("ym-arm-patch");
 
             CleanupOrphanPreviewObjects();
             SceneView.RepaintAll();
         }
 
-        private static void StartPreview(GameObject avatarRoot, ArmPatchComponent sourceComponent)
+        private static bool StartPreview(GameObject avatarRoot, ArmPatchComponent sourceComponent)
         {
             StopPreview();
+            if (!PreviewCoordinator.TryBegin("ym-arm-patch", "YM Arm Patch", avatarRoot, true, out var failure))
+            {
+                Debug.LogWarning("[YM Arm Patch] Preview skipped. " + failure);
+                return false;
+            }
 
             _previewClip = LoadPreviewClip();
             if (_previewClip == null)
             {
                 Debug.LogWarning("[YM Arm Patch] Preview clip not found.");
-                return;
+                PreviewCoordinator.End("ym-arm-patch");
+                return false;
             }
 
             _sourceAvatarRoot = avatarRoot;
@@ -163,6 +171,7 @@ namespace YoridoriModifiers.ArmPatch
             EditorApplication.update += OnEditorUpdate;
 
             SceneView.RepaintAll();
+            return true;
         }
 
         private static void OnEditorUpdate()

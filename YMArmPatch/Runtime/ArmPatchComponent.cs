@@ -44,13 +44,13 @@ namespace YoridoriModifiers.ArmPatch
     {
         [Header("Shoulder")]
         [Tooltip("Enable shoulder correction.")]
-        public bool enableShoulderFix = true;
+        public bool enableShoulderFix = false;
 
         [Tooltip("Shared shoulder position offset. Right side is mirrored internally.")]
         public Vector3 shoulderPositionOffset = Vector3.zero;
 
         [Tooltip("Shared shoulder rotation offset. Right side is mirrored internally.")]
-        public Vector3 shoulderEulerOffset = new Vector3(0f, 0f, -10f);
+        public Vector3 shoulderEulerOffset = Vector3.zero;
 
         [Tooltip("Upper arm roll axis. Default is X.")]
         public TwistAxis upperArmRollAxis = TwistAxis.X;
@@ -62,21 +62,21 @@ namespace YoridoriModifiers.ArmPatch
         [Header("Forearm")]
         [Tooltip("Enable forearm correction.")]
         [FormerlySerializedAs("enableWristFix")]
-        public bool enableForearmFix = true;
+        public bool enableForearmFix = false;
 
         [Tooltip("Forearm thickness scale at root side.")]
         [FormerlySerializedAs("wristThicknessScale")]
-        public float forearmThicknessRootScale = 0.8f;
+        public float forearmThicknessRootScale = 1f;
 
         [Tooltip("Forearm thickness scale at tip side.")]
-        public float forearmThicknessTipScale = 1.1f;
+        public float forearmThicknessTipScale = 1f;
 
         [Tooltip("Forearm width scale at root side.")]
         [FormerlySerializedAs("wristWidthScale")]
-        public float forearmWidthRootScale = 0.95f;
+        public float forearmWidthRootScale = 1f;
 
         [Tooltip("Forearm width scale at tip side.")]
-        public float forearmWidthTipScale = 0.9f;
+        public float forearmWidthTipScale = 1f;
 
         [Tooltip("Root roll offset for twist aim.")]
         [Range(-90f, 90f)]
@@ -110,10 +110,10 @@ namespace YoridoriModifiers.ArmPatch
 
         [Header("Thumb")]
         [Tooltip("Enable thumb correction.")]
-        public bool enableThumbFix = true;
+        public bool enableThumbFix = false;
 
         [Tooltip("Shared thumb rotation offset. Right side is mirrored internally.")]
-        public Vector3 thumbEulerOffset = new Vector3(10f, 0f, 20f);
+        public Vector3 thumbEulerOffset = Vector3.zero;
 
         [Tooltip("Constraint implementation used by this tool.")]
         public ConstraintMode constraintMode = ConstraintMode.VRChatConstraints;

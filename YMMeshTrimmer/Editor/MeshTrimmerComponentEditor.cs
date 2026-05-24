@@ -62,7 +62,7 @@ public class MeshTrimmerComponentEditor : Editor
     private UiLanguage _language;
     private string _lastFocusedControl;
     private bool _advancedFoldout;
-    private bool _targetsFoldout = true;
+    private bool _targetsFoldout = false;
     private int _lastHotControl;
 
     static MeshTrimmerComponentEditor()

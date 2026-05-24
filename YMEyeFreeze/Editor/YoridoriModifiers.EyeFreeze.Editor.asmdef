@@ -1,11 +1,11 @@
 {
-    "name": "YoridoriModifiers.Core.Editor",
-    "rootNamespace": "YoridoriModifiers.Core.Editor",
+    "name": "YoridoriModifiers.EyeFreeze.Editor",
+    "rootNamespace": "YoridoriModifiers.EyeFreeze",
     "references": [
-        "YoridoriModifiers.ArmPatch.Runtime",
+        "nadena.dev.ndmf",
+        "YoridoriModifiers.Core.Editor",
         "YoridoriModifiers.EyeFreeze.Runtime",
-        "YoridoriModifiers.MToonToLilToon.Runtime",
-        "YoridoriModifiers.MeshTrimmer.Runtime"
+        "VRC.SDK3A"
     ],
     "includePlatforms": [
         "Editor"

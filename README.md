@@ -16,6 +16,9 @@ Unity 2022.3 / VCC / ALCOM で作成した VRChat Avatars Project での利用�
 - `YM MToon to lilToon`
   - MToon 1.0 / 互換 MToon マテリアルを lilToon へ変換します。
   - 髪マテリアルの結合、眉ステンシル、FakeShadow、顔影調整などを必要に応じて有効化できます。
+- `YM Eye Freeze`
+  - Exメニューに Eye Look と Blink を一時停止し、目ボーンを初期状態で固定するモードを追加します。
+  - カメラ目線化やターゲット追従は行いません。
 
 ## 導入
 
@@ -35,8 +38,9 @@ https://yoridrill.github.io/vpm-repos/redirect.html
 - `Yoridori Modifiers/YM Arm Patch`
 - `Yoridori Modifiers/YM Mesh Trimmer`
 - `Yoridori Modifiers/YM MToon to lilToon`
+- `Yoridori Modifiers/YM Eye Freeze`
 
-VRoid アバターでは、Hierarchy のアバターを右クリックして以下のメニューを使うと、3ツールをまとめて追加できます。
+VRoid アバターでは、Hierarchy のアバターを右クリックして以下のメニューを使うと、4ツールをまとめて追加できます。
 
 - `Yoridori Modifiers/Add VRoid Preset/Long Sleeves`
 - `Yoridori Modifiers/Add VRoid Preset/Short Sleeves`
@@ -49,7 +53,7 @@ VRoid アバターでは、Hierarchy のアバターを右クリックして以�
 
 ## Preview
 
-各ツールの Inspector 上部に `Preview` ボタンがあります。  
+Preview 対応ツールの Inspector 上部には `Preview` ボタンがあります。  
 Preview 中はシーン上の元モデルをできるだけ壊さないように一時オブジェクトで表示します。
 
 Preview 表示が残ったり、モデルが見えなくなった場合は、各ツールの `Advanced` 内にある `Reset Preview` を押してください。
@@ -64,8 +68,9 @@ Preview 表示が残ったり、モデルが見えなくなった場合は、各
 - [YM Arm Patch](./YMArmPatch/README.md)
 - [YM Mesh Trimmer](./YMMeshTrimmer/README.md)
 - [YM MToon to lilToon](./YMMToonToLilToon/README.md)
+- [YM Eye Freeze](./YMEyeFreeze/README.md)
 
-ビルド時は、`YM Arm Patch`、`YM Mesh Trimmer`、`YM MToon to lilToon` の順で処理します。  
+ビルド時は、`YM Arm Patch`、`YM Mesh Trimmer`、`YM MToon to lilToon`、`YM Eye Freeze` の順で処理します。  
 
 ## ライセンス
 

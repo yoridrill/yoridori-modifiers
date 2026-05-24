@@ -2,6 +2,7 @@ using System;
 using UnityEditor;
 using UnityEngine;
 using YoridoriModifiers.ArmPatch;
+using YoridoriModifiers.EyeFreeze;
 using YoridoriModifiers.MeshTrimmer;
 using YoridoriModifiers.MToonToLilToon;
 
@@ -63,6 +64,7 @@ namespace YoridoriModifiers.Core.Editor
             ConfigureWindowsMeshTrimmer(windowsTrimmer);
 
             GetOrAddComponent<MToonToLilToonComponent>(root, undoName);
+            GetOrAddComponent<YMEyeFreeze>(root, undoName);
 
             Undo.CollapseUndoOperations(undoGroup);
             EditorUtility.SetDirty(root);

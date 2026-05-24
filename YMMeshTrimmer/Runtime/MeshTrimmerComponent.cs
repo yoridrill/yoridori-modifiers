@@ -83,7 +83,6 @@ public class MeshTrimmerComponent : MonoBehaviour, IEditorOnly
     [SerializeField] private List<PreviewRecoveryRecord> previewRecoveryRecords = new List<PreviewRecoveryRecord>();
     [HideInInspector] public TrimAlgorithm trimAlgorithm = TrimAlgorithm.EdgeCrossing;
     [HideInInspector] public bool debugEdgeCrossingRoutes = false;
-    [HideInInspector] public List<string> debugEdgeCrossingRouteMaterialFilters = new List<string>();
 
     public bool PreviewActiveSerialized
     {

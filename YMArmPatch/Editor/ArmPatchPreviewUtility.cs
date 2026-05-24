@@ -10,6 +10,7 @@ namespace YoridoriModifiers.ArmPatch
     {
         private const string PreviewRootName = "__NDMF_VRoidArmPatch_PreviewRoot";
         private const string PreviewAvatarName = "__NDMF_VRoidArmPatch_PreviewAvatar";
+        private const string ToolName = "YM Arm Patch";
 
         private static GameObject _sourceAvatarRoot;
         private static ArmPatchComponent _sourceComponent;
@@ -59,7 +60,7 @@ namespace YoridoriModifiers.ArmPatch
             var avatarRoot = FindHumanoidAvatarRoot(component.transform);
             if (avatarRoot == null)
             {
-                Debug.LogWarning("[YM Arm Patch] Preview skipped. Humanoid Animator not found.");
+                LogUtility.PreviewSkipped(ToolName, "Humanoid Animator not found.");
                 return false;
             }
 
@@ -124,16 +125,16 @@ namespace YoridoriModifiers.ArmPatch
         private static bool StartPreview(GameObject avatarRoot, ArmPatchComponent sourceComponent)
         {
             StopPreview();
-            if (!PreviewCoordinator.TryBegin("ym-arm-patch", "YM Arm Patch", avatarRoot, true, out var failure))
+            if (!PreviewCoordinator.TryBegin("ym-arm-patch", ToolName, avatarRoot, true, out var failure))
             {
-                Debug.LogWarning("[YM Arm Patch] Preview skipped. " + failure);
+                LogUtility.PreviewSkipped(ToolName, failure);
                 return false;
             }
 
             _previewClip = LoadPreviewClip();
             if (_previewClip == null)
             {
-                Debug.LogWarning("[YM Arm Patch] Preview clip not found.");
+                LogUtility.Warning(ToolName, "Preview clip not found.");
                 PreviewCoordinator.End("ym-arm-patch");
                 return false;
             }

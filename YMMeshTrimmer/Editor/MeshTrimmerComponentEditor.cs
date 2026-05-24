@@ -17,6 +17,7 @@ public class MeshTrimmerComponentEditor : Editor
     private const string PreviewRootName = "__YoridoriMeshTrimmerPreviewRoot";
     private const string PreviewAvatarName = "__YoridoriMeshTrimmerPreviewAvatar";
     private const string LanguagePrefKey = "MeshTrimmerComponentEditor.Language";
+    private const string ToolName = "YM Mesh Trimmer";
 
     private enum UiLanguage { English = 0, Japanese = 1 }
     private enum PreviewUpdateType { None, MeshOnly, TextureOnly, MeshAndTexture }
@@ -503,8 +504,9 @@ public class MeshTrimmerComponentEditor : Editor
     {
         if (trimmer == null || state.queued || state.processing) return false;
         var avatarRoot = PreviewCoordinator.FindAvatarRoot(trimmer.gameObject);
-        if (!PreviewCoordinator.TryBegin(GetPreviewOwnerKey(trimmer), "YM Mesh Trimmer", avatarRoot, false, out var failure))
+        if (!PreviewCoordinator.TryBegin(GetPreviewOwnerKey(trimmer), ToolName, avatarRoot, false, out var failure))
         {
+            LogUtility.PreviewSkipped(ToolName, failure);
             state.failureMessage = failure;
             return false;
         }
@@ -572,8 +574,11 @@ public class MeshTrimmerComponentEditor : Editor
             }
 
             sw.Stop();
-            if (trimmer.debugEdgeCrossingRoutes)
-                Debug.Log($"[YM Mesh Trimmer][Preview] UpdateType={type}, Renderers={state.rendererStates.Count}, PreviewMeshes={meshCount}, PreviewTextures={texCount}, ElapsedMs={sw.ElapsedMilliseconds}");
+            LogUtility.Verbose(
+                ToolName,
+                trimmer.debugEdgeCrossingRoutes,
+                "Preview",
+                $"UpdateType={type}, Renderers={state.rendererStates.Count}, PreviewMeshes={meshCount}, PreviewTextures={texCount}, ElapsedMs={sw.ElapsedMilliseconds}");
 
             trimmer.PreviewActiveSerialized = true;
             EditorUtility.SetDirty(trimmer);
@@ -581,7 +586,7 @@ public class MeshTrimmerComponentEditor : Editor
         }
         catch (Exception ex)
         {
-            Debug.LogError($"[YM Mesh Trimmer][Preview] Failed and restoring originals. {ex}");
+            LogUtility.Error(ToolName, "Preview", $"Failed and restoring originals. {ex}");
             RestoreOriginalsFromRecovery(trimmer);
             ClearPreview(trimmer);
             state.active = false;
@@ -674,7 +679,6 @@ public class MeshTrimmerComponentEditor : Editor
         preview.edgeCrossingMinChordLengthRatio = source.edgeCrossingMinChordLengthRatio;
         preview.trimAlgorithm = source.trimAlgorithm;
         preview.debugEdgeCrossingRoutes = source.debugEdgeCrossingRoutes;
-        preview.debugEdgeCrossingRouteMaterialFilters = new List<string>(source.debugEdgeCrossingRouteMaterialFilters ?? new List<string>());
         preview.targets = CloneTargetsForPreview(source, state);
     }
 

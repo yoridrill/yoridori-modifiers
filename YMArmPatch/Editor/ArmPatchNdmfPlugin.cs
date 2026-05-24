@@ -6,6 +6,7 @@ using UnityEngine;
 using UnityEngine.Animations;
 using VRC.Dynamics;
 using VRC.SDK3.Dynamics.Constraint.Components;
+using YoridoriModifiers.Core.Editor;
 
 [assembly: ExportsPlugin(typeof(YoridoriModifiers.ArmPatch.ArmPatchNdmfPlugin))]
 
@@ -13,6 +14,8 @@ namespace YoridoriModifiers.ArmPatch
 {
     public sealed class ArmPatchNdmfPlugin : Plugin<ArmPatchNdmfPlugin>
     {
+        private const string ToolName = "YM Arm Patch";
+
         public override string QualifiedName => "jp.yoridrill.ym-arm-patch";
         public override string DisplayName => "YM Arm Patch";
 
@@ -106,7 +109,7 @@ namespace YoridoriModifiers.ArmPatch
             var animator = avatarRoot.GetComponentInChildren<Animator>(true);
             if (!IsValidHumanoid(animator))
             {
-                Debug.LogWarning("[YM Arm Patch] Preview skipped. Humanoid Animator not found.");
+                LogUtility.PreviewSkipped(ToolName, "Humanoid Animator not found.");
                 return;
             }
 

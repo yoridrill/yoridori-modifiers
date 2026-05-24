@@ -1,10 +1,13 @@
 using System.Collections.Generic;
 using UnityEngine;
+using YoridoriModifiers.Core.Editor;
 
 namespace YoridoriModifiers.MeshTrimmer
 {
 public static class AlphaMaskProcessor
 {
+    private const string ToolName = "YM Mesh Trimmer";
+
     public class AlphaMaskData
     {
         public Texture2D texture;
@@ -29,7 +32,7 @@ public static class AlphaMaskProcessor
         }
         catch (UnityException)
         {
-            Debug.LogWarning($"[YM Mesh Trimmer] Texture is not readable and will be skipped: {texture.name}");
+            LogUtility.Warning(ToolName, "AlphaMask", $"Texture is not readable and will be skipped: {texture.name}");
             return false;
         }
 

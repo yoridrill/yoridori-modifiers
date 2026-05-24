@@ -2,11 +2,13 @@ using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using YoridoriModifiers.Core.Editor;
 
 namespace YoridoriModifiers.MeshTrimmer
 {
 public static class AutoFillColorResolver
 {
+    private const string ToolName = "YM Mesh Trimmer";
     private const string DefaultConfigGuid = "c4ac5599314e047b6aa3f87adb037542";
     private const string UserConfigPath = "Assets/NDMF-VRoid-Mesh-Trimmer-Setting.json";
     private const float AlphaThreshold = 0.05f;
@@ -18,7 +20,6 @@ public static class AutoFillColorResolver
         public FillColorRule[] fillColors;
         public PreSubdivideRule[] preSubdivide;
         public string trimAlgorithm;
-        public string[] debugEdgeCrossingLogMaterials;
     }
 
     [Serializable]
@@ -60,23 +61,22 @@ public static class AutoFillColorResolver
         var config = loadResult.config;
         if (config == null)
         {
-            if (verbose) Debug.Log("[YM Mesh Trimmer] Auto config is empty or unavailable.");
+            LogUtility.Verbose(ToolName, verbose, "AutoConfig", "Config is empty or unavailable.");
             return;
         }
 
-        if (verbose) Debug.Log($"[YM Mesh Trimmer] Auto fill-color config source: {loadResult.source} ({loadResult.sourcePath})");
+        LogUtility.Verbose(ToolName, verbose, "AutoConfig", $"FillColorConfigSource={loadResult.source}, Path={loadResult.sourcePath}");
 
         var materialMap = BuildMaterialMap(trimmer);
         var appliedTargets = new HashSet<MeshTrimmerComponent.TextureTargetSettings>();
 
         ApplyTrimAlgorithmRule(config, trimmer);
-        ApplyEdgeRouteDebugFilterRule(config, trimmer);
 
         ApplyPreSubdivideRules(config, targets, verbose);
 
         if (config.fillColors == null || config.fillColors.Length == 0)
         {
-            if (verbose) Debug.Log("[YM Mesh Trimmer] Auto fill-color config is empty or unavailable.");
+            LogUtility.Verbose(ToolName, verbose, "AutoConfig", "Fill-color config is empty or unavailable.");
             return;
         }
 
@@ -96,7 +96,7 @@ public static class AutoFillColorResolver
 
             string targetName = GetFirstUsageMaterialName(target);
             string texName = target.mainTexture != null ? target.mainTexture.name : "(None)";
-            if (verbose) Debug.Log($"[YM Mesh Trimmer] Auto fill-color applied. TargetMaterial={targetName}, TargetTexture={texName}, SourceMaterial={sourceMaterial.name}, UV=({uv.x:F3}, {uv.y:F3}), Color=RGBA({fillColor.r:F3}, {fillColor.g:F3}, {fillColor.b:F3}, {fillColor.a:F3})");
+            LogUtility.Verbose(ToolName, verbose, "AutoConfig", $"FillColorApplied TargetMaterial={targetName}, TargetTexture={texName}, SourceMaterial={sourceMaterial.name}, UV=({uv.x:F3}, {uv.y:F3}), Color=RGBA({fillColor.r:F3}, {fillColor.g:F3}, {fillColor.b:F3}, {fillColor.a:F3})");
         }
     }
 
@@ -118,12 +118,12 @@ public static class AutoFillColorResolver
                 target.preSubdivideLevel = Mathf.Clamp(rule.level, 0, 2);
                 target.preSubdivideQuadAware = rule.quadAware;
                 matched++;
-                if (verbose) Debug.Log($"[YM Mesh Trimmer] Auto preSubdivide matched. TargetMaterial={GetFirstUsageMaterialName(target)}, Level={target.preSubdivideLevel}, QuadAware={target.preSubdivideQuadAware}");
+                LogUtility.Verbose(ToolName, verbose, "AutoConfig", $"PreSubdivideMatched TargetMaterial={GetFirstUsageMaterialName(target)}, Level={target.preSubdivideLevel}, QuadAware={target.preSubdivideQuadAware}");
                 break;
             }
         }
 
-        if (verbose) Debug.Log($"[YM Mesh Trimmer] Auto preSubdivide rules processed. RuleCount={config.preSubdivide.Length}, MatchedTargetCount={matched}");
+        LogUtility.Verbose(ToolName, verbose, "AutoConfig", $"PreSubdivideRulesProcessed RuleCount={config.preSubdivide.Length}, MatchedTargetCount={matched}");
     }
 
     private static void ApplyTrimAlgorithmRule(FillColorConfig config, MeshTrimmerComponent trimmer)
@@ -138,20 +138,7 @@ public static class AutoFillColorResolver
         {
             trimmer.trimAlgorithm = MeshTrimmerComponent.TrimAlgorithm.EdgeCrossing;
         }
-        if (trimmer.debugEdgeCrossingRoutes) Debug.Log($"[YM Mesh Trimmer] Trim algorithm set by config: {trimmer.trimAlgorithm}");
-    }
-
-    private static void ApplyEdgeRouteDebugFilterRule(FillColorConfig config, MeshTrimmerComponent trimmer)
-    {
-        if (trimmer == null) return;
-        trimmer.debugEdgeCrossingRouteMaterialFilters.Clear();
-        if (config.debugEdgeCrossingLogMaterials == null) return;
-        for (int i = 0; i < config.debugEdgeCrossingLogMaterials.Length; i++)
-        {
-            string v = config.debugEdgeCrossingLogMaterials[i];
-            if (string.IsNullOrWhiteSpace(v)) continue;
-            trimmer.debugEdgeCrossingRouteMaterialFilters.Add(v.Trim());
-        }
+        LogUtility.Verbose(ToolName, trimmer.debugEdgeCrossingRoutes, "AutoConfig", $"TrimAlgorithm={trimmer.trimAlgorithm}");
     }
 
     private static bool TryMatchTarget(MeshTrimmerComponent.TextureTargetSettings settings, string[] targetCandidates)
@@ -354,7 +341,7 @@ public static class AutoFillColorResolver
             return result;
         }
 
-        Debug.LogWarning("[YM Mesh Trimmer] Fill-color config not found. Checked user and default JSON.");
+        LogUtility.Warning(ToolName, "AutoConfig", "Fill-color config not found. Checked user and default JSON.");
         return result;
     }
 
@@ -367,13 +354,13 @@ public static class AutoFillColorResolver
         }
         catch (Exception ex)
         {
-            Debug.LogWarning("[YM Mesh Trimmer] Failed to parse fill-color config JSON: " + ex.Message + " (" + path + ")");
+            LogUtility.Warning(ToolName, "AutoConfig", "Failed to parse fill-color config JSON: " + ex.Message + " (" + path + ")");
             return null;
         }
 
         if (config == null || config.fillColors == null)
         {
-            Debug.LogWarning("[YM Mesh Trimmer] Failed to parse fill-color config JSON: deserialized object was null or missing fillColors. (" + path + ")");
+            LogUtility.Warning(ToolName, "AutoConfig", "Failed to parse fill-color config JSON: deserialized object was null or missing fillColors. (" + path + ")");
             return null;
         }
 

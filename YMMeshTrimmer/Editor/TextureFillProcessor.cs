@@ -7,6 +7,8 @@ namespace YoridoriModifiers.MeshTrimmer
 {
 public static class TexturePostProcessProcessor
 {
+    private const string ToolName = "YM Mesh Trimmer";
+
     public static void ApplyBuildTimeReplacement(MeshTrimmerComponent trimmer)
     {
         if (trimmer == null)
@@ -73,8 +75,11 @@ public static class TexturePostProcessProcessor
                 }
             }
 
-            if (trimmer != null && trimmer.debugEdgeCrossingRoutes)
-                Debug.Log($"[YM Mesh Trimmer] Build-time replacement applied. Texture={target.mainTexture.name}, Mode={target.texturePostProcessMode}");
+            LogUtility.Verbose(
+                ToolName,
+                trimmer != null && trimmer.debugEdgeCrossingRoutes,
+                "TextureFill",
+                $"Build-time replacement applied. Texture={target.mainTexture.name}, Mode={target.texturePostProcessMode}");
         }
     }
 
@@ -103,7 +108,7 @@ public static class TexturePostProcessProcessor
         }
         catch (UnityException)
         {
-            Debug.LogWarning($"[YM Mesh Trimmer] Texture post-process skipped (non-readable): {source.name}");
+            LogUtility.Warning(ToolName, "TextureFill", $"Texture post-process skipped (non-readable): {source.name}");
             return false;
         }
 
@@ -126,7 +131,7 @@ public static class TexturePostProcessProcessor
         processed = CreateWritableTexture(width, height, source, linear);
         if (processed == null)
         {
-            Debug.LogWarning($"[YM Mesh Trimmer] Texture post-process skipped (failed to create writable texture): {source.name}");
+            LogUtility.Warning(ToolName, "TextureFill", $"Texture post-process skipped (failed to create writable texture): {source.name}");
             return false;
         }
 
@@ -142,7 +147,7 @@ public static class TexturePostProcessProcessor
         }
         catch (UnityException ex)
         {
-            Debug.LogWarning($"[YM Mesh Trimmer] Texture post-process skipped (SetPixels failed): {source.name} - {ex.Message}");
+            LogUtility.Warning(ToolName, "TextureFill", $"Texture post-process skipped (SetPixels failed): {source.name} - {ex.Message}");
             Object.DestroyImmediate(processed);
             processed = null;
             return false;

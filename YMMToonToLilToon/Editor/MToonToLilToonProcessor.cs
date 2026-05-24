@@ -10,6 +10,8 @@ namespace YoridoriModifiers.MToonToLilToon
 {
     internal static class MToonToLilToonProcessor
     {
+        private const string ToolName = "YM MToon to lilToon";
+
         private enum TextureBakeKind
         {
             Color,
@@ -73,7 +75,7 @@ namespace YoridoriModifiers.MToonToLilToon
                 component.isPreviewing = false;
                 if (component.verboseLog)
                 {
-                    Debug.LogWarning("[MToon10ToLilToon] Preview state was active on this component and has been reset before conversion.", component);
+                    LogUtility.Warning(ToolName, "Preview state was active on this component and has been reset before conversion.", component);
                 }
             }
 
@@ -89,7 +91,7 @@ namespace YoridoriModifiers.MToonToLilToon
                 component.unsupportedProperties = new List<string>();
                 if (component.verboseLog)
                 {
-                    Debug.LogWarning("[MToon10ToLilToon] lilToon shader was not found. Conversion skipped.", component);
+                    LogUtility.Warning(ToolName, "lilToon shader was not found. Conversion skipped.", component);
                 }
                 return;
             }
@@ -247,8 +249,9 @@ namespace YoridoriModifiers.MToonToLilToon
                 ? string.Join(" | ", report.Warnings.Select(w => w.Message))
                 : "none";
 
-            Debug.Log(
-                $"[MToon10ToLilToon] scanned={report.ScannedMaterialCount}, converted={report.ConvertedMaterialCount}, skipped={report.SkippedMaterialCount}, warnings={warnings}, unsupported={unsupportedSummary}",
+            LogUtility.Info(
+                ToolName,
+                $"scanned={report.ScannedMaterialCount}, converted={report.ConvertedMaterialCount}, skipped={report.SkippedMaterialCount}, warnings={warnings}, unsupported={unsupportedSummary}",
                 component);
         }
 
@@ -818,7 +821,7 @@ namespace YoridoriModifiers.MToonToLilToon
             var ramp = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
             if (ramp == null)
             {
-                Debug.LogWarning("[MToon10ToLilToon] Toon Standard Realistic ramp was not found.");
+                LogUtility.Warning(ToolName, "Toon Standard Realistic ramp was not found.");
                 return;
             }
 
@@ -1246,7 +1249,7 @@ namespace YoridoriModifiers.MToonToLilToon
                 if (verboseLog)
                 {
                     var format = texture is Texture2D tex2D ? tex2D.format.ToString() : "(non-Texture2D)";
-                    Debug.Log($"[MToon10ToLilToon] {mergedMaterial.name} {propertyName} -> {path} format={format}");
+                    LogUtility.Info(ToolName, $"{mergedMaterial.name} {propertyName} -> {path} format={format}");
                 }
                 if (string.Equals(propertyName, "_MainTex", System.StringComparison.OrdinalIgnoreCase) && texture == null)
                 {
@@ -1360,7 +1363,7 @@ namespace YoridoriModifiers.MToonToLilToon
         {
             var formatPart = string.IsNullOrEmpty(format) ? "" : $" format={format}";
             var namePart = string.IsNullOrEmpty(textureName) ? "" : $" name={textureName}";
-            Debug.Log($"[BumpMapDebug] {stage}{namePart} center={FormatColor(color)} encodedX={EncodedX(color):F4} encodedY={EncodedY(color):F4} unpack={FormatVector3(UnityUnpackNormalRGorAG(color))}{formatPart}");
+            LogUtility.Info(ToolName, "NormalMap", $"{stage}{namePart} center={FormatColor(color)} encodedX={EncodedX(color):F4} encodedY={EncodedY(color):F4} unpack={FormatVector3(UnityUnpackNormalRGorAG(color))}{formatPart}");
         }
 
         private static string FormatColor(Color c) => $"({c.r:F4},{c.g:F4},{c.b:F4},{c.a:F4})";
@@ -2078,12 +2081,12 @@ namespace YoridoriModifiers.MToonToLilToon
                     report?.Warnings.Add(new ConversionWarning(message));
                     if (verbose)
                     {
-                        Debug.LogWarning($"[MToon10ToLilToon][AAO-precheck] {message}", renderer);
+                        LogUtility.Warning(ToolName, "AAO-precheck", message, renderer);
                     }
                 }
                 else if (verbose)
                 {
-                    Debug.Log($"[MToon10ToLilToon][AAO-precheck] {renderer.name}: subMeshCount/materialCount OK ({materials.Length})", renderer);
+                    LogUtility.Info(ToolName, "AAO-precheck", $"{renderer.name}: subMeshCount/materialCount OK ({materials.Length})", renderer);
                 }
 
                 for (var i = 0; i < materials.Length; i++)
@@ -2095,7 +2098,7 @@ namespace YoridoriModifiers.MToonToLilToon
                         report?.Warnings.Add(new ConversionWarning(message));
                         if (verbose)
                         {
-                            Debug.LogWarning($"[MToon10ToLilToon][AAO-precheck] {message}", renderer);
+                            LogUtility.Warning(ToolName, "AAO-precheck", message, renderer);
                         }
                         continue;
                     }
@@ -2110,7 +2113,7 @@ namespace YoridoriModifiers.MToonToLilToon
                         report?.Warnings.Add(new ConversionWarning(message));
                         if (verbose)
                         {
-                            Debug.LogWarning($"[MToon10ToLilToon][AAO-precheck] {message}", renderer);
+                            LogUtility.Warning(ToolName, "AAO-precheck", message, renderer);
                         }
                         continue;
                     }
@@ -2118,7 +2121,7 @@ namespace YoridoriModifiers.MToonToLilToon
                     if (verbose)
                     {
                         var textureName = resolvedMainTexture != null ? resolvedMainTexture.name : "(null:fake-shadow)";
-                        Debug.Log($"[MToon10ToLilToon][AAO-precheck] {renderer.name}: material[{i}] {material.name} -> texture {textureName}", renderer);
+                        LogUtility.Info(ToolName, "AAO-precheck", $"{renderer.name}: material[{i}] {material.name} -> texture {textureName}", renderer);
                     }
                 }
             }

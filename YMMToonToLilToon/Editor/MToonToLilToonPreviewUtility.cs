@@ -12,6 +12,7 @@ namespace YoridoriModifiers.MToonToLilToon
     {
         private const string PreviewRootName = "__YoridoriMToonToLilToonPreviewRoot";
         private const string PreviewAvatarName = "__YoridoriMToonToLilToonPreviewAvatar";
+        private const string ToolName = "YM MToon to lilToon";
 
         private static GameObject _sourceAvatarRoot;
         private static GameObject _previewRoot;
@@ -139,8 +140,9 @@ namespace YoridoriModifiers.MToonToLilToon
         private static void QueueStartPreview(GameObject avatarRoot)
         {
             StopPreview();
-            if (!PreviewCoordinator.TryBegin("ym-mtoon-to-liltoon", "YM MToon to lilToon", avatarRoot, false, out var failure))
+            if (!PreviewCoordinator.TryBegin("ym-mtoon-to-liltoon", ToolName, avatarRoot, false, out var failure))
             {
+                LogUtility.PreviewSkipped(ToolName, failure);
                 _previewFailed = true;
                 SetProgress(failure);
                 return;

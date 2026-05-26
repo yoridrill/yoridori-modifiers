@@ -25,7 +25,7 @@ namespace YoridoriModifiers.MToonToLilToon
         }
 
         private const string PrefKeyLanguage = "MToonToLilToonComponentEditor.Language";
-        private const string DefaultFaceShadowMaskTextureGuid = "68acac0df33c74d6ba68772c4685986f";
+        private const string DefaultFaceShadowMaskTextureGuid = "7fcb903d503482383c04f62fc730ef62";
         private Language _language;
 
         private void OnEnable()

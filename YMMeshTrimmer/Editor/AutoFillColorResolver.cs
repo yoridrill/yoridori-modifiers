@@ -9,7 +9,7 @@ namespace YoridoriModifiers.MeshTrimmer
 public static class AutoFillColorResolver
 {
     private const string ToolName = "YM Mesh Trimmer";
-    private const string DefaultConfigGuid = "c4ac5599314e047b6aa3f87adb037542";
+    private const string DefaultConfigGuid = "913b6d45eecf30e8e5727b508b630201";
     private const string UserConfigPath = "Assets/NDMF-VRoid-Mesh-Trimmer-Setting.json";
     private const float AlphaThreshold = 0.05f;
 

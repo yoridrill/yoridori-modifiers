@@ -1293,7 +1293,7 @@ namespace YoridoriModifiers.ArmPatch
         {
             if (components.Length > 1)
             {
-                Debug.LogWarning("[YM Arm Patch] Multiple components found. Last one will be used.");
+                Debug.LogWarning("[YM Arm Patch] Multiple components found. Preferred component will be used.");
             }
             var c = SelectPreferredComponent(components, avatarRoot);
 
@@ -1334,9 +1334,8 @@ namespace YoridoriModifiers.ArmPatch
             {
                 var c = components[i];
                 if (c == null) continue;
-                int depth = GetDepthFromRoot(c.transform, root);
-                int score = depth;
-                if (c.forearmTwistBoneType != ForearmTwistBoneType.None) score += 1000;
+                int depth = PreviewCoordinator.GetDepthFromRoot(c.transform, root);
+                int score = -depth * 10000 - i;
                 if (score > bestScore)
                 {
                     best = c;
@@ -1346,18 +1345,6 @@ namespace YoridoriModifiers.ArmPatch
 
             return best;
         }
-
-        private static int GetDepthFromRoot(Transform t, Transform root)
-        {
-            int depth = 0;
-            while (t != null && t != root)
-            {
-                depth++;
-                t = t.parent;
-            }
-            return depth;
-        }
-
         private static void RemoveComponents(ArmPatchComponent[] components)
         {
             for (int i = 0; i < components.Length; i++)

@@ -62,20 +62,8 @@ namespace YoridoriModifiers.EyeFreeze
             return components
                 .Where(c => c != null)
                 .OrderByDescending(c => c.transform == rootTransform)
-                .ThenBy(c => GetTransformDepth(c.transform))
+                .ThenBy(c => PreviewCoordinator.GetDepthFromRoot(c.transform, rootTransform))
                 .FirstOrDefault();
-        }
-
-        private static int GetTransformDepth(Transform transform)
-        {
-            var depth = 0;
-            while (transform != null)
-            {
-                depth++;
-                transform = transform.parent;
-            }
-
-            return depth;
         }
 
         private static void Build(BuildContext context, YMEyeFreeze component)

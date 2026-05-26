@@ -24,6 +24,14 @@ namespace YoridoriModifiers.MToonToLilToon
             Build,
         }
 
+        private static GameObject ResolveProcessingRoot(MToonToLilToonComponent component)
+        {
+            if (component == null) return null;
+
+            var avatarRoot = PreviewCoordinator.FindAvatarRoot(component.gameObject);
+            return avatarRoot != null ? avatarRoot : component.gameObject;
+        }
+
         private sealed class HairMergeCacheEntry
         {
             public Material mergedTemplate;
@@ -46,7 +54,7 @@ namespace YoridoriModifiers.MToonToLilToon
         {
             if (component == null || overrides == null) return;
 
-            var materials = component.GetComponentsInChildren<Renderer>(true)
+            var materials = ResolveProcessingRoot(component).GetComponentsInChildren<Renderer>(true)
                 .SelectMany(renderer => renderer != null ? renderer.sharedMaterials : System.Array.Empty<Material>())
                 .Where(material => material != null
                     && material.shader != null
@@ -114,7 +122,7 @@ namespace YoridoriModifiers.MToonToLilToon
             var fakeShadowPairs = new List<(Material hair, Material fake)>();
             var mergedHairMaterials = new List<Material>();
             onProgress?.Invoke("Converting materials...");
-            foreach (var renderer in component.GetComponentsInChildren<Renderer>(true))
+            foreach (var renderer in ResolveProcessingRoot(component).GetComponentsInChildren<Renderer>(true))
             {
                 ProcessRenderer(
                     renderer,
@@ -234,7 +242,7 @@ namespace YoridoriModifiers.MToonToLilToon
         {
             if (component == null || !component.enableHairMerge || component.hairSelections == null || component.hairSelections.Count == 0) return;
 
-            var avatarMaterials = component.GetComponentsInChildren<Renderer>(true)
+            var avatarMaterials = ResolveProcessingRoot(component).GetComponentsInChildren<Renderer>(true)
                 .SelectMany(renderer => renderer != null ? renderer.sharedMaterials : System.Array.Empty<Material>())
                 .Where(material => material != null)
                 .Distinct()
@@ -2265,7 +2273,7 @@ namespace YoridoriModifiers.MToonToLilToon
             if (component == null) return;
             var verbose = component.verboseLog;
 
-            foreach (var renderer in component.GetComponentsInChildren<Renderer>(true))
+            foreach (var renderer in ResolveProcessingRoot(component).GetComponentsInChildren<Renderer>(true))
             {
                 if (renderer == null) continue;
                 var materials = renderer.sharedMaterials ?? System.Array.Empty<Material>();

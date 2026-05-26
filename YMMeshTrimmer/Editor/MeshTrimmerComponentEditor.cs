@@ -187,10 +187,9 @@ public class MeshTrimmerComponentEditor : Editor
     {
         thisWillBeUsed = false;
         if (trimmer == null || trimmer.transform == null) return false;
-        var root = trimmer.transform.root;
+        var root = PreviewCoordinator.FindAvatarRoot(trimmer.gameObject);
         if (root == null) return false;
         var trimmers = root.GetComponentsInChildren<MeshTrimmerComponent>(true);
-        MeshTrimmerComponent firstOverlapping = null;
         bool hasOverlap = false;
         foreach (var other in trimmers)
         {
@@ -199,15 +198,48 @@ public class MeshTrimmerComponentEditor : Editor
                 (enableForAndroid && other.enableForAndroid) ||
                 (enableForiOS && other.enableForiOS))
             {
-                firstOverlapping ??= other;
                 if (other != trimmer)
                 {
                     hasOverlap = true;
                 }
             }
         }
+        var firstOverlapping = SelectPreferredTrimmerForBuildTarget(trimmers, root, enableForWindows, enableForAndroid, enableForiOS);
         thisWillBeUsed = firstOverlapping == trimmer;
         return hasOverlap;
+    }
+
+    private static MeshTrimmerComponent SelectPreferredTrimmerForBuildTarget(
+        MeshTrimmerComponent[] trimmers,
+        GameObject avatarRoot,
+        bool enableForWindows,
+        bool enableForAndroid,
+        bool enableForiOS)
+    {
+        if (trimmers == null || trimmers.Length == 0) return null;
+
+        MeshTrimmerComponent best = null;
+        var bestScore = int.MinValue;
+        var rootTransform = avatarRoot != null ? avatarRoot.transform : null;
+        for (var i = 0; i < trimmers.Length; i++)
+        {
+            var trimmer = trimmers[i];
+            if (trimmer == null) continue;
+            if (!((enableForWindows && trimmer.enableForWindows) ||
+                (enableForAndroid && trimmer.enableForAndroid) ||
+                (enableForiOS && trimmer.enableForiOS)))
+            {
+                continue;
+            }
+
+            var depth = PreviewCoordinator.GetDepthFromRoot(trimmer.transform, rootTransform);
+            var score = -depth * 10000 - i;
+            if (score <= bestScore) continue;
+            best = trimmer;
+            bestScore = score;
+        }
+
+        return best;
     }
 
     private void DrawAdvancedSection(MeshTrimmerComponent trimmer)
@@ -1030,7 +1062,8 @@ public class MeshTrimmerComponentEditor : Editor
         Dictionary<Texture2D, MeshTrimmerComponent.TextureTargetSettings> grouped =
             new Dictionary<Texture2D, MeshTrimmerComponent.TextureTargetSettings>();
 
-        SkinnedMeshRenderer[] renderers = trimmer.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+        var searchRoot = ResolveAutoDetectSearchRoot(trimmer);
+        SkinnedMeshRenderer[] renderers = searchRoot.GetComponentsInChildren<SkinnedMeshRenderer>(true);
         foreach (var renderer in renderers)
         {
             if (renderer.sharedMesh == null) continue;
@@ -1068,12 +1101,49 @@ public class MeshTrimmerComponentEditor : Editor
     internal static void EnsureAutoDetectedTargets(MeshTrimmerComponent trimmer, bool forceRefresh)
     {
         if (trimmer == null) return;
-        if (forceRefresh || trimmer.targets == null || trimmer.targets.Count == 0)
+        if (forceRefresh || trimmer.targets == null || trimmer.targets.Count == 0 || HasStaleTargetReferences(trimmer))
         {
             var undoGroup = Undo.GetCurrentGroup();
             AutoDetectTargets(trimmer);
             Undo.CollapseUndoOperations(undoGroup);
         }
+    }
+
+    private static GameObject ResolveAutoDetectSearchRoot(MeshTrimmerComponent trimmer)
+    {
+        if (trimmer == null) return null;
+        if (trimmer.GetComponentsInChildren<SkinnedMeshRenderer>(true).Length > 0)
+        {
+            return trimmer.gameObject;
+        }
+
+        return PreviewCoordinator.FindAvatarRoot(trimmer.gameObject) ?? trimmer.gameObject;
+    }
+
+    private static bool HasStaleTargetReferences(MeshTrimmerComponent trimmer)
+    {
+        if (trimmer == null || trimmer.targets == null || trimmer.targets.Count == 0) return true;
+
+        var avatarRoot = PreviewCoordinator.FindAvatarRoot(trimmer.gameObject);
+        var rootTransform = avatarRoot != null ? avatarRoot.transform : trimmer.transform;
+        var hasUsage = false;
+        for (var i = 0; i < trimmer.targets.Count; i++)
+        {
+            var target = trimmer.targets[i];
+            if (target == null || target.usages == null || target.usages.Count == 0) continue;
+            for (var j = 0; j < target.usages.Count; j++)
+            {
+                var renderer = target.usages[j]?.renderer;
+                if (renderer == null) continue;
+                hasUsage = true;
+                if (!PreviewCoordinator.IsUnderRoot(renderer.transform, rootTransform))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return !hasUsage;
     }
 
     private static bool ShouldProcessMaterial(Material mat)
@@ -1120,11 +1190,12 @@ public class MeshTrimmerNdmfPlugin : Plugin<MeshTrimmerNdmfPlugin>
             if (avatarRoot == null) return;
             var trimmers = avatarRoot.GetComponentsInChildren<MeshTrimmerComponent>(true);
             MeshTrimmerComponentEditor.ClearAllPreviews();
+            var selected = SelectPreferredTrimmerForCurrentBuildTarget(trimmers, avatarRoot);
             bool executedForCurrentPlatform = false;
             foreach (var trimmer in trimmers)
             {
                 if (trimmer == null || !IsEnabledForCurrentBuildTarget(trimmer, avatarRoot)) continue;
-                if (executedForCurrentPlatform)
+                if (trimmer != selected || executedForCurrentPlatform)
                 {
                     continue;
                 }
@@ -1142,6 +1213,29 @@ public class MeshTrimmerNdmfPlugin : Plugin<MeshTrimmerNdmfPlugin>
                 UnityEngine.Object.DestroyImmediate(trimmer);
             }
         });
+    }
+
+    private static MeshTrimmerComponent SelectPreferredTrimmerForCurrentBuildTarget(
+        MeshTrimmerComponent[] trimmers,
+        GameObject avatarRoot)
+    {
+        if (trimmers == null || trimmers.Length == 0) return null;
+
+        MeshTrimmerComponent best = null;
+        var bestScore = int.MinValue;
+        var rootTransform = avatarRoot != null ? avatarRoot.transform : null;
+        for (var i = 0; i < trimmers.Length; i++)
+        {
+            var trimmer = trimmers[i];
+            if (trimmer == null || !IsEnabledForCurrentBuildTarget(trimmer, avatarRoot)) continue;
+            var depth = PreviewCoordinator.GetDepthFromRoot(trimmer.transform, rootTransform);
+            var score = -depth * 10000 - i;
+            if (score <= bestScore) continue;
+            best = trimmer;
+            bestScore = score;
+        }
+
+        return best;
     }
 
     private static bool IsEnabledForCurrentBuildTarget(MeshTrimmerComponent trimmer, GameObject avatarRoot)

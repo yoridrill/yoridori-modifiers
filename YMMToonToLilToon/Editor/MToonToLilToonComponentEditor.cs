@@ -59,6 +59,8 @@ namespace YoridoriModifiers.MToonToLilToon
 
             DrawPreviewButton(component);
             EditorGUILayout.Space(4f);
+            DrawMultipleComponentsWarning(component);
+            EditorGUILayout.Space(4f);
             var sharedFaceMaterialChanged = DrawSharedFaceMaterialSelector(component);
             var globalOverridesChanged = DrawLilToonUserSettings();
             DrawSpecificPartAdjustmentsHeading();
@@ -887,11 +889,56 @@ namespace YoridoriModifiers.MToonToLilToon
 
         private static List<Material> GetRendererMaterials(MToonToLilToonComponent component)
         {
-            return component.GetComponentsInChildren<Renderer>(true)
+            var avatarRoot = PreviewCoordinator.FindAvatarRoot(component.gameObject);
+            var searchRoot = avatarRoot != null ? avatarRoot : component.gameObject;
+            return searchRoot.GetComponentsInChildren<Renderer>(true)
                 .SelectMany(r => r.sharedMaterials)
                 .Where(m => m != null)
                 .Distinct()
                 .ToList();
+        }
+
+        private void DrawMultipleComponentsWarning(MToonToLilToonComponent component)
+        {
+            if (component == null) return;
+            var avatarRoot = PreviewCoordinator.FindAvatarRoot(component.gameObject);
+            if (avatarRoot == null) return;
+
+            var components = avatarRoot.GetComponentsInChildren<MToonToLilToonComponent>(true);
+            if (components == null || components.Length <= 1) return;
+
+            var selected = SelectPreferredComponentForBuild(components, avatarRoot);
+            var thisWillBeUsed = selected == component;
+            EditorGUILayout.HelpBox(
+                thisWillBeUsed
+                    ? T("複数箇所で設定されています。ビルド時はこのコンポーネントの設定値が使用されます。",
+                        "This component is configured in multiple places. The values on this component will be used for the build.")
+                    : T("複数箇所で設定されています。ビルド時、このコンポーネントでの設定は無視されます。",
+                        "This component is configured in multiple places. The values on this component will be ignored for the build."),
+                MessageType.Warning);
+        }
+
+        private static MToonToLilToonComponent SelectPreferredComponentForBuild(
+            MToonToLilToonComponent[] components,
+            GameObject avatarRoot)
+        {
+            if (components == null || components.Length == 0) return null;
+
+            MToonToLilToonComponent best = null;
+            var bestScore = int.MinValue;
+            var rootTransform = avatarRoot != null ? avatarRoot.transform : null;
+            for (var i = 0; i < components.Length; i++)
+            {
+                var component = components[i];
+                if (component == null) continue;
+                var depth = PreviewCoordinator.GetDepthFromRoot(component.transform, rootTransform);
+                var score = -depth * 10000 - i;
+                if (score <= bestScore) continue;
+                best = component;
+                bestScore = score;
+            }
+
+            return best;
         }
 
         private static Material DetectDefaultFaceMaterial(IReadOnlyList<Material> materials)

@@ -159,7 +159,10 @@ public static class AutoFillColorResolver
     private static Dictionary<string, Material> BuildMaterialMap(MeshTrimmerComponent trimmer)
     {
         var map = new Dictionary<string, Material>(StringComparer.OrdinalIgnoreCase);
-        var renderers = trimmer.GetComponentsInChildren<Renderer>(true);
+        var searchRoot = trimmer.GetComponentsInChildren<Renderer>(true).Length > 0
+            ? trimmer.gameObject
+            : PreviewCoordinator.FindAvatarRoot(trimmer.gameObject) ?? trimmer.gameObject;
+        var renderers = searchRoot.GetComponentsInChildren<Renderer>(true);
         foreach (var renderer in renderers)
         {
             if (renderer == null) continue;

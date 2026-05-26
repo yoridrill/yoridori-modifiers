@@ -52,7 +52,7 @@ namespace YoridoriModifiers.EyeFreeze
                     "Adds an Ex Menu mode that pauses Eye Look and Blink, and fixes eye bones at their initial state."),
                 MessageType.Info);
 
-            DrawAvatarRootWarning(component);
+            DrawPlacementStatus(component);
             EditorGUILayout.Space(4);
 
             EditorGUILayout.PropertyField(menuNameProp, new GUIContent(T("メニュー表示名", "Menu Name")));
@@ -77,13 +77,11 @@ namespace YoridoriModifiers.EyeFreeze
             }
         }
 
-        private void DrawAvatarRootWarning(YMEyeFreeze component)
+        private void DrawPlacementStatus(YMEyeFreeze component)
         {
             if (component == null) return;
 
             var ownDescriptor = component.GetComponent<VRCAvatarDescriptor>();
-            if (ownDescriptor != null) return;
-
             var parentDescriptor = component.GetComponentInParent<VRCAvatarDescriptor>(true);
             if (parentDescriptor == null)
             {
@@ -95,11 +93,51 @@ namespace YoridoriModifiers.EyeFreeze
                 return;
             }
 
+            var avatarRoot = parentDescriptor.gameObject;
+            var components = avatarRoot.GetComponentsInChildren<YMEyeFreeze>(true);
+            if (components != null && components.Length > 1)
+            {
+                var selected = SelectPreferredComponentForBuild(components, avatarRoot);
+                var thisWillBeUsed = selected == component;
+                EditorGUILayout.HelpBox(
+                    thisWillBeUsed
+                        ? T("複数箇所で設定されています。ビルド時はこのコンポーネントの設定値が使用されます。",
+                            "This component is configured in multiple places. The values on this component will be used for the build.")
+                        : T("複数箇所で設定されています。ビルド時、このコンポーネントでの設定は無視されます。",
+                            "This component is configured in multiple places. The values on this component will be ignored for the build."),
+                    MessageType.Warning);
+                return;
+            }
+
+            if (ownDescriptor != null) return;
+
             EditorGUILayout.HelpBox(
                 T(
-                    "AvatarRoot 以外に追加されています。AvatarRoot に追加してください。",
-                    "This component is not on AvatarRoot. Add it to AvatarRoot."),
-                MessageType.Warning);
+                    "AvatarRoot 配下に追加されています。ビルド時はこのアバターに適用されます。",
+                    "This component is under AvatarRoot. It will be applied to this avatar during build."),
+                MessageType.Info);
+        }
+
+        private static YMEyeFreeze SelectPreferredComponentForBuild(YMEyeFreeze[] components, GameObject avatarRoot)
+        {
+            if (components == null || components.Length == 0) return null;
+            var rootTransform = avatarRoot != null ? avatarRoot.transform : null;
+            YMEyeFreeze best = null;
+            var bestDepth = int.MaxValue;
+
+            for (var i = 0; i < components.Length; i++)
+            {
+                var component = components[i];
+                if (component == null) continue;
+                var depth = PreviewCoordinator.GetDepthFromRoot(component.transform, rootTransform);
+                if (best == null || depth < bestDepth)
+                {
+                    best = component;
+                    bestDepth = depth;
+                }
+            }
+
+            return best;
         }
 
         private void DrawAdvancedSection()

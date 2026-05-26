@@ -220,9 +220,8 @@ namespace YoridoriModifiers.ArmPatch
             {
                 var c = components[i];
                 if (c == null) continue;
-                int depth = GetDepthFromRoot(c.transform, root);
-                int score = depth;
-                if (c.forearmTwistBoneType != ForearmTwistBoneType.None) score += 1000;
+                int depth = PreviewCoordinator.GetDepthFromRoot(c.transform, root);
+                int score = -depth * 10000 - i;
                 if (score > bestScore)
                 {
                     best = c;
@@ -232,18 +231,6 @@ namespace YoridoriModifiers.ArmPatch
 
             return best;
         }
-
-        private static int GetDepthFromRoot(Transform t, Transform root)
-        {
-            int depth = 0;
-            while (t != null && t != root)
-            {
-                depth++;
-                t = t.parent;
-            }
-            return depth;
-        }
-
         private void DrawShoulderRows()
         {
             DrawShoulderMainRow();

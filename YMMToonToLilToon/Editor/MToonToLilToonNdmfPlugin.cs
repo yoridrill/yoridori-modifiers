@@ -1,6 +1,7 @@
 using System.Linq;
 using nadena.dev.ndmf;
 using UnityEngine;
+using YoridoriModifiers.Core.Editor;
 
 [assembly: ExportsPlugin(typeof(YoridoriModifiers.MToonToLilToon.MToonToLilToonNdmfPlugin))]
 
@@ -37,8 +38,10 @@ namespace YoridoriModifiers.MToonToLilToon
                     }
                 }
 
+                var selected = SelectPreferredComponent(components, root);
                 foreach (var component in components)
                 {
+                    if (component != selected) continue;
                     ApplyOnBuild(component);
                 }
             }
@@ -62,6 +65,29 @@ namespace YoridoriModifiers.MToonToLilToon
         private static void ApplyOnBuild(MToonToLilToonComponent component)
         {
             MToonToLilToonProcessor.ApplyOnBuild(component);
+        }
+
+        private static MToonToLilToonComponent SelectPreferredComponent(
+            MToonToLilToonComponent[] components,
+            GameObject avatarRoot)
+        {
+            if (components == null || components.Length == 0) return null;
+
+            MToonToLilToonComponent best = null;
+            var bestScore = int.MinValue;
+            var rootTransform = avatarRoot != null ? avatarRoot.transform : null;
+            for (var i = 0; i < components.Length; i++)
+            {
+                var component = components[i];
+                if (component == null) continue;
+                var depth = PreviewCoordinator.GetDepthFromRoot(component.transform, rootTransform);
+                var score = -depth * 10000 - i;
+                if (score <= bestScore) continue;
+                best = component;
+                bestScore = score;
+            }
+
+            return best;
         }
 
         private static void RemoveComponents(MToonToLilToonComponent[] components)

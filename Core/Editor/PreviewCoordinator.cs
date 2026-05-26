@@ -148,6 +148,35 @@ namespace YoridoriModifiers.Core.Editor
             return string.Join("/", segments);
         }
 
+        public static int GetDepthFromRoot(Transform target, Transform root)
+        {
+            if (target == null) return int.MaxValue;
+            if (root == null) return 0;
+
+            var depth = 0;
+            var current = target;
+            while (current != null && current != root)
+            {
+                depth++;
+                current = current.parent;
+            }
+
+            return current == root ? depth : int.MaxValue;
+        }
+
+        public static bool IsUnderRoot(Transform target, Transform root)
+        {
+            if (target == null || root == null) return false;
+            var current = target;
+            while (current != null)
+            {
+                if (current == root) return true;
+                current = current.parent;
+            }
+
+            return false;
+        }
+
         private static void CleanupDeadSessions()
         {
             Sessions.RemoveAll(s => s == null || s.avatarRoot == null);

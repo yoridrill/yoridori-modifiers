@@ -6,16 +6,77 @@ namespace YoridoriModifiers.Core.Editor
 {
     public static class GeneratedTextureUtility
     {
-        public static void CompressGeneratedTexture(Texture2D texture, string context, bool isNormalMap = false)
+        public static Texture2D CompressGeneratedTexture(Texture2D texture, string context, bool isNormalMap = false, BuildTarget? buildTarget = null)
         {
             if (texture == null) throw new InvalidOperationException($"CompressGeneratedTexture: texture is null ({context}).");
 
-            var targetFormat = isNormalMap ? TextureFormat.DXT5 : TextureFormat.DXT5;
-            EditorUtility.CompressTexture(texture, targetFormat, TextureCompressionQuality.Normal);
+            if (isNormalMap)
+            {
+                return GenerateNormalMapTexture(texture, context, buildTarget ?? EditorUserBuildSettings.activeBuildTarget);
+            }
+
+            EditorUtility.CompressTexture(texture, TextureFormat.DXT5, TextureCompressionQuality.Normal);
             if (texture.format == TextureFormat.RGBA32)
             {
                 throw new InvalidOperationException($"Generated texture compression failed for {context}; format is still RGBA32.");
             }
+
+            return texture;
+        }
+
+        private static Texture2D GenerateNormalMapTexture(Texture2D texture, string context, BuildTarget buildTarget)
+        {
+            var output = new Texture2D(texture.width, texture.height, TextureFormat.RGBA32, true, true)
+            {
+                name = texture.name,
+                wrapMode = texture.wrapMode,
+                filterMode = texture.filterMode,
+                anisoLevel = texture.anisoLevel,
+            };
+
+            output.SetPixels32(PackRgbNormalPixelsForUnity(texture.GetPixels32(0)));
+            output.Apply(true, false);
+            EditorUtility.CompressTexture(output, TextureFormat.DXT5, TextureCompressionQuality.Normal);
+            if (output.format == TextureFormat.RGBA32)
+            {
+                throw new InvalidOperationException($"Generated normal map compression failed for {context}; format is still RGBA32.");
+            }
+
+            return output;
+        }
+
+        private static Color32[] PackRgbNormalPixelsForUnity(Color32[] pixels)
+        {
+            if (pixels == null) return Array.Empty<Color32>();
+
+            for (var i = 0; i < pixels.Length; i++)
+            {
+                var pixel = pixels[i];
+                var normal = DecodeRgbNormal(pixel);
+                pixel.g = EncodeNormalChannel(normal.y);
+                pixel.b = 255;
+                pixel.a = EncodeNormalChannel(normal.x);
+                pixel.r = 255;
+                pixels[i] = pixel;
+            }
+
+            return pixels;
+        }
+
+        private static Vector3 DecodeRgbNormal(Color32 pixel)
+        {
+            var normal = new Vector3(
+                pixel.r / 255f * 2f - 1f,
+                pixel.g / 255f * 2f - 1f,
+                pixel.b / 255f * 2f - 1f);
+            if (normal.sqrMagnitude <= 1e-8f) return Vector3.forward;
+            normal.Normalize();
+            return normal;
+        }
+
+        private static byte EncodeNormalChannel(float value)
+        {
+            return (byte)Mathf.Clamp(Mathf.RoundToInt((value * 0.5f + 0.5f) * 255f), 0, 255);
         }
 
         public static void ConfigureGeneratedTextureImporter(

@@ -140,6 +140,7 @@ namespace YoridoriModifiers.MToonToLilToon
         private static void QueueStartPreview(GameObject avatarRoot)
         {
             StopPreview();
+            MToonToLilToonProcessor.ClearHairMergeCache();
             if (!PreviewCoordinator.TryBegin("ym-mtoon-to-liltoon", ToolName, avatarRoot, false, out var failure))
             {
                 LogUtility.PreviewSkipped(ToolName, failure);
@@ -203,6 +204,7 @@ namespace YoridoriModifiers.MToonToLilToon
         internal static void StopPreview()
         {
             RestoreSourceRenderers();
+            MToonToLilToonProcessor.ClearHairMergeCache();
 
             if (_previewRoot != null)
             {

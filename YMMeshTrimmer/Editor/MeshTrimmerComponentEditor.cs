@@ -1123,7 +1123,7 @@ public class MeshTrimmerNdmfPlugin : Plugin<MeshTrimmerNdmfPlugin>
             bool executedForCurrentPlatform = false;
             foreach (var trimmer in trimmers)
             {
-                if (trimmer == null || !IsEnabledForCurrentBuildTarget(trimmer)) continue;
+                if (trimmer == null || !IsEnabledForCurrentBuildTarget(trimmer, avatarRoot)) continue;
                 if (executedForCurrentPlatform)
                 {
                     continue;
@@ -1144,9 +1144,9 @@ public class MeshTrimmerNdmfPlugin : Plugin<MeshTrimmerNdmfPlugin>
         });
     }
 
-    private static bool IsEnabledForCurrentBuildTarget(MeshTrimmerComponent trimmer)
+    private static bool IsEnabledForCurrentBuildTarget(MeshTrimmerComponent trimmer, GameObject avatarRoot)
     {
-        switch (EditorUserBuildSettings.activeBuildTarget)
+        switch (ResolveCurrentBuildTarget(avatarRoot))
         {
             case BuildTarget.StandaloneWindows:
             case BuildTarget.StandaloneWindows64:
@@ -1158,6 +1158,47 @@ public class MeshTrimmerNdmfPlugin : Plugin<MeshTrimmerNdmfPlugin>
             default:
                 return false;
         }
+    }
+
+    private static BuildTarget ResolveCurrentBuildTarget(GameObject avatarRoot)
+    {
+        var vqtBuildTarget = ResolveVrcQuestToolsBuildTarget(avatarRoot);
+        if (vqtBuildTarget.HasValue)
+        {
+            return vqtBuildTarget.Value;
+        }
+
+        return EditorUserBuildSettings.activeBuildTarget;
+    }
+
+    private static BuildTarget? ResolveVrcQuestToolsBuildTarget(GameObject avatarRoot)
+    {
+        if (avatarRoot == null) return null;
+
+        foreach (var component in avatarRoot.GetComponents<Component>())
+        {
+            if (component == null) continue;
+            var type = component.GetType();
+            if (type.FullName != "KRT.VRCQuestTools.Components.PlatformTargetSettings") continue;
+
+            var buildTargetField = type.GetField("buildTarget");
+            if (buildTargetField == null) return null;
+
+            var buildTarget = buildTargetField.GetValue(component);
+            if (buildTarget == null) return null;
+
+            switch (buildTarget.ToString())
+            {
+                case "PC":
+                    return BuildTarget.StandaloneWindows64;
+                case "Android":
+                    return BuildTarget.Android;
+                default:
+                    return null;
+            }
+        }
+
+        return null;
     }
 }
 

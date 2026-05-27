@@ -617,9 +617,10 @@ namespace YoridoriModifiers.MToonToLilToon
             var fallback = FirstNonNullTexture(atlasTextures) ?? NewSolidTexture(Color.white);
             var atlasMaxSize = ResolveAtlasMaxSize(atlasTextures);
             var packTextures = PrepareBaseAtlasTextures(atlasTextures, fallback);
-            var atlas = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            var atlas = new Texture2D(2, 2, TextureFormat.RGBA32, true);
+            GeneratedTextureUtility.ConfigureRuntimeGeneratedTexture(atlas);
             atlasRects = atlas.PackTextures(packTextures, 2, atlasMaxSize, false).ToList();
-            atlas.Apply(false, false);
+            atlas.Apply(true, false);
             BleedTransparentPixels(atlas, 2);
             atlas = CompressGeneratedAtlas(atlas, "_MainTex");
             mergedMaterial.SetTexture("_MainTex", atlas);
@@ -1253,7 +1254,8 @@ namespace YoridoriModifiers.MToonToLilToon
             var fallback = bakeKind == TextureBakeKind.NormalMap
                 ? NewSolidTexture(fallbackColor, true)
                 : FirstNonNullTexture(textures) ?? NewSolidTexture(fallbackColor);
-            var atlas = new Texture2D(atlasWidth, atlasHeight, TextureFormat.RGBA32, false, bakeKind == TextureBakeKind.NormalMap);
+            var atlas = new Texture2D(atlasWidth, atlasHeight, TextureFormat.RGBA32, true, bakeKind == TextureBakeKind.NormalMap);
+            GeneratedTextureUtility.ConfigureRuntimeGeneratedTexture(atlas);
             atlas.SetPixels(Enumerable.Repeat(new Color(0f, 0f, 0f, 0f), atlasWidth * atlasHeight).ToArray());
             for (var i = 0; i < textures.Count && i < rects.Count; i++)
             {
@@ -1283,7 +1285,7 @@ namespace YoridoriModifiers.MToonToLilToon
                     LogBumpMapSample($"atlasAfterSetPixels({sampleX},{sampleY})", atlasColor);
                 }
             }
-            atlas.Apply(false, false);
+            atlas.Apply(true, false);
             if (bakeKind == TextureBakeKind.NormalMap)
             {
                 ReplaceTransparentPixels(atlas, NeutralNormalColor());
@@ -1335,7 +1337,7 @@ namespace YoridoriModifiers.MToonToLilToon
             var importer = AssetImporter.GetAtPath(assetPath) as TextureImporter;
             if (importer != null)
             {
-                ConfigureAtlasImporter(importer, propertyName);
+                ConfigureAtlasImporter(importer, propertyName, Mathf.Max(atlas.width, atlas.height));
                 importer.SaveAndReimport();
             }
             AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
@@ -1404,13 +1406,13 @@ namespace YoridoriModifiers.MToonToLilToon
             return GeneratedTextureUtility.CompressGeneratedTexture(atlas, propertyName, isNormal, buildTarget);
         }
 
-        private static void ConfigureAtlasImporter(TextureImporter importer, string propertyName)
+        private static void ConfigureAtlasImporter(TextureImporter importer, string propertyName, int maxTextureSize)
         {
             var isNormal = string.Equals(propertyName, "_BumpMap", System.StringComparison.OrdinalIgnoreCase);
             var isMask = string.Equals(propertyName, "_OutlineTex", System.StringComparison.OrdinalIgnoreCase)
                 || string.Equals(propertyName, "_OutlineMask", System.StringComparison.OrdinalIgnoreCase)
                 || string.Equals(propertyName, "_ShadowBorderMask", System.StringComparison.OrdinalIgnoreCase);
-            GeneratedTextureUtility.ConfigureGeneratedTextureImporter(importer, isNormal, isMask);
+            GeneratedTextureUtility.ConfigureGeneratedTextureImporter(importer, isNormal, isMask, true, maxTextureSize);
         }
 
         private static Color NeutralNormalColor()

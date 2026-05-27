@@ -15,7 +15,10 @@ namespace YoridoriModifiers.Core.Editor
                 return GenerateNormalMapTexture(texture, context, buildTarget ?? EditorUserBuildSettings.activeBuildTarget);
             }
 
+            ConfigureRuntimeGeneratedTexture(texture);
+            texture.Apply(true, false);
             EditorUtility.CompressTexture(texture, TextureFormat.DXT5, TextureCompressionQuality.Normal);
+            ConfigureRuntimeGeneratedTexture(texture);
             if (texture.format == TextureFormat.RGBA32)
             {
                 throw new InvalidOperationException($"Generated texture compression failed for {context}; format is still RGBA32.");
@@ -33,16 +36,38 @@ namespace YoridoriModifiers.Core.Editor
                 filterMode = texture.filterMode,
                 anisoLevel = texture.anisoLevel,
             };
+            ConfigureRuntimeGeneratedTexture(output);
 
             output.SetPixels32(PackRgbNormalPixelsForUnity(texture.GetPixels32(0)));
             output.Apply(true, false);
             EditorUtility.CompressTexture(output, TextureFormat.DXT5, TextureCompressionQuality.Normal);
+            ConfigureRuntimeGeneratedTexture(output);
             if (output.format == TextureFormat.RGBA32)
             {
                 throw new InvalidOperationException($"Generated normal map compression failed for {context}; format is still RGBA32.");
             }
 
             return output;
+        }
+
+        public static void ConfigureRuntimeGeneratedTexture(Texture2D texture, bool streamingMipmaps = true, int streamingMipmapsPriority = 0)
+        {
+            if (texture == null) return;
+
+            using var serializedTexture = new SerializedObject(texture);
+            var streamingMipmapsProperty = serializedTexture.FindProperty("m_StreamingMipmaps");
+            if (streamingMipmapsProperty != null)
+            {
+                streamingMipmapsProperty.boolValue = streamingMipmaps;
+            }
+
+            var streamingMipmapsPriorityProperty = serializedTexture.FindProperty("m_StreamingMipmapsPriority");
+            if (streamingMipmapsPriorityProperty != null)
+            {
+                streamingMipmapsPriorityProperty.intValue = streamingMipmapsPriority;
+            }
+
+            serializedTexture.ApplyModifiedPropertiesWithoutUndo();
         }
 
         private static Color32[] PackRgbNormalPixelsForUnity(Color32[] pixels)
@@ -83,7 +108,8 @@ namespace YoridoriModifiers.Core.Editor
             TextureImporter importer,
             bool isNormalMap,
             bool isMask,
-            bool streamingMipmaps = true)
+            bool streamingMipmaps = true,
+            int maxTextureSize = 0)
         {
             if (importer == null) return;
 
@@ -95,9 +121,17 @@ namespace YoridoriModifiers.Core.Editor
             importer.alphaSource = TextureImporterAlphaSource.FromInput;
             importer.sRGBTexture = !isNormalMap && !isMask;
             importer.crunchedCompression = false;
+            if (maxTextureSize > 0)
+            {
+                importer.maxTextureSize = Mathf.NextPowerOfTwo(Mathf.Clamp(maxTextureSize, 32, 16384));
+            }
 
             var settings = importer.GetPlatformTextureSettings("Standalone");
             settings.overridden = true;
+            if (maxTextureSize > 0)
+            {
+                settings.maxTextureSize = importer.maxTextureSize;
+            }
             settings.format = TextureImporterFormat.Automatic;
             settings.textureCompression = TextureImporterCompression.Compressed;
             settings.crunchedCompression = false;

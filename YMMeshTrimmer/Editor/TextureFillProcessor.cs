@@ -144,7 +144,7 @@ public static class TexturePostProcessProcessor
         try
         {
             processed.SetPixels(pixels);
-            processed.Apply(source.mipmapCount > 1, false);
+            processed.Apply(true, false);
             if (compress)
             {
                 GeneratedTextureUtility.CompressGeneratedTexture(processed, source.name);
@@ -172,7 +172,6 @@ public static class TexturePostProcessProcessor
 
     private static Texture2D CreateWritableTexture(int width, int height, Texture2D source, bool linear)
     {
-        bool mipChain = source.mipmapCount > 1;
         Texture2D tex = null;
 
         // 圧縮/非対応フォーマットで SetPixels が失敗するケースがあるため、常に書き込み可能な標準フォーマットで作成する。
@@ -186,13 +185,14 @@ public static class TexturePostProcessProcessor
         {
             try
             {
-                tex = new Texture2D(width, height, format, mipChain, linear)
+                tex = new Texture2D(width, height, format, true, linear)
                 {
                     name = source.name + "_YoridoriMeshTrimmerProcessed",
                     wrapMode = source.wrapMode,
                     filterMode = source.filterMode,
                     anisoLevel = source.anisoLevel
                 };
+                GeneratedTextureUtility.ConfigureRuntimeGeneratedTexture(tex);
                 return tex;
             }
             catch (UnityException)

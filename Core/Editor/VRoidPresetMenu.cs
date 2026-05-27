@@ -313,7 +313,7 @@ namespace YoridoriModifiers.Core.Editor
             component.shoulderEulerOffset = preset switch
             {
                 SleevePreset.LongSleeves => new Vector3(0f, 0f, -10f),
-                SleevePreset.ShortSleeves => new Vector3(0f, 0f, -13f),
+                SleevePreset.ShortSleeves => new Vector3(0f, 0f, -12f),
                 SleevePreset.Kimono => new Vector3(0f, 0f, -5f),
                 _ => Vector3.zero
             };

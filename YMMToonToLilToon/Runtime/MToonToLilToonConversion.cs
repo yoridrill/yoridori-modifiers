@@ -89,7 +89,7 @@ namespace YoridoriModifiers.MToonToLilToon
                 .ToList();
 
             var nameMatched = distinctMaterials
-                .Where(m => m.name.IndexOf("HAIR", StringComparison.OrdinalIgnoreCase) >= 0)
+                .Where(m => m.name.IndexOf("HAIR_", StringComparison.OrdinalIgnoreCase) >= 0)
                 .ToList();
 
             var transparentCount = nameMatched.Count(m => RenderTypeResolver.ResolveFromMaterial(m) == RenderType.Transparent);
@@ -123,6 +123,11 @@ namespace YoridoriModifiers.MToonToLilToon
         public static CullMode ResolveFromMaterial(Material material)
         {
             if (material == null) return CullMode.Back;
+
+            if (TryResolveFromProperty(material, "_M_CullMode", out var fromMToon10CullMode))
+            {
+                return fromMToon10CullMode;
+            }
 
             if (material.HasProperty("_DoubleSided"))
             {
@@ -197,15 +202,17 @@ namespace YoridoriModifiers.MToonToLilToon
                 }
             }
 
+            // Legacy MToon normally keeps _BlendMode and keywords in sync, but imported
+            // or hand-edited materials can leave stale hidden floats behind.
+            if (material.IsKeywordEnabled("_ALPHATEST_ON")) return RenderType.Cutout;
+            if (material.IsKeywordEnabled("_ALPHABLEND_ON")) return RenderType.Transparent;
+
             if (material.HasProperty("_BlendMode"))
             {
                 var blendMode = Mathf.RoundToInt(material.GetFloat("_BlendMode"));
                 if (blendMode == 1) return RenderType.Cutout;
                 if (blendMode >= 2) return RenderType.Transparent;
             }
-
-            if (material.IsKeywordEnabled("_ALPHATEST_ON")) return RenderType.Cutout;
-            if (material.IsKeywordEnabled("_ALPHABLEND_ON")) return RenderType.Transparent;
 
             if (material.renderQueue >= (int)RenderQueue.Transparent) return RenderType.Transparent;
             if (material.renderQueue >= (int)RenderQueue.AlphaTest) return RenderType.Cutout;
@@ -302,13 +309,14 @@ namespace YoridoriModifiers.MToonToLilToon
                 CopyColor(source, converted, new[] { "_MatcapColor" }, new[] { "_MatCapColor" }, report);
                 CopyTexture(source, converted, new[] { "_MatcapTex", "_SphereAdd" }, new[] { "_MatCapTex" }, report, ignoreTinyDummyTexture: true);
                 CopyColor(source, converted, new[] { "_RimColor" }, new[] { "_RimColor" }, report);
-                CopyTexture(source, converted, new[] { "_RimTex" }, new[] { "_RimColorTex" }, report, ignoreTinyDummyTexture: true);
+                CopyTexture(source, converted, new[] { "_RimTex", "_RimTexture" }, new[] { "_RimColorTex" }, report, ignoreTinyDummyTexture: true);
                 CopyColor(source, converted, new[] { "_OutlineColorFactor", "_OutlineColor" }, new[] { "_OutlineColor" }, report);
                 CopyTexture(source, converted, new[] { "_OutlineWidthTex", "_OutlineWidthTexture", "_OutlineWidthMultiplyTexture" }, new[] { "_OutlineWidthMask" }, report, ignoreTinyDummyTexture: true);
 
                 ApplyRenderState(source, converted, report);
                 ApplyOutlineState(source, converted);
                 ApplyShadowState(source, converted);
+                ApplyLegacyShadowMaskMapping(source, converted);
                 ApplyRimState(source, converted);
                 ApplyUvAnimationMapping(source, converted);
                 ApplyFeatureEnables(source, converted);
@@ -390,10 +398,19 @@ namespace YoridoriModifiers.MToonToLilToon
 
             if (TryGetFloat(source, new[] { "_ShadingShiftFactor", "_ShadeShift" }, out var shiftRaw))
             {
-                // MToon: -1 で影が覆い尽くす / +1 で影が消える（レンジ -1..1）
+                // MToon10: -1 で影が覆い尽くす / +1 で影が消える（レンジ -1..1）
+                // 旧MToon: 1 で影が覆い尽くす / -1 で影が消える（レンジ -1..1）
                 // lilToon: 1 で影が覆い尽くす / 0 で影が消える（レンジ 0..1）
-                var shift = Mathf.Clamp(shiftRaw, -1f, 1f);
-                SetIfExists(destination, "_ShadowBorder", (1f - shift) * 0.5f);
+                if (IsLegacyMToon(source))
+                {
+                    var shift = Mathf.Clamp(shiftRaw, -1f, 1f);
+                    SetIfExists(destination, "_ShadowBorder", (1f + shift) * 0.5f);
+                }
+                else
+                {
+                    var shift = Mathf.Clamp(shiftRaw, -1f, 1f);
+                    SetIfExists(destination, "_ShadowBorder", (1f - shift) * 0.5f);
+                }
             }
 
             if (TryGetFloat(source, new[] { "_ShadingToonyFactor", "_ShadeToony" }, out var toonyRaw))
@@ -522,15 +539,53 @@ namespace YoridoriModifiers.MToonToLilToon
         {
             if (source == null || destination == null) return;
 
-            var useShadow = true;
+            var useShadow = HasNonDefaultColor(source, new[] { "_ShadeColor", "_ShadeColorFactor" }, Color.white)
+                || HasTexture(source, true, "_ShadeTex", "_ShadeTexture", "_ShadeMap", "_ShadeMultiplyTexture", "_ShadeColorTexture")
+                || HasNonDefaultFloat(source, new[] { "_ShadingShiftFactor", "_ShadeShift" }, 0f)
+                || HasNonDefaultFloat(source, new[] { "_ShadingToonyFactor", "_ShadeToony" }, 1f)
+                || HasTexture(source, true, "_ShadingShiftTex", "_ShadingGradeTexture");
+
+            if (!useShadow && IsLegacyMToon(source))
+            {
+                // Legacy MToon defaults still use directional toon shading even when received shadows are disabled.
+                useShadow = true;
+            }
+
+            var receiveShadow = 1f;
             if (source.HasProperty("_ReceiveShadowRate"))
             {
-                useShadow = source.GetFloat("_ReceiveShadowRate") > 0.001f;
+                receiveShadow = Mathf.Clamp01(source.GetFloat("_ReceiveShadowRate"));
             }
 
             SetIfExists(destination, "_UseShadow", useShadow ? 1f : 0f);
-            SetIfExists(destination, "_ReceiveShadowRate", useShadow ? 1f : 0f);
+            SetIfExists(destination, "_ReceiveShadowRate", receiveShadow);
+            SetIfExists(destination, "_ShadowReceive", receiveShadow);
             SetIfExists(destination, "_ShadowEnvStrength", 0.5f);
+        }
+
+        private static void ApplyLegacyShadowMaskMapping(Material source, Material destination)
+        {
+            if (source == null || destination == null || !IsLegacyMToon(source)) return;
+
+            var hasShadingGradeTexture = TryFindExistingProperty(source, new[] { "_ShadingGradeTexture" }, out var shadingGradeProp)
+                && !IsLikelyDummyTexture(source.GetTexture(shadingGradeProp));
+            if (hasShadingGradeTexture)
+            {
+                SetTextureIfExists(destination, "_ShadowBorderMask", source.GetTexture(shadingGradeProp));
+                SetIfExists(destination, "_ShadowPostAO", 0f);
+
+                var rate = source.HasProperty("_ShadingGradeRate")
+                    ? Mathf.Clamp01(source.GetFloat("_ShadingGradeRate"))
+                    : 1f;
+                SetIfExists(destination, "_ShadowAOShift", new Color(rate, 1f - rate, rate, 1f - rate));
+            }
+
+            var hasReceiveShadowTexture = TryFindExistingProperty(source, new[] { "_ReceiveShadowTexture" }, out var receiveShadowProp)
+                && !IsLikelyDummyTexture(source.GetTexture(receiveShadowProp));
+            if (hasReceiveShadowTexture && !hasShadingGradeTexture)
+            {
+                SetTextureIfExists(destination, "_ShadowStrengthMask", source.GetTexture(receiveShadowProp));
+            }
         }
 
         private static void ApplyRimState(Material source, Material destination)
@@ -550,6 +605,23 @@ namespace YoridoriModifiers.MToonToLilToon
             }
 
             CopyFloat(source, destination, new[] { "_RimLightingMix" }, new[] { "_RimEnableLighting" }, null);
+            ApplyOutlineLightingState(source, destination);
+        }
+
+        private static void ApplyOutlineLightingState(Material source, Material destination)
+        {
+            if (source == null || destination == null) return;
+
+            if (IsLegacyMToon(source))
+            {
+                var colorMode = ResolveLegacyOutlineColorMode(source);
+                if (colorMode == 0)
+                {
+                    SetIfExists(destination, "_OutlineEnableLighting", 0f);
+                    return;
+                }
+            }
+
             CopyFloat(source, destination, new[] { "_OutlineLightingMix" }, new[] { "_OutlineEnableLighting" }, null);
         }
 
@@ -586,7 +658,7 @@ namespace YoridoriModifiers.MToonToLilToon
             SetIfExists(destination, "_UseMatCap", useMatCap ? 1f : 0f);
 
             var useRim = HasNonDefaultColor(source, new[] { "_RimColor" }, Color.black)
-                && IsNonDummyTextureOrUnset(source, "_RimTex");
+                && IsNonDummyTextureOrUnset(source, "_RimTex", "_RimTexture");
             SetIfExists(destination, "_UseRim", useRim ? 1f : 0f);
 
             var useNormalMap = HasTexture(source, true, "_NormalMap", "_BumpMap")
@@ -667,6 +739,7 @@ namespace YoridoriModifiers.MToonToLilToon
             if (destination.HasProperty("_OutlineTex") && sourceMainTex != null)
             {
                 destination.SetTexture("_OutlineTex", sourceMainTex);
+                CopyTextureScaleOffset(source, destination, new[] { "_BaseMap", "_MainTex" }, "_OutlineTex");
             }
 
             var outlineWidthMask = sourceOutlineWidthTex ?? sourceOutlineMask;
@@ -679,10 +752,10 @@ namespace YoridoriModifiers.MToonToLilToon
 
         private static void ApplyOutlineWidthMode(Material source, Material destination)
         {
-            if (source == null || destination == null || !source.HasProperty("_OutlineWidthMode")) return;
+            if (source == null || destination == null) return;
 
             // MToon10: 0=None, 1=WorldCoordinates, 2=ScreenCoordinates
-            var mode = Mathf.RoundToInt(source.GetFloat("_OutlineWidthMode"));
+            var mode = ResolveOutlineWidthMode(source);
             var useOutline = mode > 0 ? 1f : 0f;
             var fixWidth = mode == 2 ? 1f : 0f;
 
@@ -771,11 +844,28 @@ namespace YoridoriModifiers.MToonToLilToon
         private static bool HasOutline(Material source)
         {
             if (source == null) return false;
-            var hasOutlineMode = source.HasProperty("_OutlineWidthMode")
-                && Mathf.RoundToInt(source.GetFloat("_OutlineWidthMode")) > 0;
+            var hasOutlineMode = ResolveOutlineWidthMode(source) > 0;
             var hasOutlineWidth = source.HasProperty("_OutlineWidth")
                 && source.GetFloat("_OutlineWidth") > 0f;
             return hasOutlineMode && hasOutlineWidth;
+        }
+
+        private static int ResolveOutlineWidthMode(Material source)
+        {
+            if (source == null) return 0;
+            if (source.IsKeywordEnabled("MTOON_OUTLINE_WIDTH_WORLD")) return 1;
+            if (source.IsKeywordEnabled("MTOON_OUTLINE_WIDTH_SCREEN")) return 2;
+            if (source.HasProperty("_OutlineWidthMode")) return Mathf.RoundToInt(source.GetFloat("_OutlineWidthMode"));
+            return 0;
+        }
+
+        private static int ResolveLegacyOutlineColorMode(Material source)
+        {
+            if (source == null) return 0;
+            if (source.IsKeywordEnabled("MTOON_OUTLINE_COLOR_FIXED")) return 0;
+            if (source.IsKeywordEnabled("MTOON_OUTLINE_COLOR_MIXED")) return 1;
+            if (source.HasProperty("_OutlineColorMode")) return Mathf.RoundToInt(source.GetFloat("_OutlineColorMode"));
+            return 0;
         }
 
         private static bool IsLegacyMToon(Material material)
@@ -804,11 +894,7 @@ namespace YoridoriModifiers.MToonToLilToon
             CopyFloat(source, destination, new[] { "_ColorMask" }, new[] { "_ColorMask" }, report);
             CopyFloat(source, destination, new[] { "_M_AlphaToMask", "_AlphaToMask" }, new[] { "_AlphaToMask" }, report);
 
-            if (source.HasProperty("_BaseMap"))
-            {
-                destination.mainTextureScale = source.mainTextureScale;
-                destination.mainTextureOffset = source.mainTextureOffset;
-            }
+            CopyTextureScaleOffset(source, destination, new[] { "_BaseMap", "_MainTex" }, new[] { "_MainTex", "_BaseMap" });
 
             var renderType = RenderTypeResolver.ResolveFromMaterial(source);
             ApplyAlphaMode(source, destination, renderType);
@@ -819,20 +905,20 @@ namespace YoridoriModifiers.MToonToLilToon
         {
             if (source == null || destination == null) return;
 
-            // MToon10 は glTF doubleSided 由来で _DoubleSided を利用することがある。
-            // この値が true の場合は lilToon 側を Cull Off に揃える。
-            if (source.HasProperty("_DoubleSided"))
+            if (TryFindExistingProperty(source, new[] { "_M_CullMode", "_CullMode", "_Cull" }, out var sourceCull))
             {
-                var doubleSided = source.GetFloat("_DoubleSided") > 0.5f;
-                var cull = doubleSided ? (float)CullMode.Off : (float)CullMode.Back;
+                var cull = source.GetFloat(sourceCull);
                 SetIfExists(destination, "_Cull", cull);
                 ApplyBackfaceRenderStateForCull(destination, cull);
                 return;
             }
 
-            if (TryFindExistingProperty(source, new[] { "_M_CullMode", "_CullMode", "_Cull" }, out var sourceCull))
+            // MToon10 は glTF doubleSided 由来で _DoubleSided を利用することがある。
+            // _M_CullMode が無い場合のフォールバックとして lilToon 側を揃える。
+            if (source.HasProperty("_DoubleSided"))
             {
-                var cull = source.GetFloat(sourceCull);
+                var doubleSided = source.GetFloat("_DoubleSided") > 0.5f;
+                var cull = doubleSided ? (float)CullMode.Off : (float)CullMode.Back;
                 SetIfExists(destination, "_Cull", cull);
                 ApplyBackfaceRenderStateForCull(destination, cull);
                 return;
@@ -955,7 +1041,7 @@ namespace YoridoriModifiers.MToonToLilToon
             // MToon 側の回転速度は 2π スケール差があるため lilToon 向けに補正する。
             var lilRotation = hasRotation ? rotation * (Mathf.PI * 2f) : rotation;
 
-            if (!hasScrollX && !hasScrollY && !hasRotation) return;
+            if (scrollX == 0f && scrollY == 0f && rotation == 0f) return;
 
             var hasEmission = HasNonDefaultColor(source, new[] { "_EmissionColor" }, Color.black)
                 && IsNonDummyTextureOrUnset(source, "_EmissiveMap", "_EmissionMap");
@@ -974,6 +1060,7 @@ namespace YoridoriModifiers.MToonToLilToon
             {
                 SetTextureIfExists(destination, "_Main2ndBlendMask", uvAnimMask);
                 SetTextureIfExists(destination, "_Main2ndTex", destination.GetTexture("_MainTex"));
+                CopyTextureScaleOffset(destination, destination, new[] { "_MainTex", "_BaseMap" }, "_Main2ndTex");
                 SetIfExists(destination, "_Color2nd", destination.GetColor("_Color"));
                 SetIfExists(destination, "_UseMain2ndTex", 1f);
                 SetScrollRotate(destination, "_Main2ndTex_ScrollRotate", hasScrollX, scrollX, hasScrollY, scrollY, hasRotation, lilRotation);
@@ -1029,6 +1116,28 @@ namespace YoridoriModifiers.MToonToLilToon
             current.y = hasScrollY ? scrollY : current.y;
             current.w = hasRotation ? rotation : current.w;
             material.SetVector(propertyName, current);
+        }
+
+        private static void CopyTextureScaleOffset(Material source, Material destination, IReadOnlyList<string> sourceCandidates, IReadOnlyList<string> destinationCandidates)
+        {
+            if (!TryFindExistingProperty(source, sourceCandidates, out var sourceProperty)) return;
+            if (!TryFindExistingProperty(destination, destinationCandidates, out var destinationProperty)) return;
+            CopyTextureScaleOffset(source, destination, sourceProperty, destinationProperty);
+        }
+
+        private static void CopyTextureScaleOffset(Material source, Material destination, IReadOnlyList<string> sourceCandidates, string destinationProperty)
+        {
+            if (!TryFindExistingProperty(source, sourceCandidates, out var sourceProperty)) return;
+            CopyTextureScaleOffset(source, destination, sourceProperty, destinationProperty);
+        }
+
+        private static void CopyTextureScaleOffset(Material source, Material destination, string sourceProperty, string destinationProperty)
+        {
+            if (source == null || destination == null) return;
+            if (!source.HasProperty(sourceProperty) || !destination.HasProperty(destinationProperty)) return;
+
+            destination.SetTextureScale(destinationProperty, source.GetTextureScale(sourceProperty));
+            destination.SetTextureOffset(destinationProperty, source.GetTextureOffset(sourceProperty));
         }
 
         private static bool TryGetFloat(Material material, IReadOnlyList<string> candidates, out float value)

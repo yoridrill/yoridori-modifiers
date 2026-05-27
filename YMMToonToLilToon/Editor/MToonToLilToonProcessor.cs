@@ -631,11 +631,11 @@ namespace YoridoriModifiers.MToonToLilToon
             }
             SetColorIfAnyExists(mergedMaterial, new[] { "_Color", "_BaseColor" }, Color.white);
 
-            BakeOptionalAtlas(new[] { "_ShadowColorTex", "_Shadow1stColorTex" }, original, mergedIndices, mergedMaterial, new[] { "_ShadeMap", "_ShadeMultiplyTexture" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.Color, verboseLog);
+            BakeOptionalAtlas(new[] { "_ShadowColorTex", "_Shadow1stColorTex" }, original, mergedIndices, mergedMaterial, new[] { "_ShadeTex", "_ShadeTexture", "_ShadeMap", "_ShadeMultiplyTexture", "_ShadeColorTexture" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.Color, verboseLog);
             BakeOptionalAtlas(new[] { "_EmissionMap" }, original, mergedIndices, mergedMaterial, new[] { "_EmissiveMap", "_EmissionMap" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.Color, verboseLog);
             BakeOptionalAtlas(new[] { "_BumpMap" }, original, mergedIndices, mergedMaterial, new[] { "_NormalMap", "_BumpMap" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.NormalMap, verboseLog);
-            BakeOptionalAtlas(new[] { "_ShadowBorderMask" }, original, mergedIndices, mergedMaterial, new[] { "_ShadingShiftTex", "_ShadowBorderMask" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.LinearMask, verboseLog);
-            BakeOptionalAtlas(new[] { "_OutlineTex", "_OutlineMask" }, original, mergedIndices, mergedMaterial, new[] { "_OutlineWidthMultiplyTexture", "_OutlineMask" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.LinearMask, verboseLog);
+            BakeOptionalAtlas(new[] { "_ShadowBorderMask" }, original, mergedIndices, mergedMaterial, new[] { "_ShadingShiftTex", "_ShadingGradeTexture", "_ShadowBorderMask" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.LinearMask, verboseLog);
+            BakeOptionalAtlas(new[] { "_OutlineTex", "_OutlineMask" }, original, mergedIndices, mergedMaterial, new[] { "_OutlineWidthTex", "_OutlineWidthTexture", "_OutlineWidthMultiplyTexture", "_OutlineMask" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.LinearMask, verboseLog);
             NormalizeMergedEmissionAndMatCapState(original, mergedIndices, mergedMaterial);
             ValidateMergedMaterialTextureReferences(mergedMaterial, report, verboseLog);
             if (useHairMergeCache && HasCacheableMergedAtlasTextures(mergedMaterial) && IsValidHairMergeCacheHit(mergedMaterial, atlasRects, mergedIndices.Count))
@@ -1133,7 +1133,7 @@ namespace YoridoriModifiers.MToonToLilToon
                     hasEmissionColor = true;
                 }
 
-                var matCapTex = GetTextureFromAny(source, new[] { "_MatcapTex" });
+                var matCapTex = GetTextureFromAny(source, new[] { "_MatcapTex", "_SphereAdd" });
                 if (matCapTex != null && !IsLikelyDummyTexture(matCapTex))
                 {
                     hasMatCapTexture = true;
@@ -1151,9 +1151,9 @@ namespace YoridoriModifiers.MToonToLilToon
             SetFloatIfAnyExists(mergedMaterial, new[] { "_UseEmission" }, useEmission ? 1f : 0f);
             SetColorIfAnyExists(mergedMaterial, new[] { "_EmissionColor" }, hasEmissionColor ? emissionColor : Color.black);
 
-            var useMatCap = hasMatCapTexture && hasMatCapColor;
+            var useMatCap = hasMatCapTexture;
             SetFloatIfAnyExists(mergedMaterial, new[] { "_UseMatCap" }, useMatCap ? 1f : 0f);
-            SetColorIfAnyExists(mergedMaterial, new[] { "_MatCapColor" }, useMatCap ? matCapColor : Color.black);
+            SetColorIfAnyExists(mergedMaterial, new[] { "_MatCapColor" }, useMatCap ? (hasMatCapColor ? matCapColor : Color.white) : Color.black);
         }
 
         private static Texture GetTextureFromAny(Material material, IReadOnlyList<string> propertyNames)

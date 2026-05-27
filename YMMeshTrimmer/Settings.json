@@ -22,6 +22,14 @@
     {
       "target": ["eyelash", "まつげ", "睫毛"],
       "level": 1
+    },
+    {
+        "target": ["eyeline", "アイライン"],
+        "level": 1
+    },
+    {
+        "target": ["brow", "眉"],
+        "level": 1
     }
   ]
 }

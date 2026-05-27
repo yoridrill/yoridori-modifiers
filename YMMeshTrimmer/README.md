@@ -70,7 +70,7 @@ Inspector の警告には、そのコンポーネントがビルド時に使わ�
 
 ## プリセットでの追加
 
-Hierarchy でアバターを右クリックし、`Yoridori Modifiers/Add VRoid Preset` から追加すると、Mesh Trimmer は2つ追加されます。
+Hierarchy でアバターを右クリックし、`Yoridori Modifiers/Create YM Components Object for VRoid` または `Yoridori Modifiers/Add Component with VRoid Defaults/YM Mesh Trimmer` から追加すると、Mesh Trimmer は2つ追加されます。
 
 - Android/iOS 用
   - Android と iOS が有効

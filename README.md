@@ -40,14 +40,16 @@ https://yoridrill.github.io/vpm-repos/redirect.html
 - `Yoridori Modifiers/YM MToon to lilToon`
 - `Yoridori Modifiers/YM Eye Freeze`
 
-VRoid アバターでは、Hierarchy のアバターを右クリックして以下のメニューを使うと、4ツールをまとめて追加できます。
+VRoid アバターでは、Hierarchy のアバターを右クリックして以下のメニューを使うと、4ツールをまとめた GameObject を追加できます。
 
-- `Yoridori Modifiers/Add VRoid Preset/Long Sleeves`
-- `Yoridori Modifiers/Add VRoid Preset/Short Sleeves`
-- `Yoridori Modifiers/Add VRoid Preset/Kimono`
-- `Yoridori Modifiers/Add VRoid Preset from VRM 0.0/Long Sleeves`
-- `Yoridori Modifiers/Add VRoid Preset from VRM 0.0/Short Sleeves`
-- `Yoridori Modifiers/Add VRoid Preset from VRM 0.0/Kimono`
+- `Yoridori Modifiers/Create YM Components Object for VRoid/Long Sleeves`
+- `Yoridori Modifiers/Create YM Components Object for VRoid/Short Sleeves`
+- `Yoridori Modifiers/Create YM Components Object for VRoid/Kimono`
+- `Yoridori Modifiers/Create YM Components Object for VRoid/(via VRM 0.0) Long Sleeves`
+- `Yoridori Modifiers/Create YM Components Object for VRoid/(via VRM 0.0) Short Sleeves`
+- `Yoridori Modifiers/Create YM Components Object for VRoid/(via VRM 0.0) Kimono`
+
+個別に追加したい場合は、`Yoridori Modifiers/Add Component with VRoid Defaults` から選択できます。
 
 `YM Mesh Trimmer` は Android/iOS 用と Windows 用の2つが追加され、Windows 用は広めのマスク設定になります。
 

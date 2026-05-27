@@ -25,7 +25,6 @@ namespace YoridoriModifiers.MToonToLilToon
         }
 
         private const string PrefKeyLanguage = "MToonToLilToonComponentEditor.Language";
-        private const string DefaultFaceShadowMaskTextureGuid = "7fcb903d503482383c04f62fc730ef62";
         private Language _language;
 
         private void OnEnable()
@@ -551,20 +550,15 @@ namespace YoridoriModifiers.MToonToLilToon
         private void DrawFaceShadowMaskSettings(MToonToLilToonComponent component)
         {
             var textureProperty = serializedObject.FindProperty(nameof(MToonToLilToonComponent.faceShadowSdfTexture));
-            if (textureProperty.objectReferenceValue == null)
-            {
-                textureProperty.objectReferenceValue = LoadDefaultFaceShadowMaskTexture();
-            }
-
             DrawFaceShadowMaskTypePopup();
 
             EditorGUILayout.PropertyField(
                 textureProperty,
                 TT(
                     "マスク",
-                    "デフォルトではVRoid用の平面化マスクが指定されています。",
+                    "空の場合はマスクなしで実行されます。",
                     "Mask",
-                    "By default, a flattened mask for VRoid is assigned."));
+                    "If empty, conversion runs without a mask."));
             var lodProperty = serializedObject.FindProperty(nameof(MToonToLilToonComponent.shadowStrengthMaskLod));
             lodProperty.floatValue = EditorGUILayout.Slider(
                 TT(
@@ -873,12 +867,6 @@ namespace YoridoriModifiers.MToonToLilToon
 
             EnsureFaceMaterialsDetected(serializedComponent, scannedMaterials);
 
-            var textureProp = serializedComponent.FindProperty(nameof(MToonToLilToonComponent.faceShadowSdfTexture));
-            if (textureProp.objectReferenceValue == null)
-            {
-                textureProp.objectReferenceValue = LoadDefaultFaceShadowMaskTexture();
-            }
-
             var eyebrowProp = serializedComponent.FindProperty(nameof(MToonToLilToonComponent.eyebrowStencilMaterial));
             var eyebrowMaterial = eyebrowProp.objectReferenceValue as Material;
             if (eyebrowMaterial == null || !scannedMaterials.Contains(eyebrowMaterial))
@@ -956,25 +944,6 @@ namespace YoridoriModifiers.MToonToLilToon
             if (face != null) return face;
 
             return materials.FirstOrDefault();
-        }
-
-        private static Texture2D LoadDefaultFaceShadowMaskTexture()
-        {
-            var texturePath = AssetDatabase.GUIDToAssetPath(DefaultFaceShadowMaskTextureGuid);
-            var texture = !string.IsNullOrEmpty(texturePath)
-                ? AssetDatabase.LoadAssetAtPath<Texture2D>(texturePath)
-                : null;
-            if (texture != null) return texture;
-
-            var guids = AssetDatabase.FindAssets("VRoidFaceShadowFlat t:Texture2D");
-            for (var i = 0; i < guids.Length; i++)
-            {
-                var path = AssetDatabase.GUIDToAssetPath(guids[i]);
-                texture = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
-                if (texture != null) return texture;
-            }
-
-            return null;
         }
 
         private static Material DetectDefaultEyebrowMaterial(IReadOnlyList<Material> materials)

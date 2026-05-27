@@ -82,6 +82,12 @@ namespace YoridoriModifiers.MToonToLilToon
         {
             if (component == null) return;
             EnsureHairSelectionsMatchAvatarMaterials(component);
+            var processingRoot = ResolveProcessingRoot(component);
+            if (processingRoot == null) return;
+            var currentMaterials = CollectCurrentMaterials(processingRoot);
+            var fakeShadowFaceMaterial = ResolveCurrentMaterialReference(component.fakeShadowFaceMaterial, currentMaterials);
+            var faceShadowFaceMaterial = ResolveCurrentMaterialReference(component.faceShadowFaceMaterial, currentMaterials);
+            var eyebrowStencilMaterial = ResolveCurrentMaterialReference(component.eyebrowStencilMaterial, currentMaterials);
 
             if (component.isPreviewing)
             {
@@ -122,7 +128,7 @@ namespace YoridoriModifiers.MToonToLilToon
             var fakeShadowPairs = new List<(Material hair, Material fake)>();
             var mergedHairMaterials = new List<Material>();
             onProgress?.Invoke("Converting materials...");
-            foreach (var renderer in ResolveProcessingRoot(component).GetComponentsInChildren<Renderer>(true))
+            foreach (var renderer in processingRoot.GetComponentsInChildren<Renderer>(true))
             {
                 ProcessRenderer(
                     renderer,
@@ -147,25 +153,21 @@ namespace YoridoriModifiers.MToonToLilToon
                     onProgress);
             }
 
-            var resolvedFaceMaterial = component.fakeShadowFaceMaterial != null
-                ? (convertedBySource.TryGetValue(component.fakeShadowFaceMaterial, out var convertedFace)
+            var resolvedFaceMaterial = fakeShadowFaceMaterial != null
+                ? (convertedBySource.TryGetValue(fakeShadowFaceMaterial, out var convertedFace)
                     ? convertedFace
-                    : component.fakeShadowFaceMaterial)
+                    : fakeShadowFaceMaterial)
                 : null;
-            var resolvedFaceShadowMaterial = component.faceShadowFaceMaterial != null
-                ? (convertedBySource.TryGetValue(component.faceShadowFaceMaterial, out var convertedFaceShadow)
+            var resolvedFaceShadowMaterial = faceShadowFaceMaterial != null
+                ? (convertedBySource.TryGetValue(faceShadowFaceMaterial, out var convertedFaceShadow)
                     ? convertedFaceShadow
-                    : component.faceShadowFaceMaterial)
+                    : faceShadowFaceMaterial)
                 : null;
-            var resolvedEyebrowMaterial = component.eyebrowStencilMaterial != null
-                ? (convertedBySource.TryGetValue(component.eyebrowStencilMaterial, out var convertedEyebrow)
+            var resolvedEyebrowMaterial = eyebrowStencilMaterial != null
+                ? (convertedBySource.TryGetValue(eyebrowStencilMaterial, out var convertedEyebrow)
                     ? convertedEyebrow
-                    : component.eyebrowStencilMaterial)
+                    : eyebrowStencilMaterial)
                 : null;
-
-            component.fakeShadowFaceMaterial = resolvedFaceMaterial;
-            component.faceShadowFaceMaterial = resolvedFaceShadowMaterial;
-            component.eyebrowStencilMaterial = resolvedEyebrowMaterial;
 
             if (component.enableEyebrowStencil
                 && resolvedFaceMaterial != null
@@ -236,6 +238,39 @@ namespace YoridoriModifiers.MToonToLilToon
             component.unsupportedProperties = report.UnsupportedPropertySummary.Select(kv => $"{kv.Key}:{kv.Value}").ToList();
             ValidateRendererMaterialTextureReferencesBeforeAao(component, report);
             LogVerboseReportIfNeeded(component, report);
+        }
+
+        private static IReadOnlyList<Material> CollectCurrentMaterials(GameObject processingRoot)
+        {
+            if (processingRoot == null) return System.Array.Empty<Material>();
+
+            return processingRoot.GetComponentsInChildren<Renderer>(true)
+                .SelectMany(renderer => renderer != null ? renderer.sharedMaterials : System.Array.Empty<Material>())
+                .Where(material => material != null)
+                .Distinct()
+                .ToList();
+        }
+
+        private static Material ResolveCurrentMaterialReference(Material configuredMaterial, IReadOnlyList<Material> currentMaterials)
+        {
+            if (configuredMaterial == null || currentMaterials == null) return configuredMaterial;
+            if (currentMaterials.Count == 0 || currentMaterials.Contains(configuredMaterial)) return configuredMaterial;
+
+            var configuredName = configuredMaterial.name;
+            if (string.IsNullOrEmpty(configuredName)) return configuredMaterial;
+
+            return currentMaterials.FirstOrDefault(material => IsCurrentVersionOfConfiguredMaterial(material, configuredName))
+                ?? configuredMaterial;
+        }
+
+        private static bool IsCurrentVersionOfConfiguredMaterial(Material candidate, string sourceName)
+        {
+            if (candidate == null || string.IsNullOrEmpty(sourceName)) return false;
+
+            return candidate.name == sourceName
+                || candidate.name.StartsWith($"{sourceName}_", System.StringComparison.Ordinal)
+                || candidate.name.StartsWith($"{sourceName} ", System.StringComparison.Ordinal)
+                || candidate.name.StartsWith($"{sourceName}(", System.StringComparison.Ordinal);
         }
 
         private static void EnsureHairSelectionsMatchAvatarMaterials(MToonToLilToonComponent component)

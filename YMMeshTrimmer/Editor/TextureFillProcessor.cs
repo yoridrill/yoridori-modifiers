@@ -40,7 +40,7 @@ public static class TexturePostProcessProcessor
 
             foreach (var usage in target.usages)
             {
-                if (usage == null || usage.renderer == null || usage.material == null)
+                if (usage == null || usage.renderer == null)
                 {
                     continue;
                 }
@@ -51,17 +51,23 @@ public static class TexturePostProcessProcessor
                     continue;
                 }
 
-                int key = HashMaterialKey(usage.material, processedTexture);
+                var currentMaterial = sharedMaterials[usage.subMeshIndex];
+                if (currentMaterial == null)
+                {
+                    continue;
+                }
+
+                int key = HashMaterialKey(currentMaterial, processedTexture);
                 if (!materialCache.TryGetValue(key, out Material replacement))
                 {
-                    if (!MaterialMainTextureResolver.TryGetMainTexture(usage.material, out Texture2D sourceMainTexture, out string textureProperty))
+                    if (!MaterialMainTextureResolver.TryGetMainTexture(currentMaterial, out Texture2D sourceMainTexture, out string textureProperty))
                     {
                         continue;
                     }
 
-                    replacement = new Material(usage.material)
+                    replacement = new Material(currentMaterial)
                     {
-                        name = usage.material.name + "_YoridoriMeshTrimmerProcessed"
+                        name = currentMaterial.name + "_YoridoriMeshTrimmerProcessed"
                     };
                     replacement.SetTexture(textureProperty, processedTexture);
                     ReplaceAllMatchingTextureSlots(replacement, sourceMainTexture, processedTexture);

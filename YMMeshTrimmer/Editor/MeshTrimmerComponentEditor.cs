@@ -1140,6 +1140,18 @@ public class MeshTrimmerComponentEditor : Editor
                 {
                     return true;
                 }
+
+                var subMeshIndex = target.usages[j].subMeshIndex;
+                var materials = renderer.sharedMaterials;
+                if (subMeshIndex < 0 || subMeshIndex >= materials.Length)
+                {
+                    return true;
+                }
+
+                if (target.usages[j].material != materials[subMeshIndex])
+                {
+                    return true;
+                }
             }
         }
 

@@ -4,7 +4,7 @@
 オフセットした追加ボーンを Constraint で連動させ、VRoid で起きやすいなで肩、手首まわりのねじれ、開きすぎる親指を抑えます。
 
 通常の Add Component では、非VRoidモデルでも使いやすいようにニュートラルな初期値になっています。  
-VRoid 向けの値をまとめて入れたい場合は、Hierarchy のアバター右クリックメニューから `Yoridori Modifiers/Add VRoid Preset` を使ってください。
+VRoid 向けの値をまとめて入れたい場合は、Hierarchy のアバター右クリックメニューから `Yoridori Modifiers/Create YM Components Object for VRoid` を使ってください。
 
 ## 使い方
 
@@ -32,17 +32,19 @@ VRoid 向けの推奨値はプリセットから追加できます。
 
 Hierarchy でアバターを右クリックし、以下から選択できます。
 
-- `Yoridori Modifiers/Add VRoid Preset/Long Sleeves`
-- `Yoridori Modifiers/Add VRoid Preset/Short Sleeves`
-- `Yoridori Modifiers/Add VRoid Preset/Kimono`
-- `Yoridori Modifiers/Add VRoid Preset from VRM 0.0/Long Sleeves`
-- `Yoridori Modifiers/Add VRoid Preset from VRM 0.0/Short Sleeves`
-- `Yoridori Modifiers/Add VRoid Preset from VRM 0.0/Kimono`
+- `Yoridori Modifiers/Create YM Components Object for VRoid/Long Sleeves`
+- `Yoridori Modifiers/Create YM Components Object for VRoid/Short Sleeves`
+- `Yoridori Modifiers/Create YM Components Object for VRoid/Kimono`
+- `Yoridori Modifiers/Create YM Components Object for VRoid/(via VRM 0.0) Long Sleeves`
+- `Yoridori Modifiers/Create YM Components Object for VRoid/(via VRM 0.0) Short Sleeves`
+- `Yoridori Modifiers/Create YM Components Object for VRoid/(via VRM 0.0) Kimono`
+
+Arm Patch だけをアバタールートに追加したい場合は、`Yoridori Modifiers/Add Component with VRoid Defaults/YM Arm Patch` から選択できます。
 
 プリセットでは `Shoulder Fix`、`Forearm Fix`、`Thumb Fix` が有効になります。  
 VRM 0.0 用プリセットは親指の初期角度が異なります。
 
-`Kimono` では、名前に `body` と `skin` の両方を含むマテリアルを大文字小文字無視で探し、見つかれば Twist Target に設定します。見つからない場合は `Auto` になります。
+`Kimono` では、名前に `body` と `skin` の両方を含むマテリアルを大文字小文字無視で探し、見つかれば Twist Target に設定します。見つからない場合は `Auto` になります。Twist Bone Count は `4` になります。
 
 ## 設定
 

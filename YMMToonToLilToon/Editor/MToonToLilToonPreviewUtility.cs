@@ -178,8 +178,11 @@ namespace YoridoriModifiers.MToonToLilToon
                 _previewAvatar.name = PreviewAvatarName;
                 _previewAvatar.hideFlags = HideFlags.HideInHierarchy | HideFlags.DontSaveInEditor;
 
-                foreach (var component in _previewAvatar.GetComponentsInChildren<MToonToLilToonComponent>(true))
+                var previewComponents = _previewAvatar.GetComponentsInChildren<MToonToLilToonComponent>(true);
+                var selectedComponent = SelectPreferredComponent(previewComponents, _previewAvatar);
+                foreach (var component in previewComponents)
                 {
+                    if (component != selectedComponent) continue;
                     MToonToLilToonProcessor.ApplyOnBuild(component, SetProgress, MToonToLilToonProcessor.ConversionRoute.Preview);
                     component.isPreviewing = true;
                 }
@@ -270,6 +273,29 @@ namespace YoridoriModifiers.MToonToLilToon
                 if (go.name != PreviewRootName && go.name != PreviewAvatarName) continue;
                 Object.DestroyImmediate(go);
             }
+        }
+
+        private static MToonToLilToonComponent SelectPreferredComponent(
+            MToonToLilToonComponent[] components,
+            GameObject avatarRoot)
+        {
+            if (components == null || components.Length == 0) return null;
+
+            MToonToLilToonComponent best = null;
+            var bestScore = int.MinValue;
+            var rootTransform = avatarRoot != null ? avatarRoot.transform : null;
+            for (var i = 0; i < components.Length; i++)
+            {
+                var component = components[i];
+                if (component == null) continue;
+                var depth = PreviewCoordinator.GetDepthFromRoot(component.transform, rootTransform);
+                var score = -depth * 10000 - i;
+                if (score <= bestScore) continue;
+                best = component;
+                bestScore = score;
+            }
+
+            return best;
         }
 
         private static string BuildRelativePath(Transform root, Transform target)

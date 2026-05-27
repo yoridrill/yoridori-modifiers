@@ -81,14 +81,13 @@ namespace YoridoriModifiers.EyeFreeze
         {
             if (component == null) return;
 
-            var ownDescriptor = component.GetComponent<VRCAvatarDescriptor>();
             var parentDescriptor = component.GetComponentInParent<VRCAvatarDescriptor>(true);
             if (parentDescriptor == null)
             {
                 EditorGUILayout.HelpBox(
                     T(
-                        "AvatarRoot に追加してください。VRCAvatarDescriptor が見つかりません。",
-                        "Add this component to AvatarRoot. VRCAvatarDescriptor was not found."),
+                        "アバター配下に追加してください。VRCAvatarDescriptor が見つかりません。",
+                        "Add this component under an avatar. VRCAvatarDescriptor was not found."),
                     MessageType.Warning);
                 return;
             }
@@ -109,13 +108,6 @@ namespace YoridoriModifiers.EyeFreeze
                 return;
             }
 
-            if (ownDescriptor != null) return;
-
-            EditorGUILayout.HelpBox(
-                T(
-                    "AvatarRoot 配下に追加されています。ビルド時はこのアバターに適用されます。",
-                    "This component is under AvatarRoot. It will be applied to this avatar during build."),
-                MessageType.Info);
         }
 
         private static YMEyeFreeze SelectPreferredComponentForBuild(YMEyeFreeze[] components, GameObject avatarRoot)

@@ -4,8 +4,10 @@ using nadena.dev.ndmf;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
+using VRC.Dynamics;
 using VRC.SDK3.Avatars.Components;
 using VRC.SDK3.Avatars.ScriptableObjects;
+using VRC.SDK3.Dynamics.Constraint.Components;
 using YoridoriModifiers.Core.Editor;
 using Object = UnityEngine.Object;
 
@@ -18,8 +20,8 @@ namespace YoridoriModifiers.EyeFreeze
         private const string ToolName = "YM Eye Freeze";
         private const string QualifiedPluginName = "jp.yoridrill.ym-eye-freeze";
         private const string IconPath = "Packages/jp.yoridrill.yoridori-modifiers/icon.png";
-        private const string DefaultGestureControllerPath =
-            "Packages/com.vrchat.avatars/Samples/AV3 Demo Assets/Animation/Controllers/vrc_AvatarV3HandsLayer.controller";
+        private const string LeftEyeTargetName = "YM_LeftEye_FreezeRotationTarget";
+        private const string RightEyeTargetName = "YM_RightEye_FreezeRotationTarget";
 
         public override string QualifiedName => QualifiedPluginName;
         public override string DisplayName => ToolName;
@@ -91,34 +93,84 @@ namespace YoridoriModifiers.EyeFreeze
                 ? "Eye Freeze"
                 : component.menuName.Trim();
 
-            var clip = CreateEyeFreezeClip(avatarRoot, leftEye, rightEye);
-            context.AssetSaver.SaveAsset(clip);
+            var animator = avatarRoot.GetComponentInChildren<Animator>(true);
+            var head = animator != null ? animator.GetBoneTransform(HumanBodyBones.Head) : null;
+            if (head == null)
+            {
+                Debug.LogWarning("[YM Eye Freeze] Humanoid head bone not found. Skipped.");
+                return;
+            }
 
-            var controller = BuildGestureController(context, descriptor, parameterName, clip);
+            var leftConstraint = BuildEyeRotationConstraint(leftEye, CreateFreezeTarget(head, leftEye, LeftEyeTargetName));
+            var rightConstraint = BuildEyeRotationConstraint(rightEye, CreateFreezeTarget(head, rightEye, RightEyeTargetName));
+
+            var offClip = CreateEyeFreezeClip(avatarRoot, leftConstraint, rightConstraint, false, "YM Eye Freeze Off");
+            var onClip = CreateEyeFreezeClip(avatarRoot, leftConstraint, rightConstraint, true, "YM Eye Freeze On");
+            context.AssetSaver.SaveAsset(offClip);
+            context.AssetSaver.SaveAsset(onClip);
+
+            var controller = BuildFxController(context, descriptor, parameterName, offClip, onClip);
             if (controller == null) return;
 
             MergeExpressionParameter(context, descriptor, parameterName, component.saved, component.synced);
             MergeExpressionMenu(context, descriptor, menuName, parameterName);
         }
 
-        private static AnimationClip CreateEyeFreezeClip(GameObject avatarRoot, Transform leftEye, Transform rightEye)
+        private static Transform CreateFreezeTarget(Transform head, Transform eye, string targetName)
+        {
+            var target = new GameObject(targetName).transform;
+            target.SetParent(head, false);
+            target.position = eye.position;
+            target.rotation = eye.rotation;
+            target.localScale = Vector3.one;
+            return target;
+        }
+
+        private static VRCRotationConstraint BuildEyeRotationConstraint(Transform eye, Transform source)
+        {
+            var constraint = eye.gameObject.AddComponent<VRCRotationConstraint>();
+
+            constraint.IsActive = false;
+            constraint.GlobalWeight = 1f;
+            constraint.Locked = true;
+            constraint.SolveInLocalSpace = false;
+            constraint.FreezeToWorld = false;
+            constraint.RebakeOffsetsWhenUnfrozen = false;
+
+            constraint.RotationAtRest = eye.localEulerAngles;
+            constraint.RotationOffset = Vector3.zero;
+
+            constraint.AffectsRotationX = true;
+            constraint.AffectsRotationY = true;
+            constraint.AffectsRotationZ = true;
+
+            constraint.Sources.Clear();
+            constraint.Sources.Add(new VRCConstraintSource(source, 1f));
+
+            constraint.ApplyConfigurationChanges();
+            return constraint;
+        }
+
+        private static AnimationClip CreateEyeFreezeClip(
+            GameObject avatarRoot,
+            VRCRotationConstraint leftConstraint,
+            VRCRotationConstraint rightConstraint,
+            bool isActive,
+            string clipName)
         {
             var clip = new AnimationClip
             {
-                name = "YM Eye Freeze"
+                name = clipName
             };
 
-            AddRotationCurves(clip, AnimationUtility.CalculateTransformPath(leftEye, avatarRoot.transform), leftEye.localRotation);
-            AddRotationCurves(clip, AnimationUtility.CalculateTransformPath(rightEye, avatarRoot.transform), rightEye.localRotation);
+            AddConstraintActiveCurve(clip, AnimationUtility.CalculateTransformPath(leftConstraint.transform, avatarRoot.transform), isActive);
+            AddConstraintActiveCurve(clip, AnimationUtility.CalculateTransformPath(rightConstraint.transform, avatarRoot.transform), isActive);
             return clip;
         }
 
-        private static void AddRotationCurves(AnimationClip clip, string path, Quaternion rotation)
+        private static void AddConstraintActiveCurve(AnimationClip clip, string path, bool isActive)
         {
-            clip.SetCurve(path, typeof(Transform), "m_LocalRotation.x", OneKeyCurve(rotation.x));
-            clip.SetCurve(path, typeof(Transform), "m_LocalRotation.y", OneKeyCurve(rotation.y));
-            clip.SetCurve(path, typeof(Transform), "m_LocalRotation.z", OneKeyCurve(rotation.z));
-            clip.SetCurve(path, typeof(Transform), "m_LocalRotation.w", OneKeyCurve(rotation.w));
+            clip.SetCurve(path, typeof(VRCRotationConstraint), nameof(VRCConstraintBase.IsActive), OneKeyCurve(isActive ? 1f : 0f));
         }
 
         private static AnimationCurve OneKeyCurve(float value)
@@ -126,29 +178,30 @@ namespace YoridoriModifiers.EyeFreeze
             return new AnimationCurve(new Keyframe(0f, value));
         }
 
-        private static AnimatorController BuildGestureController(
+        private static AnimatorController BuildFxController(
             BuildContext context,
             VRCAvatarDescriptor descriptor,
             string parameterName,
-            AnimationClip clip)
+            AnimationClip offClip,
+            AnimationClip onClip)
         {
-            var layerIndex = EnsureGestureLayer(descriptor);
+            var layerIndex = EnsureFxLayer(descriptor);
             if (layerIndex < 0)
             {
-                Debug.LogWarning("[YM Eye Freeze] Gesture layer not found. Skipped.");
+                Debug.LogWarning("[YM Eye Freeze] FX layer not found. Skipped.");
                 return null;
             }
 
-            var sourceController = ResolveGestureSourceController(descriptor.baseAnimationLayers[layerIndex]);
+            var sourceController = ResolveFxSourceController(descriptor.baseAnimationLayers[layerIndex]);
             var controller = sourceController != null
                 ? Object.Instantiate(sourceController)
                 : new AnimatorController();
 
-            controller.name = "YM Eye Freeze Gesture";
+            controller.name = "YM Eye Freeze FX";
             context.AssetSaver.SaveAsset(controller);
 
             AddBoolParameterIfMissing(controller, parameterName);
-            AddEyeFreezeLayer(controller, parameterName, clip);
+            AddEyeFreezeLayer(controller, parameterName, offClip, onClip);
 
             descriptor.customizeAnimationLayers = true;
             var layers = descriptor.baseAnimationLayers;
@@ -159,37 +212,37 @@ namespace YoridoriModifiers.EyeFreeze
             return controller;
         }
 
-        private static int EnsureGestureLayer(VRCAvatarDescriptor descriptor)
+        private static int EnsureFxLayer(VRCAvatarDescriptor descriptor)
         {
             var layers = descriptor.baseAnimationLayers ?? Array.Empty<VRCAvatarDescriptor.CustomAnimLayer>();
             for (var i = 0; i < layers.Length; i++)
             {
-                if (layers[i].type == VRCAvatarDescriptor.AnimLayerType.Gesture) return i;
+                if (layers[i].type == VRCAvatarDescriptor.AnimLayerType.FX) return i;
             }
 
             Array.Resize(ref layers, layers.Length + 1);
             var index = layers.Length - 1;
             layers[index] = new VRCAvatarDescriptor.CustomAnimLayer
             {
-                type = VRCAvatarDescriptor.AnimLayerType.Gesture,
-                isDefault = true
+                type = VRCAvatarDescriptor.AnimLayerType.FX,
+                isDefault = false
             };
             descriptor.baseAnimationLayers = layers;
             return index;
         }
 
-        private static AnimatorController ResolveGestureSourceController(VRCAvatarDescriptor.CustomAnimLayer layer)
+        private static AnimatorController ResolveFxSourceController(VRCAvatarDescriptor.CustomAnimLayer layer)
         {
             if (!layer.isDefault)
             {
                 if (layer.animatorController is AnimatorController controller) return controller;
                 if (layer.animatorController != null)
                 {
-                    Debug.LogWarning("[YM Eye Freeze] Gesture layer controller is not an AnimatorController. A new controller will be created.");
+                    Debug.LogWarning("[YM Eye Freeze] FX layer controller is not an AnimatorController. A new controller will be created.");
                 }
             }
 
-            return AssetDatabase.LoadAssetAtPath<AnimatorController>(DefaultGestureControllerPath);
+            return null;
         }
 
         private static void AddBoolParameterIfMissing(AnimatorController controller, string parameterName)
@@ -207,7 +260,11 @@ namespace YoridoriModifiers.EyeFreeze
             });
         }
 
-        private static void AddEyeFreezeLayer(AnimatorController controller, string parameterName, AnimationClip clip)
+        private static void AddEyeFreezeLayer(
+            AnimatorController controller,
+            string parameterName,
+            AnimationClip offClip,
+            AnimationClip onClip)
         {
             var existingLayers = controller.layers
                 .Where(layer => layer != null && layer.name != ToolName)
@@ -223,13 +280,12 @@ namespace YoridoriModifiers.EyeFreeze
             stateMachine.name = ToolName;
 
             var offState = stateMachine.AddState("Off", new Vector3(240f, 80f, 0f));
+            offState.motion = offClip;
             offState.writeDefaultValues = false;
-            AddTrackingControl(offState, VRCAnimatorTrackingControl.TrackingType.Tracking);
 
             var onState = stateMachine.AddState("On", new Vector3(240f, 180f, 0f));
-            onState.motion = clip;
+            onState.motion = onClip;
             onState.writeDefaultValues = false;
-            AddTrackingControl(onState, VRCAnimatorTrackingControl.TrackingType.Animation);
 
             stateMachine.defaultState = offState;
 
@@ -243,21 +299,6 @@ namespace YoridoriModifiers.EyeFreeze
 
             layers[layers.Length - 1] = layer;
             controller.layers = layers;
-        }
-
-        private static void AddTrackingControl(AnimatorState state, VRCAnimatorTrackingControl.TrackingType eyesTracking)
-        {
-            var tracking = state.AddStateMachineBehaviour<VRCAnimatorTrackingControl>();
-            tracking.trackingHead = VRCAnimatorTrackingControl.TrackingType.NoChange;
-            tracking.trackingLeftHand = VRCAnimatorTrackingControl.TrackingType.NoChange;
-            tracking.trackingRightHand = VRCAnimatorTrackingControl.TrackingType.NoChange;
-            tracking.trackingHip = VRCAnimatorTrackingControl.TrackingType.NoChange;
-            tracking.trackingLeftFoot = VRCAnimatorTrackingControl.TrackingType.NoChange;
-            tracking.trackingRightFoot = VRCAnimatorTrackingControl.TrackingType.NoChange;
-            tracking.trackingLeftFingers = VRCAnimatorTrackingControl.TrackingType.NoChange;
-            tracking.trackingRightFingers = VRCAnimatorTrackingControl.TrackingType.NoChange;
-            tracking.trackingEyes = eyesTracking;
-            tracking.trackingMouth = VRCAnimatorTrackingControl.TrackingType.NoChange;
         }
 
         private static void ConfigureTransition(AnimatorStateTransition transition)

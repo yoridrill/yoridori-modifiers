@@ -1,6 +1,6 @@
 # YM Eye Freeze
 
-撮影時に VRChat の Eye Look による目線のキョロキョロとまばたきを一時停止し、目ボーンを初期状態で固定する NDMF ツールです。  
+撮影時に VRChat の Eye Look による目線のキョロキョロを抑え、目ボーンを初期状態へ戻す NDMF ツールです。
 カメラ目線化やターゲット追従を行う機能ではありません。
 
 ## 使い方
@@ -8,8 +8,8 @@
 1. AvatarRoot に `Yoridori Modifiers/YM Eye Freeze` を追加します。
 2. アップロード後、Expression Menu の `Eye Freeze` を ON/OFF します。
 
-ON の間は Eyes & Eyelid が Animation になり、左右の目ボーンがビルド時の初期 localRotation で固定されます。  
-OFF にすると Eyes & Eyelid は Tracking に戻り、通常の Eye Look に戻ります。
+ON の間は VRChat Rotation Constraint が有効になり、左右の目ボーンが Head 配下の固定ターゲットの回転へ戻ります。
+OFF にすると Constraint が無効になり、通常の Eye Look に戻ります。
 
 ## 設定
 
@@ -25,6 +25,7 @@ OFF にすると Eyes & Eyelid は Tracking に戻り、通常の Eye Look に�
 ## 制限
 
 - カメラ目線化ではありません。
+- まばたきの停止は行いません。
 - Eye Look 未設定のアバターは対象外です。
 - `VRCAvatarDescriptor` の Eye Look に leftEye / rightEye が設定された、ボーン式 Eye Look のみ対象です。
 - 手動目ボーン指定、BlendShape 目線、UV 目線には対応していません。

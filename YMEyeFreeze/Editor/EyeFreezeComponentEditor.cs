@@ -48,8 +48,8 @@ namespace YoridoriModifiers.EyeFreeze
 
             EditorGUILayout.HelpBox(
                 T(
-                    "Eye LookとBlinkを一時停止し、 目ボーンを初期状態で固定するモードを Exメニューに追加します。",
-                    "Adds an Ex Menu mode that pauses Eye Look and Blink, and fixes eye bones at their initial state."),
+                    "目ボーンを初期状態で固定するモードを Exメニューに追加します。",
+                    "Adds an Ex Menu mode that returns eye bones to their initial rotation."),
                 MessageType.Info);
 
             DrawPlacementStatus(component);

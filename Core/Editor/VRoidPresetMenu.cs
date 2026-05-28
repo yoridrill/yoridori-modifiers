@@ -304,6 +304,7 @@ namespace YoridoriModifiers.Core.Editor
         private static void ConfigureArmPatch(ArmPatchComponent component, GameObject root, SleevePreset preset, bool fromVrm00)
         {
             Undo.RecordObject(component, BuildUndoName(preset, fromVrm00));
+            component.MigrateSerializedValuesIfNeeded();
 
             component.enableShoulderFix = true;
             component.enableForearmFix = true;
@@ -318,11 +319,9 @@ namespace YoridoriModifiers.Core.Editor
                 _ => Vector3.zero
             };
 
-            component.forearmThicknessRootScale = 1f;
-            component.forearmThicknessTipScale = 1f;
-            component.forearmWidthRootScale = 1f;
-            component.forearmWidthTipScale = 1f;
-            component.forearmRootRollOffset = 0f;
+            component.forearmElbowScale = Vector3.one;
+            component.forearmWristScale = Vector3.one;
+            component.forearmElbowRollOffset = 0f;
             component.forearmTwistBoneCount = ForearmTwistBoneCount.Count0;
             component.forearmTwistBoneType = ForearmTwistBoneType.None;
             component.forearmSkinMaterialName = "Auto";
@@ -331,10 +330,8 @@ namespace YoridoriModifiers.Core.Editor
             {
                 component.forearmTwistBoneCount = ForearmTwistBoneCount.Count8;
                 component.forearmTwistBoneType = ForearmTwistBoneType.AllTwist;
-                component.forearmThicknessRootScale = 0.8f;
-                component.forearmThicknessTipScale = 1.1f;
-                component.forearmWidthRootScale = 0.95f;
-                component.forearmWidthTipScale = 0.9f;
+                component.forearmElbowScale = new Vector3(1f, 0.8f, 0.95f);
+                component.forearmWristScale = new Vector3(1f, 1.1f, 0.9f);
             }
             else if (preset == SleevePreset.Kimono)
             {
@@ -344,9 +341,9 @@ namespace YoridoriModifiers.Core.Editor
                 component.forearmTwistBoneType = string.IsNullOrEmpty(twistTarget)
                     ? ForearmTwistBoneType.AllTwist
                     : ForearmTwistBoneType.SkinOnly;
-                component.forearmThicknessTipScale = 1.1f;
-                component.forearmWidthTipScale = 0.9f;
-                component.forearmRootRollOffset = -70f;
+                component.forearmElbowScale = new Vector3(0.9f, 1f, 1f);
+                component.forearmWristScale = new Vector3(1f, 1.1f, 0.9f);
+                component.forearmElbowRollOffset = -70f;
             }
 
             component.thumbEulerOffset = fromVrm00

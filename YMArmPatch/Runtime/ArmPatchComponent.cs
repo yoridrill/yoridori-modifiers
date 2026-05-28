@@ -64,23 +64,16 @@ namespace YoridoriModifiers.ArmPatch
         [FormerlySerializedAs("enableWristFix")]
         public bool enableForearmFix = false;
 
-        [Tooltip("Forearm thickness scale at root side.")]
-        [FormerlySerializedAs("wristThicknessScale")]
-        public float forearmThicknessRootScale = 1f;
+        [Tooltip("Forearm scale at elbow side.")]
+        public Vector3 forearmElbowScale = Vector3.one;
 
-        [Tooltip("Forearm thickness scale at tip side.")]
-        public float forearmThicknessTipScale = 1f;
+        [Tooltip("Forearm scale at wrist side.")]
+        public Vector3 forearmWristScale = Vector3.one;
 
-        [Tooltip("Forearm width scale at root side.")]
-        [FormerlySerializedAs("wristWidthScale")]
-        public float forearmWidthRootScale = 1f;
-
-        [Tooltip("Forearm width scale at tip side.")]
-        public float forearmWidthTipScale = 1f;
-
-        [Tooltip("Root roll offset for twist aim.")]
+        [Tooltip("Elbow roll offset for twist aim.")]
         [Range(-90f, 90f)]
-        public float forearmRootRollOffset = 0f;
+        [FormerlySerializedAs("forearmRootRollOffset")]
+        public float forearmElbowRollOffset = 0f;
 
         [Tooltip("Forearm roll axis. Default is X.")]
         [FormerlySerializedAs("wristRollAxis")]
@@ -123,5 +116,51 @@ namespace YoridoriModifiers.ArmPatch
 
         [Tooltip("Enable verbose logging.")]
         public bool verboseLog = false;
+
+        [SerializeField, HideInInspector]
+        private int armPatchSerializedVersion = 0;
+
+        [SerializeField, HideInInspector, FormerlySerializedAs("wristThicknessScale")]
+        private float forearmThicknessRootScale = 1f;
+
+        [SerializeField, HideInInspector]
+        private float forearmThicknessTipScale = 1f;
+
+        [SerializeField, HideInInspector, FormerlySerializedAs("wristWidthScale")]
+        private float forearmWidthRootScale = 1f;
+
+        [SerializeField, HideInInspector]
+        private float forearmWidthTipScale = 1f;
+
+        private const int CurrentSerializedVersion = 1;
+
+        public void MigrateSerializedValuesIfNeeded()
+        {
+            if (armPatchSerializedVersion >= CurrentSerializedVersion) return;
+
+            forearmElbowScale = BuildLegacyScaleVector(forearmRollAxis, forearmThicknessRootScale, forearmWidthRootScale);
+            forearmWristScale = BuildLegacyScaleVector(forearmRollAxis, forearmThicknessTipScale, forearmWidthTipScale);
+            armPatchSerializedVersion = CurrentSerializedVersion;
+        }
+
+        private void OnValidate()
+        {
+            MigrateSerializedValuesIfNeeded();
+        }
+
+        private static Vector3 BuildLegacyScaleVector(TwistAxis twistAxis, float thicknessScale, float widthScale)
+        {
+            switch (twistAxis)
+            {
+                case TwistAxis.X:
+                    return new Vector3(1f, thicknessScale, widthScale);
+                case TwistAxis.Y:
+                    return new Vector3(widthScale, 1f, thicknessScale);
+                case TwistAxis.Z:
+                    return new Vector3(widthScale, thicknessScale, 1f);
+                default:
+                    return new Vector3(1f, thicknessScale, widthScale);
+            }
+        }
     }
 }

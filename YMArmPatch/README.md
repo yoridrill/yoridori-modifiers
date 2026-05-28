@@ -24,7 +24,7 @@ Preview 表示が残ったり、モデルが見えなくなった場合は、`Ad
 - `Forearm Fix`: 無効
 - `Thumb Fix`: 無効
 - `Euler Offset`: すべて `0`
-- `Thickness` / `Width`: すべて `1`
+- `Elbow Scale` / `Wrist Scale`: すべて `(1, 1, 1)`
 
 VRoid 向けの推奨値はプリセットから追加できます。
 
@@ -44,7 +44,7 @@ Arm Patch だけをアバタールートに追加したい場合は、`Yoridori 
 プリセットでは `Shoulder Fix`、`Forearm Fix`、`Thumb Fix` が有効になります。  
 VRM 0.0 用プリセットは親指の初期角度が異なります。
 
-`Kimono` では、名前に `body` と `skin` の両方を含むマテリアルを大文字小文字無視で探し、見つかれば Twist Target に設定します。見つからない場合は `Auto` になります。Twist Bone Count は `4` になります。
+`Kimono` では、名前に `body` と `skin` の両方を含むマテリアルを大文字小文字無視で探し、見つかれば Twist Target に設定します。見つからない場合は `Auto` になります。Twist Bone Count は `4` になり、袖の長さ調整用に `Elbow Scale` の長さ方向が少し短くなります。
 
 ## 設定
 
@@ -57,6 +57,7 @@ VRM 0.0 用プリセットは親指の初期角度が異なります。
 
 前腕の見た目骨にスケール補正と手首 twist 補正を適用します。  
 半袖など腕が見える衣装では `Twist Bone Count` を増やすと安定しやすくなります。
+`Elbow Scale` と `Wrist Scale` は X/Y/Z ごとに指定でき、Twist Bone Count が 0 の場合は両者の平均値が使われます。
 
 ### Thumb Fix
 

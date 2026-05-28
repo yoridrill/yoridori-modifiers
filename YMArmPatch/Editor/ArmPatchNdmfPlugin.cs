@@ -105,6 +105,7 @@ namespace YoridoriModifiers.ArmPatch
         public static void BuildPatchRig(GameObject avatarRoot, ArmPatchComponent component, bool verboseLog = false)
         {
             if (avatarRoot == null || component == null) return;
+            component.MigrateSerializedValuesIfNeeded();
 
             var animator = avatarRoot.GetComponentInChildren<Animator>(true);
             if (!IsValidHumanoid(animator))
@@ -121,11 +122,9 @@ namespace YoridoriModifiers.ArmPatch
                 upperArmTwistAxis = component.upperArmRollAxis,
                 upperArmTwistWeight = component.upperArmRollWeight,
                 enableForearmFix = component.enableForearmFix,
-                forearmThicknessRootScale = component.forearmThicknessRootScale,
-                forearmThicknessTipScale = component.forearmThicknessTipScale,
-                forearmWidthRootScale = component.forearmWidthRootScale,
-                forearmWidthTipScale = component.forearmWidthTipScale,
-                forearmRootRollOffset = component.forearmRootRollOffset,
+                forearmElbowScale = component.forearmElbowScale,
+                forearmWristScale = component.forearmWristScale,
+                forearmElbowRollOffset = component.forearmElbowRollOffset,
                 forearmTwistAxis = component.forearmRollAxis,
                 forearmPitchAxis = component.forearmPitchAxis,
                 forearmTwistWeight = component.forearmRollWeight,
@@ -272,11 +271,9 @@ namespace YoridoriModifiers.ArmPatch
                 animator.GetBoneTransform(HumanBodyBones.LeftThumbProximal),
                 animator.GetBoneTransform(HumanBodyBones.LeftThumbIntermediate),
                 animator.GetBoneTransform(HumanBodyBones.LeftLittleProximal),
-                settings.forearmThicknessRootScale,
-                settings.forearmThicknessTipScale,
-                settings.forearmWidthRootScale,
-                settings.forearmWidthTipScale,
-                settings.forearmRootRollOffset,
+                settings.forearmElbowScale,
+                settings.forearmWristScale,
+                settings.forearmElbowRollOffset,
                 settings.forearmTwistAxis,
                 settings.forearmPitchAxis,
                 settings.forearmTwistWeight,
@@ -296,11 +293,9 @@ namespace YoridoriModifiers.ArmPatch
                 animator.GetBoneTransform(HumanBodyBones.RightThumbProximal),
                 animator.GetBoneTransform(HumanBodyBones.RightThumbIntermediate),
                 animator.GetBoneTransform(HumanBodyBones.RightLittleProximal),
-                settings.forearmThicknessRootScale,
-                settings.forearmThicknessTipScale,
-                settings.forearmWidthRootScale,
-                settings.forearmWidthTipScale,
-                settings.forearmRootRollOffset,
+                settings.forearmElbowScale,
+                settings.forearmWristScale,
+                settings.forearmElbowRollOffset,
                 settings.forearmTwistAxis,
                 settings.forearmPitchAxis,
                 settings.forearmTwistWeight,
@@ -321,11 +316,9 @@ namespace YoridoriModifiers.ArmPatch
             Transform originalThumbProximal,
             Transform originalThumbIntermediate,
             Transform originalLittleProximal,
-            float thicknessRootScale,
-            float thicknessTipScale,
-            float widthRootScale,
-            float widthTipScale,
-            float rootRollOffset,
+            Vector3 elbowScale,
+            Vector3 wristScale,
+            float elbowRollOffset,
             TwistAxis forearmTwistAxis,
             TwistAxis forearmPitchAxis,
             float forearmTwistWeight,
@@ -368,9 +361,7 @@ namespace YoridoriModifiers.ArmPatch
                     originalLowerArm
                 );
 
-                float avgThickness = (thicknessRootScale + thicknessTipScale) * 0.5f;
-                float avgWidth = (widthRootScale + widthTipScale) * 0.5f;
-                forearmDef.localScale = BuildForearmScaleVector(forearmTwistAxis, avgThickness, avgWidth);
+                forearmDef.localScale = (elbowScale + wristScale) * 0.5f;
 
                 if (originalHand == null)
                 {
@@ -460,12 +451,9 @@ namespace YoridoriModifiers.ArmPatch
                     verboseLog);
                 ApplyForearmTwistBoneScales(
                     twistBones,
-                    forearmTwistAxis,
-                    thicknessRootScale,
-                    thicknessTipScale,
-                    widthRootScale,
-                    widthTipScale);
-                ApplyRootRollOffsetToTwistAim(twistAim, constraintMode, forearmTwistAxis, rootRollOffset);
+                    elbowScale,
+                    wristScale);
+                ApplyElbowRollOffsetToTwistAim(twistAim, constraintMode, forearmTwistAxis, elbowRollOffset);
 
                 if (verboseLog)
                 {
@@ -964,24 +952,6 @@ namespace YoridoriModifiers.ArmPatch
 
         // Misc helpers
 
-        private static Vector3 BuildForearmScaleVector(TwistAxis twistAxis, float thicknessScale, float widthScale)
-        {
-            switch (twistAxis)
-            {
-                case TwistAxis.X:
-                    return new Vector3(1f, thicknessScale, widthScale);
-
-                case TwistAxis.Y:
-                    return new Vector3(widthScale, 1f, thicknessScale);
-
-                case TwistAxis.Z:
-                    return new Vector3(widthScale, thicknessScale, 1f);
-
-                default:
-                    return new Vector3(1f, thicknessScale, widthScale);
-            }
-        }
-
         private static Vector3 MirrorOffsetForRight(Vector3 leftLikeOffset)
         {
             return new Vector3(leftLikeOffset.x, -leftLikeOffset.y, -leftLikeOffset.z);
@@ -1177,27 +1147,22 @@ namespace YoridoriModifiers.ArmPatch
 
         private static void ApplyForearmTwistBoneScales(
             List<Transform> twistBones,
-            TwistAxis forearmTwistAxis,
-            float thicknessRootScale,
-            float thicknessTipScale,
-            float widthRootScale,
-            float widthTipScale)
+            Vector3 elbowScale,
+            Vector3 wristScale)
         {
             if (twistBones == null || twistBones.Count == 0) return;
             int n = twistBones.Count;
             for (int i = 0; i < n; i++)
             {
                 float t = n <= 1 ? 1f : (float)i / (n - 1);
-                float thickness = Mathf.Lerp(thicknessRootScale, thicknessTipScale, t);
-                float width = Mathf.Lerp(widthRootScale, widthTipScale, t);
                 if (twistBones[i] != null)
                 {
-                    twistBones[i].localScale = BuildForearmScaleVector(forearmTwistAxis, thickness, width);
+                    twistBones[i].localScale = Vector3.Lerp(elbowScale, wristScale, t);
                 }
             }
         }
 
-        private static void ApplyRootRollOffsetToTwistAim(Transform twistAim, ConstraintMode constraintMode, TwistAxis rollAxis, float offset)
+        private static void ApplyElbowRollOffsetToTwistAim(Transform twistAim, ConstraintMode constraintMode, TwistAxis rollAxis, float offset)
         {
             if (twistAim == null) return;
             var euler = Vector3.zero;
@@ -1296,6 +1261,7 @@ namespace YoridoriModifiers.ArmPatch
                 Debug.LogWarning("[YM Arm Patch] Multiple components found. Preferred component will be used.");
             }
             var c = SelectPreferredComponent(components, avatarRoot);
+            c.MigrateSerializedValuesIfNeeded();
 
             return new AggregatedSettings
             {
@@ -1305,11 +1271,9 @@ namespace YoridoriModifiers.ArmPatch
                 upperArmTwistAxis = c.upperArmRollAxis,
                 upperArmTwistWeight = c.upperArmRollWeight,
                 enableForearmFix = c.enableForearmFix,
-                forearmThicknessRootScale = c.forearmThicknessRootScale,
-                forearmThicknessTipScale = c.forearmThicknessTipScale,
-                forearmWidthRootScale = c.forearmWidthRootScale,
-                forearmWidthTipScale = c.forearmWidthTipScale,
-                forearmRootRollOffset = c.forearmRootRollOffset,
+                forearmElbowScale = c.forearmElbowScale,
+                forearmWristScale = c.forearmWristScale,
+                forearmElbowRollOffset = c.forearmElbowRollOffset,
                 forearmTwistAxis = c.forearmRollAxis,
                 forearmPitchAxis = c.forearmPitchAxis,
                 forearmTwistWeight = c.forearmRollWeight,
@@ -1375,11 +1339,9 @@ namespace YoridoriModifiers.ArmPatch
             public TwistAxis upperArmTwistAxis;
             public float upperArmTwistWeight;
             public bool enableForearmFix;
-            public float forearmThicknessRootScale;
-            public float forearmThicknessTipScale;
-            public float forearmWidthRootScale;
-            public float forearmWidthTipScale;
-            public float forearmRootRollOffset;
+            public Vector3 forearmElbowScale;
+            public Vector3 forearmWristScale;
+            public float forearmElbowRollOffset;
             public TwistAxis forearmTwistAxis;
             public TwistAxis forearmPitchAxis;
             public float forearmTwistWeight;

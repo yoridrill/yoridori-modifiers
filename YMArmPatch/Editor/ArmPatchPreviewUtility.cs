@@ -375,11 +375,10 @@ namespace YoridoriModifiers.ArmPatch
             dst.upperArmRollAxis = src.upperArmRollAxis;
             dst.upperArmRollWeight = src.upperArmRollWeight;
             dst.enableForearmFix = src.enableForearmFix;
-            dst.forearmThicknessRootScale = src.forearmThicknessRootScale;
-            dst.forearmThicknessTipScale = src.forearmThicknessTipScale;
-            dst.forearmWidthRootScale = src.forearmWidthRootScale;
-            dst.forearmWidthTipScale = src.forearmWidthTipScale;
-            dst.forearmRootRollOffset = src.forearmRootRollOffset;
+            src.MigrateSerializedValuesIfNeeded();
+            dst.forearmElbowScale = src.forearmElbowScale;
+            dst.forearmWristScale = src.forearmWristScale;
+            dst.forearmElbowRollOffset = src.forearmElbowRollOffset;
             dst.forearmRollAxis = src.forearmRollAxis;
             dst.forearmPitchAxis = src.forearmPitchAxis;
             dst.forearmRollWeight = src.forearmRollWeight;

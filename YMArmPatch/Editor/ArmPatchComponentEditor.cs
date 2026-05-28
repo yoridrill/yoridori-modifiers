@@ -49,11 +49,9 @@ namespace YoridoriModifiers.ArmPatch
         private SerializedProperty upperArmRollWeightProp;
 
         private SerializedProperty enableForearmFixProp;
-        private SerializedProperty forearmThicknessRootScaleProp;
-        private SerializedProperty forearmThicknessTipScaleProp;
-        private SerializedProperty forearmWidthRootScaleProp;
-        private SerializedProperty forearmWidthTipScaleProp;
-        private SerializedProperty forearmRootRollOffsetProp;
+        private SerializedProperty forearmElbowScaleProp;
+        private SerializedProperty forearmWristScaleProp;
+        private SerializedProperty forearmElbowRollOffsetProp;
         private SerializedProperty forearmRollAxisProp;
         private SerializedProperty forearmPitchAxisProp;
         private SerializedProperty forearmRollWeightProp;
@@ -86,11 +84,14 @@ namespace YoridoriModifiers.ArmPatch
             upperArmRollWeightProp = serializedObject.FindProperty("upperArmRollWeight");
 
             enableForearmFixProp = serializedObject.FindProperty("enableForearmFix");
-            forearmThicknessRootScaleProp = serializedObject.FindProperty("forearmThicknessRootScale");
-            forearmThicknessTipScaleProp = serializedObject.FindProperty("forearmThicknessTipScale");
-            forearmWidthRootScaleProp = serializedObject.FindProperty("forearmWidthRootScale");
-            forearmWidthTipScaleProp = serializedObject.FindProperty("forearmWidthTipScale");
-            forearmRootRollOffsetProp = serializedObject.FindProperty("forearmRootRollOffset");
+            foreach (var t in targets)
+            {
+                if (t is ArmPatchComponent component) component.MigrateSerializedValuesIfNeeded();
+            }
+
+            forearmElbowScaleProp = serializedObject.FindProperty("forearmElbowScale");
+            forearmWristScaleProp = serializedObject.FindProperty("forearmWristScale");
+            forearmElbowRollOffsetProp = serializedObject.FindProperty("forearmElbowRollOffset");
             forearmRollAxisProp = serializedObject.FindProperty("forearmRollAxis");
             forearmPitchAxisProp = serializedObject.FindProperty("forearmPitchAxis");
             forearmRollWeightProp = serializedObject.FindProperty("forearmRollWeight");
@@ -293,8 +294,6 @@ namespace YoridoriModifiers.ArmPatch
 
         private void DrawForearmRows(ArmPatchComponent component)
         {
-            var forearmScaleAxes = GetForearmScaleAxisLabels();
-
             Rect rect = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
 
             Rect toggleRect = new Rect(rect.x, rect.y, ToggleWidth, rect.height);
@@ -327,18 +326,18 @@ namespace YoridoriModifiers.ArmPatch
                 DrawForearmPitchAxisRow(component); // pitch after roll in requested order
                 DrawTwistBoneCountRow();
                 DrawTwistTargetRow(component);
-                DrawRootTipScaleRow(T($"Thickness ({forearmScaleAxes.thicknessAxis})", $"Thickness ({forearmScaleAxes.thicknessAxis})"), forearmThicknessRootScaleProp, forearmThicknessTipScaleProp, T("前腕の厚み補正。Twist Bone Countが0のときは平均値が使用されます。", "Forearm thickness correction. When Twist Bone Count is 0, the average value is used."));
-                DrawRootTipScaleRow(T($"Width ({forearmScaleAxes.widthAxis})", $"Width ({forearmScaleAxes.widthAxis})"), forearmWidthRootScaleProp, forearmWidthTipScaleProp, T("前腕の幅補正。Twist Bone Countが0のときは平均値が使用されます。", "Forearm width correction. When Twist Bone Count is 0, the average value is used."));
                 using (new EditorGUI.DisabledScope(forearmTwistBoneCountProp.intValue == 0))
                 {
                     DrawSubRowSlider(
-                        T("Root Roll Offset", "Root Roll Offset"),
-                        forearmRootRollOffsetProp,
+                        T("Elbow Roll Offset", "Elbow Roll Offset"),
+                        forearmElbowRollOffsetProp,
                         -90f,
                         90f,
                         T("肘付近の初期姿勢を補正できます。 VRoidの着物の場合はTwist Targetで肌を指定したあと、このOffsetを-90にすると袖を下に向けることができます。", "Can correct initial posture near the elbow. For VRoid kimono, after selecting skin in Twist Target, setting this offset to -90 can point sleeves downward.")
                     );
                 }
+                DrawScaleRow(T("Elbow Scale", "Elbow Scale"), forearmElbowScaleProp, T("肘側の前腕スケール。Twist Bone Countが0のときはWrist Scaleとの平均値が使用されます。", "Forearm scale at the elbow side. When Twist Bone Count is 0, the average with Wrist Scale is used."));
+                DrawScaleRow(T("Wrist Scale", "Wrist Scale"), forearmWristScaleProp, T("手首側の前腕スケール。Twist Bone Countが0のときはElbow Scaleとの平均値が使用されます。", "Forearm scale at the wrist side. When Twist Bone Count is 0, the average with Elbow Scale is used."));
             }
         }
 
@@ -366,7 +365,7 @@ namespace YoridoriModifiers.ArmPatch
             }
         }
 
-        private void DrawRootTipScaleRow(string label, SerializedProperty rootProp, SerializedProperty tipProp, string tooltip)
+        private void DrawScaleRow(string label, SerializedProperty property, string tooltip)
         {
             Rect rect = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
             Rect spacerRect = new Rect(rect.x, rect.y, ToggleWidth, rect.height);
@@ -375,16 +374,7 @@ namespace YoridoriModifiers.ArmPatch
             Rect valueRect = new Rect(subLabelRect.xMax + 4f, rect.y, rect.xMax - (subLabelRect.xMax + 4f), rect.height);
             EditorGUI.LabelField(mainLabelRect, GUIContent.none);
             EditorGUI.LabelField(subLabelRect, new GUIContent(label, tooltip));
-
-            float half = (valueRect.width - 8f) * 0.5f;
-            Rect rootLabelRect = new Rect(valueRect.x, valueRect.y, 34f, valueRect.height);
-            Rect rootFieldRect = new Rect(rootLabelRect.xMax, valueRect.y, half - 34f, valueRect.height);
-            Rect tipLabelRect = new Rect(valueRect.x + half + 8f, valueRect.y, 24f, valueRect.height);
-            Rect tipFieldRect = new Rect(tipLabelRect.xMax, valueRect.y, half - 24f, valueRect.height);
-            EditorGUI.LabelField(rootLabelRect, "Root");
-            rootProp.floatValue = EditorGUI.FloatField(rootFieldRect, rootProp.floatValue);
-            EditorGUI.LabelField(tipLabelRect, "Tip");
-            tipProp.floatValue = EditorGUI.FloatField(tipFieldRect, tipProp.floatValue);
+            EditorGUI.PropertyField(valueRect, property, GUIContent.none);
         }
 
         private void EnsurePitchAxis(ArmPatchComponent component)
@@ -688,23 +678,6 @@ namespace YoridoriModifiers.ArmPatch
             if (EditorGUI.EndChangeCheck())
             {
                 buildOrderProp.enumValueIndex = next;
-            }
-        }
-
-        private (string thicknessAxis, string widthAxis) GetForearmScaleAxisLabels()
-        {
-            var axis = (TwistAxis)forearmRollAxisProp.enumValueIndex;
-
-            switch (axis)
-            {
-                case TwistAxis.X:
-                    return ("Y", "Z");
-                case TwistAxis.Y:
-                    return ("Z", "X");
-                case TwistAxis.Z:
-                    return ("Y", "X");
-                default:
-                    return ("Y", "Z");
             }
         }
 

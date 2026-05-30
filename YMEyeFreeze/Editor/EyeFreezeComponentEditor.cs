@@ -48,8 +48,8 @@ namespace YoridoriModifiers.EyeFreeze
 
             EditorGUILayout.HelpBox(
                 T(
-                    "目ボーンを初期状態で固定するモードを Exメニューに追加します。",
-                    "Adds an Ex Menu mode that returns eye bones to their initial rotation."),
+                    "目ボーンを初期状態で固定するモードを Exメニューに追加します。 コンストレイントが2つ増えます。",
+                    "Adds an Ex Menu mode that returns eye bones to their initial rotation. Two more constraints will be added."),
                 MessageType.Info);
 
             DrawPlacementStatus(component);
@@ -86,7 +86,7 @@ namespace YoridoriModifiers.EyeFreeze
             {
                 EditorGUILayout.HelpBox(
                     T(
-                        "アバター配下に追加してください。VRCAvatarDescriptor が見つかりません。",
+                        "アバター配下に追加してください。 VRCAvatarDescriptorが見つかりません。",
                         "Add this component under an avatar. VRCAvatarDescriptor was not found."),
                     MessageType.Warning);
                 return;
@@ -100,9 +100,9 @@ namespace YoridoriModifiers.EyeFreeze
                 var thisWillBeUsed = selected == component;
                 EditorGUILayout.HelpBox(
                     thisWillBeUsed
-                        ? T("複数箇所で設定されています。ビルド時はこのコンポーネントの設定値が使用されます。",
+                        ? T("複数箇所で設定されています。 ビルド時はこのコンポーネントの設定値が使用されます。",
                             "This component is configured in multiple places. The values on this component will be used for the build.")
-                        : T("複数箇所で設定されています。ビルド時、このコンポーネントでの設定は無視されます。",
+                        : T("複数箇所で設定されています。 ビルド時、このコンポーネントでの設定は無視されます。",
                             "This component is configured in multiple places. The values on this component will be ignored for the build."),
                     MessageType.Warning);
                 return;

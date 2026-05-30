@@ -185,7 +185,7 @@ namespace YoridoriModifiers.ArmPatch
             if (enableThumbFixProp.boolValue) constraintCount += 6;
 
             string message = T(
-                $"・肘周辺がわずかに歪む場合があります。\n・現在の設定で増える Constraint 数: {constraintCount} 個",
+                $"・肘周辺がわずかに歪む場合があります。\n・現在の設定で増えるコンストレイント数: {constraintCount} 個",
                 $"• Elbow area may deform slightly.\n• Additional constraints with current settings: {constraintCount}"
             );
 
@@ -248,7 +248,7 @@ namespace YoridoriModifiers.ArmPatch
                     T("Position Offset", "Position Offset"),
                     shoulderPositionOffsetProp,
                     T(
-                        "肩ボーンの位置オフセット。 Yに0.01ほど入れるとVRM Converter for VRChatと近い結果になります。",
+                        "肩ボーンの位置オフセット。 Yに0.01ほど入れると VRM Converter for VRChat と近い結果になります。",
                         "Local position offset relative to the shoulder bone."
                     )
                 );
@@ -257,7 +257,7 @@ namespace YoridoriModifiers.ArmPatch
                     T("Euler Offset", "Euler Offset"),
                     shoulderEulerOffsetProp,
                     T(
-                        "肩に加える回転オフセット。右肩は内部で自動反転して適用されます。",
+                        "肩に加える回転オフセット。 右肩は内部で自動反転して適用されます。",
                         "Rotation offset applied to shoulders. The right shoulder is mirrored internally."
                     )
                 );
@@ -307,7 +307,7 @@ namespace YoridoriModifiers.ArmPatch
                 new GUIContent(
                     T("Forearm Fix", "Forearm Fix"),
                     T(
-                        "前腕の見た目骨にスケール補正と手首 twist 補正を同時に適用します。",
+                        "前腕の見た目骨に、 スケール補正とツイスト補正を同時に適用します。",
                         "Applies both scale correction and forearm twist correction to the forearm display bone."
                     )
                 )
@@ -333,11 +333,11 @@ namespace YoridoriModifiers.ArmPatch
                         forearmElbowRollOffsetProp,
                         -90f,
                         90f,
-                        T("肘付近の初期姿勢を補正できます。 VRoidの着物の場合はTwist Targetで肌を指定したあと、このOffsetを-90にすると袖を下に向けることができます。", "Can correct initial posture near the elbow. For VRoid kimono, after selecting skin in Twist Target, setting this offset to -90 can point sleeves downward.")
+                        T("肘付近の初期姿勢を補正できます。 VRoid製着物の場合は Twist Target で肌を指定して、 Offsetを-70ほどにすると、袖が下を向きます。", "Can correct initial posture near the elbow. For VRoid kimono, after selecting skin in Twist Target, setting this offset to -90 can point sleeves downward.")
                     );
                 }
-                DrawScaleRow(T("Elbow Scale", "Elbow Scale"), forearmElbowScaleProp, T("肘側の前腕スケール。Twist Bone Countが0のときはWrist Scaleとの平均値が使用されます。", "Forearm scale at the elbow side. When Twist Bone Count is 0, the average with Wrist Scale is used."));
-                DrawScaleRow(T("Wrist Scale", "Wrist Scale"), forearmWristScaleProp, T("手首側の前腕スケール。Twist Bone Countが0のときはElbow Scaleとの平均値が使用されます。", "Forearm scale at the wrist side. When Twist Bone Count is 0, the average with Elbow Scale is used."));
+                DrawScaleRow(T("Elbow Scale", "Elbow Scale"), forearmElbowScaleProp, T("肘側の前腕スケール。\nTwist Bone Count が0のときは、 Wrist Scale との平均値が使用されます。", "Forearm scale at the elbow side. When Twist Bone Count is 0, the average with Wrist Scale is used."));
+                DrawScaleRow(T("Wrist Scale", "Wrist Scale"), forearmWristScaleProp, T("手首側の前腕スケール。\nTwist Bone Count が0のときは、 Elbow Scale との平均値が使用されます。", "Forearm scale at the wrist side. When Twist Bone Count is 0, the average with Elbow Scale is used."));
             }
         }
 
@@ -350,7 +350,7 @@ namespace YoridoriModifiers.ArmPatch
             Rect subLabelRect = new Rect(mainLabelRect.xMax + Gap, rect.y, SubLabelWidth, rect.height);
             Rect valueRect = new Rect(subLabelRect.xMax + 4f, rect.y, rect.xMax - (subLabelRect.xMax + 4f), rect.height);
             EditorGUI.LabelField(mainLabelRect, GUIContent.none);
-            EditorGUI.LabelField(subLabelRect, new GUIContent(T("Pitch Axis", "Pitch Axis"), T("手首を大きく反らせると前腕が急激にねじれる場合は、この軸を変えると改善します。Roll Axisと同じ軸は選べず、選ぼうとすると自動で適切な軸へ変更します。", "If the forearm twists too sharply when bending the wrist far back, changing this axis can help. You cannot choose the same axis as Roll Axis; if you try, it is automatically changed to an appropriate axis.")));
+            EditorGUI.LabelField(subLabelRect, new GUIContent(T("Pitch Axis", "Pitch Axis"), T("手首を大きく反らせると前腕がねじれる場合は、 この軸を変えると改善します。\nRoll Axis と同じ軸は選べず、 選ぼうとすると自動で適切な軸へ変更します。", "If the forearm twists too sharply when bending the wrist far back, changing this axis can help. You cannot choose the same axis as Roll Axis; if you try, it is automatically changed to an appropriate axis.")));
 
             int roll = forearmRollAxisProp.enumValueIndex;
             var labels = new[] { "X", "Y", "Z" };
@@ -413,7 +413,7 @@ namespace YoridoriModifiers.ArmPatch
                 thumbEulerOffsetProp,
                 T("Euler Offset", "Euler Offset"),
                 T(
-                    "親指全体に加える回転オフセット。右手は内部で自動反転して適用されます。VRM0.0経由のVRoidは(0,-15,-15)がおすすめです。",
+                    "親指全体に加える回転オフセット。 右手は内部で自動反転して適用されます。 VRM0.0経由のVRoidは(0,-15,-15)がおすすめです。",
                     "Shared thumb rotation offset. Right side is mirrored internally."
                 )
             );
@@ -427,7 +427,7 @@ namespace YoridoriModifiers.ArmPatch
             int selected = Mathf.Max(0, options.IndexOf(string.IsNullOrEmpty(forearmSkinMaterialNameProp.stringValue) ? "Auto" : forearmSkinMaterialNameProp.stringValue));
             using (new EditorGUI.DisabledScope(forearmTwistBoneCountProp.intValue == 0))
             {
-                int next = DrawSubRowPopup(T("Twist Target", "Twist Target"), options.ToArray(), selected, T("Autoの場合、前腕関連のウェイトが割り当てられた部位を全てねじります。 肌を指定すると残りの服はねじられず固定されるため、着物袖などが手首に振り回されなくなりますが、手袋などが乱れます。", "Auto twists all forearm-related weighted parts; selecting skin fixes non-skin clothes but may disturb gloves."));
+                int next = DrawSubRowPopup(T("Twist Target", "Twist Target"), options.ToArray(), selected, T("Autoの場合、 前腕関連のウェイトのある部位を全てねじります。 肌を指定すると残りの服は固定されるため、 着物袖などが手首に振り回されなくなりますが、 手袋などが乱れます。", "Auto twists all forearm-related weighted parts; selecting skin fixes non-skin clothes but may disturb gloves."));
                 forearmSkinMaterialNameProp.stringValue = options[next];
             }
             if (forearmTwistBoneCountProp.intValue != 0 && forearmSkinMaterialNameProp.stringValue != "Auto" && !HasForearmWeightsOnMaterial(component, forearmSkinMaterialNameProp.stringValue))

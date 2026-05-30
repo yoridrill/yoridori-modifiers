@@ -442,7 +442,7 @@ namespace YoridoriModifiers.MToonToLilToon
                     enableEyebrowStencilProp,
                     TT(
                         "眉ステンシル",
-                        "髪の手前に眉を表示します。このツールでは簡略化のためCutoutに変更します。",
+                        "髪の手前に眉を表示します。 このツールでは簡略化のためCutoutに変更します。",
                         "Eyebrow Stencil",
                         "Shows eyebrows in front of hair. This tool switches it to Cutout for simplicity."),
                     showToggle: true);

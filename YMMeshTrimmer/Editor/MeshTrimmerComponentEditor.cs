@@ -382,22 +382,22 @@ public class MeshTrimmerComponentEditor : Editor
             case "alphaThreshold":
                 return new GUIContent(
                     T("アルファしきい値", "Alpha Threshold"),
-                    T("この値以上のアルファを残す領域として扱います。テクスチャの塗り足し色には影響しません。",
-                      "Pixels with alpha at or above this value are treated as kept. This does not affect texture fill colors."));
+                    T("この値以上のアルファを残す領域として扱います。",
+                      "Pixels with alpha at or above this value are treated as kept."));
             case "maskDilatePixels":
                 return new GUIContent(
                     T("マスク拡張 (px)", "Mask Expansion (px)"),
-                    T("残す領域をピクセル単位で外側に広げます。境界が削れすぎる場合に大きくします。",
+                    T("残す領域をピクセル単位で外側に広げます。 境界が削れすぎる場合に大きくします。",
                       "Expands the kept mask outward in pixels. Increase this when edges are trimmed too aggressively."));
             case "maskCleanupPixels":
                 return new GUIContent(
                     T("マスククリーンアップ (px)", "Mask Cleanup (px)"),
-                    T("小さな孤立領域の削除、隙間埋め、小さい穴埋めをまとめて調整します。",
+                    T("小さな孤立領域の削除、隙間埋め、 小さい穴埋めをまとめて調整します。",
                       "Controls small island removal, gap closing, and small hole filling together."));
             case "minimumFragmentSizePermille":
                 return new GUIContent(
                     T("微小ポリゴン除去 (‰)", "Minimum Fragment Size (‰)"),
-                    T("トリミング後に残る極端に小さい破片を削除します。大きくすると細い部分も削れやすくなります。",
+                    T("トリミング後に残る極端に小さい破片を削除します。 大きくすると細い部分も削れやすくなります。",
                       "Removes tiny fragments after trimming. Higher values can also remove narrow details."));
             case "minIntersectionT":
                 return new GUIContent(T("最小交点t", "Min Intersection t"));

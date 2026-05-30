@@ -55,7 +55,13 @@ namespace YoridoriModifiers.EyeFreeze
             DrawPlacementStatus(component);
             EditorGUILayout.Space(4);
 
-            EditorGUILayout.PropertyField(menuNameProp, new GUIContent(T("メニュー表示名", "Menu Name")));
+            EditorGUILayout.PropertyField(
+                menuNameProp,
+                TT(
+                    "メニュー表示名",
+                    "VRChatのExメニューに追加されるトグルの表示名です。",
+                    "Menu Name",
+                    "Name of the toggle added to the VRChat Ex Menu."));
             EditorGUILayout.Space(4);
             DrawAdvancedSection();
 
@@ -145,15 +151,40 @@ namespace YoridoriModifiers.EyeFreeze
 
             using (new EditorGUI.IndentLevelScope())
             {
-                EditorGUILayout.PropertyField(parameterNameProp, new GUIContent(T("パラメータ名", "Parameter Name")));
-                EditorGUILayout.PropertyField(savedProp, new GUIContent(T("Saved", "Saved")));
-                EditorGUILayout.PropertyField(syncedProp, new GUIContent(T("Synced", "Synced")));
+                EditorGUILayout.PropertyField(
+                    parameterNameProp,
+                    TT(
+                        "パラメータ名",
+                        "Expression Parametersに追加するBool名です。 既存のメニューやAnimatorと連携する場合だけ変更します。",
+                        "Parameter Name",
+                        "Bool name added to VRChat Expression Parameters. Change this only when linking with existing menus or animators."));
+                EditorGUILayout.PropertyField(
+                    savedProp,
+                    TT(
+                        "保存",
+                        "ON/OFF状態をVRChatに保存し、 アバター再読み込み後も維持します。",
+                        "Saved",
+                        "Saves the ON/OFF state in VRChat so it persists after reloading the avatar."));
+                EditorGUILayout.PropertyField(
+                    syncedProp,
+                    TT(
+                        "同期",
+                        "ON/OFF状態を他ユーザーにも同期します。 ローカルで使う場合はOFFにします。",
+                        "Synced",
+                        "Syncs the ON/OFF state to other users. Disable this for local-only use."));
             }
         }
 
         private string T(string ja, string en)
         {
             return language == Language.Japanese ? ja : en;
+        }
+
+        private GUIContent TT(string ja, string jaTooltip, string en, string enTooltip)
+        {
+            return language == Language.Japanese
+                ? new GUIContent(ja, jaTooltip)
+                : new GUIContent(en, enTooltip);
         }
     }
 }

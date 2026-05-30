@@ -52,9 +52,9 @@ public class MeshTrimmerComponent : MonoBehaviour, IEditorOnly
     [Min(0)] public int maskDilatePixels = 2;
     [Min(0)] public int maskCleanupPixels = 2;
 
-    [Range(0f, 1f)] public float minIntersectionT = 0.02f;
+    [HideInInspector] [Range(0f, 1f)] public float minIntersectionT = 0.02f;
 
-    [Range(0f, 1f)] public float maxIntersectionT = 0.98f;
+    [HideInInspector] [Range(0f, 1f)] public float maxIntersectionT = 0.98f;
 
     [Range(0.01f, 100.0f)] public float minimumFragmentSizePermille = 0.2f;
 

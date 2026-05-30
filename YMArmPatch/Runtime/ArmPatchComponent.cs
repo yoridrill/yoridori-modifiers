@@ -89,8 +89,7 @@ namespace YoridoriModifiers.ArmPatch
         public float forearmRollWeight = 1f;
 
 
-        [Tooltip("Legacy type setting. Twist target is controlled by Twist Target UI.")]
-        [FormerlySerializedAs("wristTwistBoneType")]
+        [HideInInspector, FormerlySerializedAs("wristTwistBoneType")]
         public ForearmTwistBoneType forearmTwistBoneType = ForearmTwistBoneType.None;
 
         [Tooltip("Number of forearm twist bones to use.")]

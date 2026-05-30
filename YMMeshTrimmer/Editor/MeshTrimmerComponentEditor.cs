@@ -399,14 +399,6 @@ public class MeshTrimmerComponentEditor : Editor
                     T("微小ポリゴン除去 (‰)", "Minimum Fragment Size (‰)"),
                     T("トリミング後に残る極端に小さい破片を削除します。 大きくすると細い部分も削れやすくなります。",
                       "Removes tiny fragments after trimming. Higher values can also remove narrow details."));
-            case "minIntersectionT":
-                return new GUIContent(T("最小交点t", "Min Intersection t"));
-            case "maxIntersectionT":
-                return new GUIContent(T("最大交点t", "Max Intersection t"));
-            case "minTriangleUvArea":
-                return new GUIContent(T("最小UV三角形面積", "Min Triangle UV Area"));
-            case "minTriangleWorldArea":
-                return new GUIContent(T("最小3D三角形面積", "Min Triangle World Area"));
             default:
                 return new GUIContent(name);
         }

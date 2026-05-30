@@ -421,19 +421,8 @@ namespace YoridoriModifiers.MToonToLilToon
                 SetIfExists(destination, "_ShadowBlur", 1f - toony);
             }
 
-            if (source.HasProperty("_ShadingShiftTex"))
-            {
-                var shiftTex = source.GetTexture("_ShadingShiftTex");
-                SetTextureIfExists(destination, "_ShadowBorderMask", shiftTex);
-            }
-
-            if (source.HasProperty("_ShadingShiftTexScale") && destination.HasProperty("_ShadowBorder"))
-            {
-                // 1:1 対応先はないため、境界位置へ全体補正として反映する。
-                var scale = Mathf.Max(0f, source.GetFloat("_ShadingShiftTexScale"));
-                var current = destination.GetFloat("_ShadowBorder");
-                SetIfExists(destination, "_ShadowBorder", Mathf.Clamp01(current * scale));
-            }
+            // MToon10 _ShadingShiftTex needs an inverted strength mask in lilToon.
+            // Texture generation is handled by the editor processor, not the runtime mapper.
         }
 
         private static void ApplyShadeTextureMapping(Material source, Material destination, ConversionReport report)
@@ -551,15 +540,8 @@ namespace YoridoriModifiers.MToonToLilToon
                 useShadow = true;
             }
 
-            var receiveShadow = 1f;
-            if (source.HasProperty("_ReceiveShadowRate"))
-            {
-                receiveShadow = Mathf.Clamp01(source.GetFloat("_ReceiveShadowRate"));
-            }
-
             SetIfExists(destination, "_UseShadow", useShadow ? 1f : 0f);
-            SetIfExists(destination, "_ReceiveShadowRate", receiveShadow);
-            SetIfExists(destination, "_ShadowReceive", receiveShadow);
+            SetIfExists(destination, "_ShadowReceive", 1f);
             SetIfExists(destination, "_ShadowEnvStrength", 0.5f);
         }
 
@@ -567,24 +549,14 @@ namespace YoridoriModifiers.MToonToLilToon
         {
             if (source == null || destination == null || !IsLegacyMToon(source)) return;
 
-            var hasShadingGradeTexture = TryFindExistingProperty(source, new[] { "_ShadingGradeTexture" }, out var shadingGradeProp)
-                && !IsLikelyDummyTexture(source.GetTexture(shadingGradeProp));
+            var hasShadingGradeTexture = TryFindExistingProperty(source, new[] { "_ShadingGradeTexture" }, out var shadingGradeProp);
+            var shadingGradeTexture = hasShadingGradeTexture ? source.GetTexture(shadingGradeProp) : null;
+            hasShadingGradeTexture = shadingGradeTexture != null && !IsLikelyDummyTexture(shadingGradeTexture);
             if (hasShadingGradeTexture)
             {
-                SetTextureIfExists(destination, "_ShadowBorderMask", source.GetTexture(shadingGradeProp));
+                SetTextureIfExists(destination, "_ShadowBorderMask", shadingGradeTexture);
                 SetIfExists(destination, "_ShadowPostAO", 0f);
-
-                var rate = source.HasProperty("_ShadingGradeRate")
-                    ? Mathf.Clamp01(source.GetFloat("_ShadingGradeRate"))
-                    : 1f;
-                SetIfExists(destination, "_ShadowAOShift", new Color(rate, 1f - rate, rate, 1f - rate));
-            }
-
-            var hasReceiveShadowTexture = TryFindExistingProperty(source, new[] { "_ReceiveShadowTexture" }, out var receiveShadowProp)
-                && !IsLikelyDummyTexture(source.GetTexture(receiveShadowProp));
-            if (hasReceiveShadowTexture && !hasShadingGradeTexture)
-            {
-                SetTextureIfExists(destination, "_ShadowStrengthMask", source.GetTexture(receiveShadowProp));
+                SetIfExists(destination, "_ShadowAOShift", new Color(0.4f, 0.1f, 1f, 0f));
             }
         }
 

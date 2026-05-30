@@ -16,6 +16,7 @@ namespace YoridoriModifiers.MToonToLilToon
         {
             Color,
             LinearMask,
+            InvertedLinearMask,
             NormalMap,
         }
         internal enum ConversionRoute
@@ -422,6 +423,7 @@ namespace YoridoriModifiers.MToonToLilToon
                 var canMerge = selectedForMerge.Contains(source);
                 if (MToonToLilToonMapper.TryConvert(source, lilToonShader, globalOverrides, useToonStandardFallback, out var converted, report))
                 {
+                    ApplyMToon10ShadingShiftStrengthMask(source, converted, generatedAssetScopeId, renderer, report);
                     result.Add(converted);
                     report.ConvertedMaterialCount++;
                     if (canMerge)
@@ -634,7 +636,8 @@ namespace YoridoriModifiers.MToonToLilToon
             BakeOptionalAtlas(new[] { "_ShadowColorTex", "_Shadow1stColorTex" }, original, mergedIndices, mergedMaterial, new[] { "_ShadeTex", "_ShadeTexture", "_ShadeMap", "_ShadeMultiplyTexture", "_ShadeColorTexture" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.Color, verboseLog);
             BakeOptionalAtlas(new[] { "_EmissionMap" }, original, mergedIndices, mergedMaterial, new[] { "_EmissiveMap", "_EmissionMap" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.Color, verboseLog);
             BakeOptionalAtlas(new[] { "_BumpMap" }, original, mergedIndices, mergedMaterial, new[] { "_NormalMap", "_BumpMap" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.NormalMap, verboseLog);
-            BakeOptionalAtlas(new[] { "_ShadowBorderMask" }, original, mergedIndices, mergedMaterial, new[] { "_ShadingShiftTex", "_ShadingGradeTexture", "_ShadowBorderMask" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.LinearMask, verboseLog);
+            BakeOptionalAtlas(new[] { "_ShadowStrengthMask" }, original, mergedIndices, mergedMaterial, new[] { "_ShadingShiftTex" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.InvertedLinearMask, verboseLog);
+            BakeOptionalAtlas(new[] { "_ShadowBorderMask" }, original, mergedIndices, mergedMaterial, new[] { "_ShadingGradeTexture", "_ShadowBorderMask" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.LinearMask, verboseLog);
             BakeOptionalAtlas(new[] { "_OutlineTex", "_OutlineMask" }, original, mergedIndices, mergedMaterial, new[] { "_OutlineWidthTex", "_OutlineWidthTexture", "_OutlineWidthMultiplyTexture", "_OutlineMask" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.LinearMask, verboseLog);
             NormalizeMergedEmissionAndMatCapState(original, mergedIndices, mergedMaterial);
             ValidateMergedMaterialTextureReferences(mergedMaterial, report, verboseLog);
@@ -1176,6 +1179,54 @@ namespace YoridoriModifiers.MToonToLilToon
             return texture.width <= 8 && texture.height <= 8;
         }
 
+        private static void ApplyMToon10ShadingShiftStrengthMask(Material source, Material destination, string generatedAssetScopeId, Renderer renderer, ConversionReport report)
+        {
+            if (!IsMToon10Material(source) || destination == null) return;
+            if (!source.HasProperty("_ShadingShiftTex") || !destination.HasProperty("_ShadowStrengthMask")) return;
+
+            var texture = source.GetTexture("_ShadingShiftTex");
+            if (texture == null || IsLikelyDummyTexture(texture)) return;
+
+            var readable = ToReadableTextureWithTransform(
+                texture,
+                source.GetTextureScale("_ShadingShiftTex"),
+                source.GetTextureOffset("_ShadingShiftTex"));
+            if (readable == null)
+            {
+                report?.Warnings.Add(new ConversionWarning($"{source.name}: _ShadingShiftTex could not be baked as an inverted _ShadowStrengthMask."));
+                return;
+            }
+
+            InvertRgb(readable);
+            var saved = SaveGeneratedTexture(generatedAssetScopeId, renderer, destination, "_ShadowStrengthMask", readable);
+            destination.SetTexture("_ShadowStrengthMask", saved != null ? saved : CompressGeneratedAtlas(readable, "_ShadowStrengthMask"));
+            destination.SetTextureScale("_ShadowStrengthMask", Vector2.one);
+            destination.SetTextureOffset("_ShadowStrengthMask", Vector2.zero);
+            SetFloatIfAnyExists(destination, new[] { "_UseShadowMask", "_UseShadowStrengthMask" }, 1f);
+            SetFloatIfAnyExists(destination, new[] { "_ShadowMaskType" }, 0f);
+        }
+
+        private static bool IsMToon10Material(Material material)
+        {
+            if (material == null || material.shader == null) return false;
+            var shaderName = material.shader.name;
+            return shaderName == "VRM10/MToon10"
+                || shaderName == "VRM10/Universal Render Pipeline/MToon10";
+        }
+
+        private static void InvertRgb(Texture2D texture)
+        {
+            if (texture == null) return;
+            var pixels = texture.GetPixels();
+            for (var i = 0; i < pixels.Length; i++)
+            {
+                var p = pixels[i];
+                pixels[i] = new Color(1f - p.r, 1f - p.g, 1f - p.b, p.a);
+            }
+            texture.SetPixels(pixels);
+            texture.Apply(false, false);
+        }
+
         private static bool IsApproximatelyBlack(Color color)
         {
             const float epsilon = 0.001f;
@@ -1237,6 +1288,10 @@ namespace YoridoriModifiers.MToonToLilToon
                     LogBumpMapSample("source", SampleTextureCenterColor(texture), (texture as Texture2D)?.format.ToString() ?? "n/a", texture.name);
                 }
                 var readable = ToReadableTextureWithTransform(texture, scale, offset, bakeKind == TextureBakeKind.NormalMap);
+                if (bakeKind == TextureBakeKind.InvertedLinearMask && readable != null)
+                {
+                    InvertRgb(readable);
+                }
                 if (bakeKind == TextureBakeKind.NormalMap && readable != null)
                 {
                     ConvertPackedNormalTextureToRgbNormal(readable);
@@ -1312,6 +1367,11 @@ namespace YoridoriModifiers.MToonToLilToon
                 SetFloatIfAnyExists(mergedMaterial, new[] { "_BumpScale", "_NormalScale" }, 1f);
                 SetFloatIfAnyExists(mergedMaterial, new[] { "_UseBumpMap", "_UseNormalMap" }, 1f);
             }
+            else if (bakeKind == TextureBakeKind.InvertedLinearMask)
+            {
+                SetFloatIfAnyExists(mergedMaterial, new[] { "_UseShadowMask", "_UseShadowStrengthMask" }, 1f);
+                SetFloatIfAnyExists(mergedMaterial, new[] { "_ShadowMaskType" }, 0f);
+            }
         }
 
 
@@ -1357,10 +1417,37 @@ namespace YoridoriModifiers.MToonToLilToon
             return imported;
         }
 
+        private static Texture2D SaveGeneratedTexture(string scopeId, Renderer renderer, Material material, string propertyName, Texture2D texture)
+        {
+            if (texture == null) return null;
+            var rendererId = renderer != null ? SanitizePathSegment(renderer.name) : "Renderer";
+            var materialId = material != null ? SanitizePathSegment(material.name) : "Material";
+            var directory = $"Assets/YoridoriModifiers.MToonToLilToon.Generated/{SanitizePathSegment(scopeId)}";
+            EnsureAssetFolder(directory);
+            var propertyId = SanitizePathSegment(propertyName).TrimStart('_');
+            var fileName = $"{rendererId}_{materialId}_{propertyId}.png";
+            var assetPath = $"{directory}/{fileName}";
+            var png = texture.EncodeToPNG();
+            if (png == null || png.Length == 0) return null;
+            System.IO.File.WriteAllBytes(assetPath, png);
+            if (!System.IO.File.Exists(assetPath)) return null;
+
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+            AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+            var importer = AssetImporter.GetAtPath(assetPath) as TextureImporter;
+            if (importer != null)
+            {
+                ConfigureAtlasImporter(importer, propertyName, Mathf.Max(texture.width, texture.height));
+                importer.SaveAndReimport();
+            }
+            AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath);
+        }
+
         private static bool HasCacheableMergedAtlasTextures(Material mergedMaterial)
         {
             if (mergedMaterial == null) return false;
-            var textureProperties = new[] { "_MainTex", "_ShadowColorTex", "_Shadow1stColorTex", "_EmissionMap", "_BumpMap", "_ShadowBorderMask", "_OutlineTex", "_OutlineMask" };
+            var textureProperties = new[] { "_MainTex", "_ShadowColorTex", "_Shadow1stColorTex", "_EmissionMap", "_BumpMap", "_ShadowBorderMask", "_ShadowStrengthMask", "_OutlineTex", "_OutlineMask" };
             for (var i = 0; i < textureProperties.Length; i++)
             {
                 var property = textureProperties[i];
@@ -1376,7 +1463,7 @@ namespace YoridoriModifiers.MToonToLilToon
         private static void ValidateMergedMaterialTextureReferences(Material mergedMaterial, ConversionReport report, bool verboseLog)
         {
             if (mergedMaterial == null) return;
-            var propertyNames = new[] { "_MainTex", "_BumpMap", "_EmissionMap", "_ShadowColorTex", "_Shadow1stColorTex", "_ShadowBorderMask", "_OutlineTex", "_OutlineMask" };
+            var propertyNames = new[] { "_MainTex", "_BumpMap", "_EmissionMap", "_ShadowColorTex", "_Shadow1stColorTex", "_ShadowBorderMask", "_ShadowStrengthMask", "_OutlineTex", "_OutlineMask" };
             for (var i = 0; i < propertyNames.Length; i++)
             {
                 var propertyName = propertyNames[i];
@@ -1411,7 +1498,8 @@ namespace YoridoriModifiers.MToonToLilToon
             var isNormal = string.Equals(propertyName, "_BumpMap", System.StringComparison.OrdinalIgnoreCase);
             var isMask = string.Equals(propertyName, "_OutlineTex", System.StringComparison.OrdinalIgnoreCase)
                 || string.Equals(propertyName, "_OutlineMask", System.StringComparison.OrdinalIgnoreCase)
-                || string.Equals(propertyName, "_ShadowBorderMask", System.StringComparison.OrdinalIgnoreCase);
+                || string.Equals(propertyName, "_ShadowBorderMask", System.StringComparison.OrdinalIgnoreCase)
+                || string.Equals(propertyName, "_ShadowStrengthMask", System.StringComparison.OrdinalIgnoreCase);
             GeneratedTextureUtility.ConfigureGeneratedTextureImporter(importer, isNormal, isMask, true, maxTextureSize);
         }
 

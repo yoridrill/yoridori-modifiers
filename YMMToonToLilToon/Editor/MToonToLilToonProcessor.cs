@@ -423,7 +423,7 @@ namespace YoridoriModifiers.MToonToLilToon
                 var canMerge = selectedForMerge.Contains(source);
                 if (MToonToLilToonMapper.TryConvert(source, lilToonShader, globalOverrides, useToonStandardFallback, out var converted, report))
                 {
-                    ApplyMToon10ShadingShiftStrengthMask(source, converted, generatedAssetScopeId, renderer, report);
+                    ApplyMToon10ShadingShiftStrengthMask(source, converted, report);
                     result.Add(converted);
                     report.ConvertedMaterialCount++;
                     if (canMerge)
@@ -1179,7 +1179,7 @@ namespace YoridoriModifiers.MToonToLilToon
             return texture.width <= 8 && texture.height <= 8;
         }
 
-        private static void ApplyMToon10ShadingShiftStrengthMask(Material source, Material destination, string generatedAssetScopeId, Renderer renderer, ConversionReport report)
+        private static void ApplyMToon10ShadingShiftStrengthMask(Material source, Material destination, ConversionReport report)
         {
             if (!IsMToon10Material(source) || destination == null) return;
             if (!source.HasProperty("_ShadingShiftTex") || !destination.HasProperty("_ShadowStrengthMask")) return;
@@ -1198,8 +1198,7 @@ namespace YoridoriModifiers.MToonToLilToon
             }
 
             InvertRgb(readable);
-            var saved = SaveGeneratedTexture(generatedAssetScopeId, renderer, destination, "_ShadowStrengthMask", readable);
-            destination.SetTexture("_ShadowStrengthMask", saved != null ? saved : CompressGeneratedAtlas(readable, "_ShadowStrengthMask"));
+            destination.SetTexture("_ShadowStrengthMask", CompressGeneratedAtlas(readable, "_ShadowStrengthMask"));
             destination.SetTextureScale("_ShadowStrengthMask", Vector2.one);
             destination.SetTextureOffset("_ShadowStrengthMask", Vector2.zero);
             SetFloatIfAnyExists(destination, new[] { "_UseShadowMask", "_UseShadowStrengthMask" }, 1f);
@@ -1415,33 +1414,6 @@ namespace YoridoriModifiers.MToonToLilToon
             }
 
             return imported;
-        }
-
-        private static Texture2D SaveGeneratedTexture(string scopeId, Renderer renderer, Material material, string propertyName, Texture2D texture)
-        {
-            if (texture == null) return null;
-            var rendererId = renderer != null ? SanitizePathSegment(renderer.name) : "Renderer";
-            var materialId = material != null ? SanitizePathSegment(material.name) : "Material";
-            var directory = $"Assets/YoridoriModifiers.MToonToLilToon.Generated/{SanitizePathSegment(scopeId)}";
-            EnsureAssetFolder(directory);
-            var propertyId = SanitizePathSegment(propertyName).TrimStart('_');
-            var fileName = $"{rendererId}_{materialId}_{propertyId}.png";
-            var assetPath = $"{directory}/{fileName}";
-            var png = texture.EncodeToPNG();
-            if (png == null || png.Length == 0) return null;
-            System.IO.File.WriteAllBytes(assetPath, png);
-            if (!System.IO.File.Exists(assetPath)) return null;
-
-            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
-            AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
-            var importer = AssetImporter.GetAtPath(assetPath) as TextureImporter;
-            if (importer != null)
-            {
-                ConfigureAtlasImporter(importer, propertyName, Mathf.Max(texture.width, texture.height));
-                importer.SaveAndReimport();
-            }
-            AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
-            return AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath);
         }
 
         private static bool HasCacheableMergedAtlasTextures(Material mergedMaterial)

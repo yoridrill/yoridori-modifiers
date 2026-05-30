@@ -245,13 +245,22 @@ public static class AutoFillColorResolver
     {
         fillColor = Color.black;
         Color[] pixels;
+        Texture2D readable = null;
         try
         {
-            pixels = texture.GetPixels();
+            readable = TextureReadUtility.ToReadableTexture(texture);
+            pixels = readable.GetPixels();
         }
-        catch (UnityException)
+        catch (Exception ex) when (ex is UnityException || ex is ArgumentException)
         {
             return false;
+        }
+        finally
+        {
+            if (readable != null && readable != texture)
+            {
+                UnityEngine.Object.DestroyImmediate(readable);
+            }
         }
 
         int width = texture.width;

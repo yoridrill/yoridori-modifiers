@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -107,15 +108,29 @@ public static class TexturePostProcessProcessor
     {
         processed = null;
 
+        bool linear = false;
+#if UNITY_2020_1_OR_NEWER
+        linear = !source.isDataSRGB;
+#endif
+
         Color[] pixels;
+        Texture2D readable = null;
         try
         {
-            pixels = source.GetPixels();
+            readable = TextureReadUtility.ToReadableTexture(source, linear);
+            pixels = readable.GetPixels();
         }
-        catch (UnityException)
+        catch (Exception ex) when (ex is UnityException || ex is ArgumentException)
         {
             LogUtility.Warning(ToolName, "TextureFill", $"Texture post-process skipped (non-readable): {source.name}");
             return false;
+        }
+        finally
+        {
+            if (readable != null && readable != source)
+            {
+                UnityEngine.Object.DestroyImmediate(readable);
+            }
         }
 
         int width = source.width;
@@ -130,10 +145,6 @@ public static class TexturePostProcessProcessor
             ApplySolidify(pixels, width, height);
         }
 
-        bool linear = false;
-#if UNITY_2020_1_OR_NEWER
-        linear = !source.isDataSRGB;
-#endif
         processed = CreateWritableTexture(width, height, source, linear);
         if (processed == null)
         {
@@ -154,7 +165,7 @@ public static class TexturePostProcessProcessor
         catch (UnityException ex)
         {
             LogUtility.Warning(ToolName, "TextureFill", $"Texture post-process skipped (SetPixels failed): {source.name} - {ex.Message}");
-            Object.DestroyImmediate(processed);
+            UnityEngine.Object.DestroyImmediate(processed);
             processed = null;
             return false;
         }
@@ -199,7 +210,7 @@ public static class TexturePostProcessProcessor
             {
                 if (tex != null)
                 {
-                    Object.DestroyImmediate(tex);
+                    UnityEngine.Object.DestroyImmediate(tex);
                     tex = null;
                 }
             }

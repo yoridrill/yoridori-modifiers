@@ -608,7 +608,7 @@ namespace YoridoriModifiers.MToonToLilToon
                     color = ResolveMToonBaseColor(source);
                 }
 
-                var readable = ToReadableTextureWithTransform(texture, scale, offset);
+                var readable = TextureReadUtility.ToReadableTextureWithTransform(texture, scale, offset);
                 atlasTextures.Add(readable != null
                     ? MultiplyTextureColor(readable, color)
                     : NewSolidTexture(color));
@@ -1187,7 +1187,7 @@ namespace YoridoriModifiers.MToonToLilToon
             var texture = source.GetTexture("_ShadingShiftTex");
             if (texture == null || IsLikelyDummyTexture(texture)) return;
 
-            var readable = ToReadableTextureWithTransform(
+            var readable = TextureReadUtility.ToReadableTextureWithTransform(
                 texture,
                 source.GetTextureScale("_ShadingShiftTex"),
                 source.GetTextureOffset("_ShadingShiftTex"));
@@ -1286,7 +1286,7 @@ namespace YoridoriModifiers.MToonToLilToon
                 {
                     LogBumpMapSample("source", SampleTextureCenterColor(texture), (texture as Texture2D)?.format.ToString() ?? "n/a", texture.name);
                 }
-                var readable = ToReadableTextureWithTransform(texture, scale, offset, bakeKind == TextureBakeKind.NormalMap);
+                var readable = TextureReadUtility.ToReadableTextureWithTransform(texture, scale, offset, bakeKind == TextureBakeKind.NormalMap);
                 if (bakeKind == TextureBakeKind.InvertedLinearMask && readable != null)
                 {
                     InvertRgb(readable);
@@ -1776,64 +1776,6 @@ namespace YoridoriModifiers.MToonToLilToon
             return resized;
         }
 
-        private static Texture2D ToReadableTexture(Texture texture, bool linear = false)
-        {
-            if (texture == null) return null;
-            if (linear && texture is Texture2D readableSource && readableSource.isReadable)
-            {
-                try
-                {
-                    var copy = new Texture2D(readableSource.width, readableSource.height, TextureFormat.RGBA32, false, true);
-                    copy.SetPixels(readableSource.GetPixels());
-                    copy.Apply(false, false);
-                    return copy;
-                }
-                catch (UnityException)
-                {
-                    // Fall through to a GPU copy for unreadable or platform-restricted textures.
-                }
-            }
-
-            var width = texture.width;
-            var height = texture.height;
-            var rt = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32, linear ? RenderTextureReadWrite.Linear : RenderTextureReadWrite.sRGB);
-            var current = RenderTexture.active;
-            Graphics.Blit(texture, rt);
-            RenderTexture.active = rt;
-            var readable = new Texture2D(width, height, TextureFormat.RGBA32, false, linear);
-            readable.ReadPixels(new Rect(0, 0, width, height), 0, 0);
-            readable.Apply();
-            RenderTexture.active = current;
-            RenderTexture.ReleaseTemporary(rt);
-            return readable;
-        }
-
-        private static Texture2D ToReadableTextureWithTransform(Texture texture, Vector2 scale, Vector2 offset, bool linear = false)
-        {
-            var readable = ToReadableTexture(texture, linear);
-            if (readable == null) return null;
-            if ((scale - Vector2.one).sqrMagnitude < 0.000001f && offset.sqrMagnitude < 0.000001f) return readable;
-
-            var width = readable.width;
-            var height = readable.height;
-            var transformed = new Texture2D(width, height, TextureFormat.RGBA32, false, linear);
-            var colors = new Color[width * height];
-            for (var y = 0; y < height; y++)
-            {
-                var v = (y + 0.5f) / height;
-                for (var x = 0; x < width; x++)
-                {
-                    var u = (x + 0.5f) / width;
-                    var tu = Mathf.Repeat(u * scale.x + offset.x, 1f);
-                    var tv = Mathf.Repeat(v * scale.y + offset.y, 1f);
-                    colors[y * width + x] = SampleRepeatPoint(readable, tu, tv);
-                }
-            }
-            transformed.SetPixels(colors);
-            transformed.Apply();
-            return transformed;
-        }
-
         private static Texture2D NewSolidTexture(Color color, bool linear = false)
         {
             var texture = new Texture2D(4, 4, TextureFormat.RGBA32, false, linear);
@@ -1885,15 +1827,6 @@ namespace YoridoriModifiers.MToonToLilToon
             var wrapped = value - Mathf.Floor(value);
             if (Mathf.Abs(value - 1f) < 0.000001f) return 1f;
             return Mathf.Clamp01(wrapped);
-        }
-
-        private static Color SampleRepeatPoint(Texture2D texture, float u, float v)
-        {
-            var width = texture.width;
-            var height = texture.height;
-            var x = Mathf.Clamp(Mathf.FloorToInt(Mathf.Repeat(u, 1f) * width), 0, Mathf.Max(0, width - 1));
-            var y = Mathf.Clamp(Mathf.FloorToInt(Mathf.Repeat(v, 1f) * height), 0, Mathf.Max(0, height - 1));
-            return texture.GetPixel(x, y);
         }
 
         private static void ApplyMergedMaterialAndMesh(Renderer renderer, List<Material> materials, List<int> materialSourceIndices, IReadOnlyList<int> mergedIndices, int mergedRepresentativeSourceIndex, Material mergedMaterial, Material fakeShadowMaterial, IReadOnlyList<Rect> rects, bool enableHairOutlineCorrection, float hairTipOutlineWidth, float hairTipRange, ConversionReport report)

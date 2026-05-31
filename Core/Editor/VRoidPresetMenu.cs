@@ -328,6 +328,7 @@ namespace YoridoriModifiers.Core.Editor
             component.enableForearmFix = true;
             component.enableThumbFix = true;
 
+            component.upperArmRollAxis = TwistAxis.X;
             component.shoulderPositionOffset = Vector3.zero;
             component.shoulderEulerOffset = preset switch
             {
@@ -337,6 +338,8 @@ namespace YoridoriModifiers.Core.Editor
                 _ => Vector3.zero
             };
 
+            component.forearmRollAxis = TwistAxis.X;
+            component.forearmPitchAxis = TwistAxis.Z;
             component.forearmElbowScale = Vector3.one;
             component.forearmWristScale = Vector3.one;
             component.forearmElbowRollOffset = 0f;

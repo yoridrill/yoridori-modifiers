@@ -22,11 +22,24 @@ namespace YoridoriModifiers.ArmPatch
 
         private static readonly List<RendererState> HiddenSourceRenderers = new List<RendererState>();
 
-        private static readonly string[] ClipCandidatePaths =
+        private static readonly string[] ProxyAnimationFolders =
         {
-            "Packages/com.vrchat.avatars/Samples/AV3 Demo Assets/Animation/Proxy Anim/proxy_idle.anim",
-            "Packages/com.vrchat.avatars/Samples/AV3 Demo Assets/Animation/ProxyAnim/proxy_idle.anim",
-            "Packages/com.vrchat.avatars/Samples/AV3 Demo Assets/Animation/ProxyAnim/proxy_idle3.anim"
+            "Packages/com.vrchat.avatars/Samples/AV3 Demo Assets/Animation/Proxy Anim",
+            "Packages/com.vrchat.avatars/Samples/AV3 Demo Assets/Animation/ProxyAnim"
+        };
+
+        private static readonly string[] ShoulderPreviewClipNames =
+        {
+            "proxy_idle",
+            "proxy_idle3",
+            "proxy_run_strafe_right"
+        };
+
+        private static readonly string[] ForearmPreviewClipNames =
+        {
+            "proxy_run_strafe_right",
+            "proxy_idle",
+            "proxy_idle3"
         };
 
         private struct RendererState
@@ -80,7 +93,8 @@ namespace YoridoriModifiers.ArmPatch
             var avatarRoot = FindHumanoidAvatarRoot(component.transform);
             if (avatarRoot == null || !IsPreviewing(avatarRoot)) return;
 
-            StartPreview(avatarRoot, component);
+            var currentClip = _previewClip;
+            StartPreview(avatarRoot, component, currentClip);
         }
 
         internal static void ResetAllPreviewArtifacts()
@@ -122,7 +136,7 @@ namespace YoridoriModifiers.ArmPatch
             SceneView.RepaintAll();
         }
 
-        private static bool StartPreview(GameObject avatarRoot, ArmPatchComponent sourceComponent)
+        private static bool StartPreview(GameObject avatarRoot, ArmPatchComponent sourceComponent, AnimationClip fixedClip = null)
         {
             StopPreview();
             if (!PreviewCoordinator.TryBegin("ym-arm-patch", ToolName, avatarRoot, true, out var failure))
@@ -131,7 +145,7 @@ namespace YoridoriModifiers.ArmPatch
                 return false;
             }
 
-            _previewClip = LoadPreviewClip();
+            _previewClip = fixedClip != null ? fixedClip : LoadPreviewClip(sourceComponent.enableShoulderFix);
             if (_previewClip == null)
             {
                 LogUtility.Warning(ToolName, "Preview clip not found.");
@@ -243,18 +257,33 @@ namespace YoridoriModifiers.ArmPatch
             return null;
         }
 
-        private static AnimationClip LoadPreviewClip()
+        private static AnimationClip LoadPreviewClip(bool preferShoulderPose)
         {
-            for (int i = 0; i < ClipCandidatePaths.Length; i++)
+            var clipNames = preferShoulderPose ? ShoulderPreviewClipNames : ForearmPreviewClipNames;
+
+            for (int i = 0; i < clipNames.Length; i++)
             {
-                var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(ClipCandidatePaths[i]);
+                var clip = LoadPreviewClipByName(clipNames[i]);
                 if (clip != null) return clip;
             }
 
-            var guids = AssetDatabase.FindAssets("proxy_idle t:AnimationClip");
+            return null;
+        }
+
+        private static AnimationClip LoadPreviewClipByName(string clipName)
+        {
+            for (int i = 0; i < ProxyAnimationFolders.Length; i++)
+            {
+                string path = $"{ProxyAnimationFolders[i]}/{clipName}.anim";
+                var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
+                if (clip != null) return clip;
+            }
+
+            var guids = AssetDatabase.FindAssets($"{clipName} t:AnimationClip");
             for (int i = 0; i < guids.Length; i++)
             {
                 string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+                if (!path.EndsWith($"/{clipName}.anim")) continue;
                 var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
                 if (clip != null) return clip;
             }

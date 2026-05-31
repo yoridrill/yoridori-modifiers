@@ -288,7 +288,7 @@ namespace YoridoriModifiers.ArmPatch
                     subLabelRect,
                     new GUIContent(
                         T("Roll Axis", "Roll Axis"),
-                        T("ねじれ補正で使う軸。初期値は X。", "Axis used for twist correction. Default is X.")
+                        T("ねじれ補正で使う軸。初期値は Y。", "Axis used for twist correction. Default is Y.")
                     )
                 );
                 DrawAxisToolbar(valueRect, upperArmRollAxisProp);
@@ -322,7 +322,7 @@ namespace YoridoriModifiers.ArmPatch
                     subLabelRect,
                     new GUIContent(
                         T("Roll Axis", "Roll Axis"),
-                        T("ねじれ補正で使う軸。初期値はX。", "Axis used for twist correction. Default is X.")
+                        T("ねじれ補正で使う軸。初期値は Y。", "Axis used for twist correction. Default is Y.")
                     )
                 );
                 DrawAxisToolbar(valueRect, forearmRollAxisProp);

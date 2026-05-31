@@ -52,8 +52,8 @@ namespace YoridoriModifiers.ArmPatch
         [Tooltip("Shared shoulder rotation offset. Right side is mirrored internally.")]
         public Vector3 shoulderEulerOffset = Vector3.zero;
 
-        [Tooltip("Upper arm roll axis. Default is X.")]
-        public TwistAxis upperArmRollAxis = TwistAxis.X;
+        [Tooltip("Upper arm roll axis. Default is Y.")]
+        public TwistAxis upperArmRollAxis = TwistAxis.Y;
 
         [Tooltip("How strongly the roll axis follows the original upper arm.")]
         [Range(0f, 1f)]
@@ -75,13 +75,13 @@ namespace YoridoriModifiers.ArmPatch
         [FormerlySerializedAs("forearmRootRollOffset")]
         public float forearmElbowRollOffset = 0f;
 
-        [Tooltip("Forearm roll axis. Default is X.")]
+        [Tooltip("Forearm roll axis. Default is Y.")]
         [FormerlySerializedAs("wristRollAxis")]
-        public TwistAxis forearmRollAxis = TwistAxis.X;
+        public TwistAxis forearmRollAxis = TwistAxis.Y;
 
         [Tooltip("Forearm pitch axis used for twist extractor up vector.")]
         [FormerlySerializedAs("wristPitchAxis")]
-        public TwistAxis forearmPitchAxis = TwistAxis.Z;
+        public TwistAxis forearmPitchAxis = TwistAxis.X;
 
         [Tooltip("How strongly forearm roll follows the hand.")]
         [Range(0f, 1f)]

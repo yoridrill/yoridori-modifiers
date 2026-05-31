@@ -13,7 +13,10 @@ VRoid 向けの値をまとめて入れたい場合は、Hierarchy のアバタ�
 3. `Preview` で見え方を確認します。
 4. Build 時に NDMF が補正用ボーンと Constraint を追加します。
 
-`Preview` では VRChat SDK 内の Idle モーションを再生して、腕まわりの見え方を確認できます。  
+`Preview` では VRChat SDK 内の Proxy モーションを再生して、腕まわりの見え方を確認できます。
+
+Preview 開始時に `Shoulder Fix` が有効なら `proxy_idle3`、無効なら `proxy_run_strafe_right` を優先します。Preview 中に設定を変更してもモーションは切り替えず、開始時のモーションを維持します。
+
 Preview 表示が残ったり、モデルが見えなくなった場合は、`Advanced` の `Reset Preview` を押してください。
 
 ## 初期値
@@ -23,6 +26,8 @@ Preview 表示が残ったり、モデルが見えなくなった場合は、`Ad
 - `Shoulder Fix`: 無効
 - `Forearm Fix`: 無効
 - `Thumb Fix`: 無効
+- `Roll Axis`: `Y`
+- `Pitch Axis`: `X`
 - `Euler Offset`: すべて `0`
 - `Elbow Scale` / `Wrist Scale`: すべて `(1, 1, 1)`
 
@@ -41,7 +46,10 @@ Hierarchy でアバターを右クリックし、以下から選択できます�
 
 Arm Patch だけをアバタールートに追加したい場合は、`Yoridori Modifiers/Add Component with VRoid Defaults/YM Arm Patch` から選択できます。
 
-プリセットでは `Shoulder Fix`、`Forearm Fix`、`Thumb Fix` が有効になります。  
+プリセットでは `Shoulder Fix`、`Forearm Fix`、`Thumb Fix` が有効になります。
+
+VRoid 向けプリセットでは、VRoid の標準的なボーン軸に合わせて `Roll Axis` は `X`、`Pitch Axis` は `Z` になります。
+
 VRM 0.0 用プリセットは親指の初期角度が異なります。
 
 `Kimono` では、名前に `body` と `skin` の両方を含むマテリアルを大文字小文字無視で探し、見つかれば Twist Target に設定します。見つからない場合は `Auto` になります。Twist Bone Count は `4` になり、袖の長さ調整用に `Elbow Scale` の長さ方向が少し短くなります。
@@ -86,7 +94,8 @@ Constraint の使用数が増えます。設定内容によっては30ほど増�
 VRChatでの使用数上限は高いため、基本引っかかることはないと思いますが、ご留意ください。 
 補正の都合上、肘付近へしわ寄せが出る場合があります。
 
-VRChat SDK 内のサンプル Idle モーションは、実機でのポーズと完全には一致しない可能性があります。  
+VRChat SDK 内のサンプル Proxy モーションは、実機でのポーズと完全には一致しない可能性があります。
+
 Preview が動かない場合は、SDK 側のアセットパス変更が原因の可能性があります。
 
 ## ライセンス

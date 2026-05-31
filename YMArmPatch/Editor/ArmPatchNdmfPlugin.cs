@@ -402,9 +402,10 @@ namespace YoridoriModifiers.ArmPatch
                 Transform twistParent;
                 if (preferElbowShape)
                 {
+                    var twistAimUpAxis = GetNonRollAxis(forearmTwistAxis, forearmPitchAxis);
                     twistParent = CreateSiblingBone(originalLowerArm.name + "_TwistAim", originalLowerArm.parent, originalLowerArm);
-                    if (constraintMode == ConstraintMode.VRChatConstraints) AddVRCUpperArmAimConstraint(twistParent, originalHand, sideLabel);
-                    else AddUnityUpperArmAimConstraint(twistParent, originalHand, sideLabel);
+                    if (constraintMode == ConstraintMode.VRChatConstraints) AddVRCAimConstraint(twistParent, originalHand, sideLabel, twistAimUpAxis);
+                    else AddUnityAimConstraint(twistParent, originalHand, sideLabel, twistAimUpAxis);
                 }
                 else
                 {
@@ -434,8 +435,8 @@ namespace YoridoriModifiers.ArmPatch
                     b.localPosition = localDir * (localDist * t);
                     b.localRotation = Quaternion.identity;
                     twistBones.Add(b);
-                    if (constraintMode == ConstraintMode.VRChatConstraints) AddVRCForearmRotateConstraintAllAxes(b, twistSource, t);
-                    else AddUnityForearmRotateConstraintAllAxes(b, twistSource, t);
+                    if (constraintMode == ConstraintMode.VRChatConstraints) AddVRCForearmRotateConstraint(b, twistSource, forearmTwistAxis, t);
+                    else AddUnityForearmRotateConstraint(b, twistSource, forearmTwistAxis, t);
 
                     if (verboseLog)
                     {
@@ -651,6 +652,15 @@ namespace YoridoriModifiers.ArmPatch
             Transform lowerArm,
             string sideLabel)
         {
+            AddVRCAimConstraint(target, lowerArm, sideLabel, null);
+        }
+
+        private static void AddVRCAimConstraint(
+            Transform target,
+            Transform lowerArm,
+            string sideLabel,
+            TwistAxis? upAxis)
+        {
             var constraint = target.gameObject.AddComponent<VRCAimConstraint>();
 
             var localAim = lowerArm.localPosition;
@@ -671,9 +681,9 @@ namespace YoridoriModifiers.ArmPatch
             constraint.AffectsRotationZ = true;
 
             constraint.AimAxis = localAim.normalized;
-            constraint.UpAxis = Vector3.up;
+            constraint.UpAxis = upAxis.HasValue ? ToAxisVector(upAxis.Value) : Vector3.up;
             constraint.WorldUp = VRCConstraintBase.WorldUpType.SceneUp;
-            constraint.WorldUpVector = Vector3.up;
+            constraint.WorldUpVector = constraint.UpAxis;
 
             constraint.Sources.Clear();
             constraint.Sources.Add(new VRCConstraintSource(lowerArm, 1f));
@@ -683,9 +693,8 @@ namespace YoridoriModifiers.ArmPatch
 
         private static void AddVRCForearmTwistExtractorAimConstraint(Transform target, Transform lowerArm, Transform hand, string sideLabel, TwistAxis rollAxis, TwistAxis pitchAxis)
         {
+            pitchAxis = GetNonRollAxis(rollAxis, pitchAxis);
             var constraint = target.gameObject.AddComponent<VRCAimConstraint>();
-            var localAim = lowerArm.localPosition;
-            if (localAim.sqrMagnitude < 1e-8f) localAim = sideLabel == "L" ? Vector3.right : Vector3.left;
             constraint.IsActive = true;
             constraint.GlobalWeight = 1f;
             constraint.Locked = true;
@@ -695,8 +704,7 @@ namespace YoridoriModifiers.ArmPatch
             constraint.AffectsRotationX = true;
             constraint.AffectsRotationY = true;
             constraint.AffectsRotationZ = true;
-            // Mirrored right-hand rigs often require flipped aim sign for extractor stability.
-            constraint.AimAxis = sideLabel == "R" ? -ToAxisVector(rollAxis) : ToAxisVector(rollAxis);
+            constraint.AimAxis = GetSignedAxisToward(target, lowerArm, rollAxis, sideLabel);
             constraint.UpAxis = ToAxisVector(pitchAxis);
             constraint.WorldUp = VRCConstraintBase.WorldUpType.ObjectRotationUp;
             constraint.WorldUpTransform = hand;
@@ -760,27 +768,6 @@ namespace YoridoriModifiers.ArmPatch
             constraint.ApplyConfigurationChanges();
         }
 
-        private static void AddVRCForearmRotateConstraintAllAxes(Transform target, Transform source, float weight)
-        {
-            var constraint = target.gameObject.AddComponent<VRCRotationConstraint>();
-            constraint.IsActive = true;
-            constraint.GlobalWeight = weight;
-            constraint.Locked = true;
-            constraint.SolveInLocalSpace = false;
-            constraint.FreezeToWorld = false;
-            constraint.RebakeOffsetsWhenUnfrozen = false;
-            constraint.RotationAtRest = target.localEulerAngles;
-            constraint.RotationOffset = Vector3.zero;
-            constraint.AffectsRotationX = true;
-            constraint.AffectsRotationY = true;
-            constraint.AffectsRotationZ = true;
-            constraint.Sources.Clear();
-            constraint.Sources.Add(new VRCConstraintSource(source, 1f));
-            constraint.ApplyConfigurationChanges();
-        }
-
-
-
         private static void AddVRCRotationConstraintAllAxes(Transform target, Transform source, Vector3 eulerOffset)
         {
             var constraint = target.gameObject.AddComponent<VRCRotationConstraint>();
@@ -819,6 +806,15 @@ namespace YoridoriModifiers.ArmPatch
             Transform lowerArm,
             string sideLabel)
         {
+            AddUnityAimConstraint(target, lowerArm, sideLabel, null);
+        }
+
+        private static void AddUnityAimConstraint(
+            Transform target,
+            Transform lowerArm,
+            string sideLabel,
+            TwistAxis? upAxis)
+        {
             var constraint = target.gameObject.AddComponent<AimConstraint>();
             constraint.constraintActive = false;
             constraint.locked = false;
@@ -839,7 +835,7 @@ namespace YoridoriModifiers.ArmPatch
             }
 
             constraint.aimVector = localAim.normalized;
-            constraint.upVector = Vector3.up;
+            constraint.upVector = upAxis.HasValue ? ToAxisVector(upAxis.Value) : Vector3.up;
             constraint.worldUpType = AimConstraint.WorldUpType.SceneUp;
             constraint.constraintActive = true;
             constraint.locked = true;
@@ -847,16 +843,14 @@ namespace YoridoriModifiers.ArmPatch
 
         private static void AddUnityForearmTwistExtractorAimConstraint(Transform target, Transform lowerArm, Transform hand, string sideLabel, TwistAxis rollAxis, TwistAxis pitchAxis)
         {
+            pitchAxis = GetNonRollAxis(rollAxis, pitchAxis);
             var constraint = target.gameObject.AddComponent<AimConstraint>();
             constraint.constraintActive = false;
             constraint.locked = false;
             constraint.weight = 1f;
             constraint.rotationAxis = Axis.X | Axis.Y | Axis.Z;
             constraint.AddSource(new ConstraintSource { sourceTransform = lowerArm, weight = 1f });
-            var localAim = lowerArm.localPosition;
-            if (localAim.sqrMagnitude < 1e-8f) localAim = sideLabel == "L" ? Vector3.right : Vector3.left;
-            // Mirrored right-hand rigs often require flipped aim sign for extractor stability.
-            constraint.aimVector = sideLabel == "R" ? -ToAxisVector(rollAxis) : ToAxisVector(rollAxis);
+            constraint.aimVector = GetSignedAxisToward(target, lowerArm, rollAxis, sideLabel);
             constraint.upVector = ToAxisVector(pitchAxis);
             constraint.worldUpType = AimConstraint.WorldUpType.ObjectRotationUp;
             constraint.worldUpObject = hand;
@@ -913,21 +907,6 @@ namespace YoridoriModifiers.ArmPatch
             constraint.locked = true;
         }
 
-        private static void AddUnityForearmRotateConstraintAllAxes(Transform target, Transform source, float weight)
-        {
-            var constraint = target.gameObject.AddComponent<RotationConstraint>();
-            constraint.constraintActive = false;
-            constraint.locked = false;
-            constraint.weight = weight;
-            constraint.rotationAxis = Axis.X | Axis.Y | Axis.Z;
-            constraint.AddSource(new ConstraintSource { sourceTransform = source, weight = 1f });
-            constraint.rotationOffset = Vector3.zero;
-            constraint.constraintActive = true;
-            constraint.locked = true;
-        }
-
-
-
         private static void AddUnityRotationConstraintAllAxes(Transform target, Transform source, Vector3 eulerOffset)
         {
             var constraint = target.gameObject.AddComponent<RotationConstraint>();
@@ -968,6 +947,23 @@ namespace YoridoriModifiers.ArmPatch
                 case TwistAxis.Z: return Vector3.forward;
                 default: return Vector3.right;
             }
+        }
+
+        private static TwistAxis GetNonRollAxis(TwistAxis rollAxis, TwistAxis pitchAxis)
+        {
+            if (pitchAxis != rollAxis) return pitchAxis;
+            return rollAxis == TwistAxis.X ? TwistAxis.Y : TwistAxis.X;
+        }
+
+        private static Vector3 GetSignedAxisToward(Transform target, Transform source, TwistAxis axis, string sideLabel)
+        {
+            var axisVector = ToAxisVector(axis);
+            if (target == null || source == null) return sideLabel == "R" ? -axisVector : axisVector;
+
+            Vector3 localDirection = target.InverseTransformDirection(source.position - target.position);
+            if (localDirection.sqrMagnitude < 1e-8f) return sideLabel == "R" ? -axisVector : axisVector;
+
+            return Vector3.Dot(localDirection.normalized, axisVector) < 0f ? -axisVector : axisVector;
         }
 
         // Misc helpers

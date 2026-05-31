@@ -85,26 +85,27 @@ namespace YoridoriModifiers.Core.Editor
 
         private static void CreatePresetGameObject(SleevePreset preset, bool fromVrm00)
         {
-            var root = Selection.activeGameObject;
-            if (root == null) return;
+            var selected = Selection.activeGameObject;
+            if (selected == null) return;
+            var avatarRoot = ResolveAvatarRoot(selected);
 
             var undoName = BuildUndoName(preset, fromVrm00);
             Undo.SetCurrentGroupName(undoName);
             int undoGroup = Undo.GetCurrentGroup();
 
             var componentObject = new GameObject(BuildPresetGameObjectName(preset, fromVrm00));
-            componentObject.name = GameObjectUtility.GetUniqueNameForSibling(root.transform, componentObject.name);
+            componentObject.name = GameObjectUtility.GetUniqueNameForSibling(avatarRoot.transform, componentObject.name);
             Undo.RegisterCreatedObjectUndo(componentObject, undoName);
-            Undo.SetTransformParent(componentObject.transform, root.transform, undoName);
+            Undo.SetTransformParent(componentObject.transform, avatarRoot.transform, undoName);
             componentObject.transform.localPosition = Vector3.zero;
             componentObject.transform.localRotation = Quaternion.identity;
             componentObject.transform.localScale = Vector3.one;
 
-            AddPresetComponents(componentObject, root, preset, fromVrm00);
+            AddPresetComponents(componentObject, avatarRoot, preset, fromVrm00);
 
             Selection.activeGameObject = componentObject;
             Undo.CollapseUndoOperations(undoGroup);
-            EditorUtility.SetDirty(root);
+            EditorUtility.SetDirty(avatarRoot);
         }
 
         private static void AddPresetComponents(GameObject target, GameObject avatarRoot, SleevePreset preset, bool fromVrm00)
@@ -123,18 +124,21 @@ namespace YoridoriModifiers.Core.Editor
 
         private static void AddArmPatchToRoot(SleevePreset preset, bool fromVrm00)
         {
-            var root = Selection.activeGameObject;
-            if (root == null) return;
+            var target = Selection.activeGameObject;
+            if (target == null) return;
+            var avatarRoot = ResolveAvatarRoot(target);
 
             var undoName = BuildArmPatchUndoName(preset, fromVrm00);
             Undo.SetCurrentGroupName(undoName);
             int undoGroup = Undo.GetCurrentGroup();
 
-            var armPatch = GetOrAddComponent<ArmPatchComponent>(root, undoName);
-            ConfigureArmPatch(armPatch, root, preset, fromVrm00);
+            if (TryAddComponent(target, out ArmPatchComponent armPatch))
+            {
+                ConfigureArmPatch(armPatch, avatarRoot, preset, fromVrm00);
+            }
 
             Undo.CollapseUndoOperations(undoGroup);
-            EditorUtility.SetDirty(root);
+            EditorUtility.SetDirty(target);
         }
 
         private static void AddMeshTrimmersToRoot(string undoName)
@@ -153,31 +157,34 @@ namespace YoridoriModifiers.Core.Editor
 
         private static void AddMToonToLilToonToRoot(string undoName)
         {
-            var root = Selection.activeGameObject;
-            if (root == null) return;
+            var target = Selection.activeGameObject;
+            if (target == null) return;
+            var avatarRoot = ResolveAvatarRoot(target);
 
             Undo.SetCurrentGroupName(undoName);
             int undoGroup = Undo.GetCurrentGroup();
 
-            var component = GetOrAddComponent<MToonToLilToonComponent>(root, undoName);
-            ConfigureMToonToLilToon(component, root);
+            if (TryAddComponent(target, out MToonToLilToonComponent component))
+            {
+                ConfigureMToonToLilToon(component, avatarRoot);
+            }
 
             Undo.CollapseUndoOperations(undoGroup);
-            EditorUtility.SetDirty(root);
+            EditorUtility.SetDirty(target);
         }
 
         private static void AddSingleComponentToRoot<T>(string undoName) where T : Component
         {
-            var root = Selection.activeGameObject;
-            if (root == null) return;
+            var target = Selection.activeGameObject;
+            if (target == null) return;
 
             Undo.SetCurrentGroupName(undoName);
             int undoGroup = Undo.GetCurrentGroup();
 
-            GetOrAddComponent<T>(root, undoName);
+            TryAddComponent<T>(target, out _);
 
             Undo.CollapseUndoOperations(undoGroup);
-            EditorUtility.SetDirty(root);
+            EditorUtility.SetDirty(target);
         }
 
         private static void AddMeshTrimmerComponents(GameObject target)
@@ -244,16 +251,27 @@ namespace YoridoriModifiers.Core.Editor
             return null;
         }
 
-        private static T GetOrAddComponent<T>(GameObject root, string undoName) where T : Component
+        private static GameObject ResolveAvatarRoot(GameObject target)
         {
-            var component = root.GetComponent<T>();
-            if (component != null)
+            if (target == null) return null;
+            return PreviewCoordinator.FindAvatarRoot(target) ?? target;
+        }
+
+        private static bool TryAddComponent<T>(GameObject target, out T component) where T : Component
+        {
+            component = null;
+            if (target == null) return false;
+
+            var existing = target.GetComponent<T>();
+            if (existing != null)
             {
-                Undo.RecordObject(component, undoName);
-                return component;
+                Selection.activeObject = existing;
+                EditorGUIUtility.PingObject(existing);
+                return false;
             }
 
-            return Undo.AddComponent<T>(root);
+            component = Undo.AddComponent<T>(target);
+            return component != null;
         }
 
         private static string BuildUndoName(SleevePreset preset, bool fromVrm00)

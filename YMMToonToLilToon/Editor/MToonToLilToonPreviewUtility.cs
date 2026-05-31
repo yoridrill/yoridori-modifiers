@@ -33,6 +33,7 @@ namespace YoridoriModifiers.MToonToLilToon
         static MToonToLilToonPreviewUtility()
         {
             SceneIconUtility.HideComponentIcon<MToonToLilToonComponent>();
+            PreviewRecoveryUtility.RegisterResetHandler("ym-mtoon-to-liltoon", ResetOwnPreviewArtifacts);
 
             AssemblyReloadEvents.beforeAssemblyReload += StopPreview;
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
@@ -105,9 +106,28 @@ namespace YoridoriModifiers.MToonToLilToon
         internal static void ResetSavedPreviewState(MToonToLilToonComponent component)
         {
             if (component == null) return;
+            PreviewRecoveryUtility.ResetAllPreviewArtifacts();
+        }
 
-            var avatarRoot = PreviewCoordinator.FindAvatarRoot(component.gameObject);
-            if (avatarRoot == null) return;
+        private static void ResetOwnPreviewArtifacts(GameObject avatarRoot)
+        {
+            if (avatarRoot == null)
+            {
+                StopPreview();
+                CleanupOrphanPreviewObjects();
+
+                var roots = new HashSet<GameObject>();
+                foreach (var component in Object.FindObjectsByType<MToonToLilToonComponent>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                {
+                    var root = component != null ? PreviewCoordinator.FindAvatarRoot(component.gameObject) : null;
+                    if (root == null || !roots.Add(root)) continue;
+                    EnableRenderers(root);
+                    SyncSourcePreviewFlag(root, false);
+                }
+
+                SceneView.RepaintAll();
+                return;
+            }
 
             if (IsPreviewing(avatarRoot))
             {
@@ -124,6 +144,18 @@ namespace YoridoriModifiers.MToonToLilToon
 
             SyncSourcePreviewFlag(avatarRoot, false);
             SceneView.RepaintAll();
+        }
+
+        private static void EnableRenderers(GameObject avatarRoot)
+        {
+            if (avatarRoot == null) return;
+
+            foreach (var renderer in avatarRoot.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null) continue;
+                renderer.enabled = true;
+                EditorUtility.SetDirty(renderer);
+            }
         }
 
         internal static bool IsPreviewing(MToonToLilToonComponent component)

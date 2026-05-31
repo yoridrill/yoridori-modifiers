@@ -897,7 +897,7 @@ namespace YoridoriModifiers.MToonToLilToon
                 var buttonRect = EditorGUI.IndentedRect(rawButtonRect);
                 if (GUI.Button(buttonRect, "Reset Preview"))
                 {
-                    MToonToLilToonPreviewUtility.ResetSavedPreviewState(component);
+                    PreviewRecoveryUtility.ResetAllPreviewArtifacts();
                     EditorUtility.SetDirty(component);
                     changed = true;
                 }

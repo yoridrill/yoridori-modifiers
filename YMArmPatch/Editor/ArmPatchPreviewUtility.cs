@@ -51,6 +51,7 @@ namespace YoridoriModifiers.ArmPatch
         static ArmPatchPreviewUtility()
         {
             SceneIconUtility.HideComponentIcon<ArmPatchComponent>();
+            PreviewRecoveryUtility.RegisterResetHandler("ym-arm-patch", ResetOwnPreviewArtifacts);
 
             AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
             EditorApplication.quitting += OnEditorQuitting;
@@ -99,9 +100,15 @@ namespace YoridoriModifiers.ArmPatch
 
         internal static void ResetAllPreviewArtifacts()
         {
+            PreviewRecoveryUtility.ResetAllPreviewArtifacts();
+        }
+
+        private static void ResetOwnPreviewArtifacts(GameObject avatarRoot)
+        {
             StopPreview();
             CleanupOrphanPreviewObjects();
-            EnableAllHumanoidRenderers();
+            if (avatarRoot != null) EnableRenderers(avatarRoot);
+            else EnableAllHumanoidRenderers();
             SceneView.RepaintAll();
         }
 
@@ -370,12 +377,25 @@ namespace YoridoriModifiers.ArmPatch
                 if (animator == null || animator.avatar == null || !animator.avatar.isHuman) continue;
 
                 var renderers = animator.gameObject.GetComponentsInChildren<Renderer>(true);
-                for (int j = 0; j < renderers.Length; j++)
+                EnableRenderers(renderers);
+            }
+        }
+
+        private static void EnableRenderers(GameObject root)
+        {
+            if (root == null) return;
+            EnableRenderers(root.GetComponentsInChildren<Renderer>(true));
+        }
+
+        private static void EnableRenderers(Renderer[] renderers)
+        {
+            if (renderers == null) return;
+
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                if (renderers[i] != null)
                 {
-                    if (renderers[j] != null)
-                    {
-                        renderers[j].enabled = true;
-                    }
+                    renderers[i].enabled = true;
                 }
             }
         }

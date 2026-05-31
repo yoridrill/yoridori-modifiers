@@ -58,7 +58,8 @@ VRoid アバターでは、Hierarchy のアバターを右クリックして以�
 Preview 対応ツールの Inspector 上部には `Preview` ボタンがあります。  
 Preview 中はシーン上の元モデルをできるだけ壊さないように一時オブジェクトで表示します。
 
-Preview 表示が残ったり、モデルが見えなくなった場合は、各ツールの `Advanced` 内にある `Reset Preview` を押してください。
+Preview 表示が残ったり、モデルが見えなくなった場合は、各ツールの `Advanced` 内にある `Reset Preview` を押してください。  
+Yoridori Modifiers のどの `Reset Preview` からでも、各ツールの Preview 復旧がまとめて実行されます。
 
 同一アバター上では同時 Preview を制限する場合があります。  
 特に AnimationMode を使う `YM Arm Patch` は、シーン上で同時に1つだけ Preview できます。

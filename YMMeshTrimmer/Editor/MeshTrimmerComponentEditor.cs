@@ -70,6 +70,7 @@ public class MeshTrimmerComponentEditor : Editor
     static MeshTrimmerComponentEditor()
     {
         SceneIconUtility.HideComponentIcon<MeshTrimmerComponent>();
+        PreviewRecoveryUtility.RegisterResetHandler("ym-mesh-trimmer", ResetMeshTrimmerPreviewArtifacts);
 
         SubscribeEditorEvents();
         ScheduleOrphanPreviewCleanup();
@@ -261,8 +262,7 @@ public class MeshTrimmerComponentEditor : Editor
         var buttonRect = EditorGUI.IndentedRect(rawButtonRect);
         if (GUI.Button(buttonRect, T("Reset Preview", "Reset Preview")))
         {
-            ClearPreview(trimmer);
-            CleanupOrphanPreviewObjects();
+            PreviewRecoveryUtility.ResetAllPreviewArtifacts();
         }
 
         EditorGUILayout.HelpBox(
@@ -1032,6 +1032,56 @@ public class MeshTrimmerComponentEditor : Editor
             ClearPreview(obj);
         }
         CleanupOrphanPreviewObjects();
+    }
+
+    private static void ResetSavedPreviewState(MeshTrimmerComponent trimmer)
+    {
+        if (trimmer == null) return;
+        PreviewRecoveryUtility.ResetAllPreviewArtifacts();
+    }
+
+    private static void ResetMeshTrimmerPreviewArtifacts(GameObject avatarRoot)
+    {
+        if (avatarRoot == null)
+        {
+            ClearAllPreviews();
+            EnableAllPreviewRenderers();
+            SceneView.RepaintAll();
+            return;
+        }
+
+        foreach (var component in avatarRoot.GetComponentsInChildren<MeshTrimmerComponent>(true))
+        {
+            ClearPreview(component);
+        }
+
+        CleanupOrphanPreviewObjects();
+        foreach (var renderer in avatarRoot.GetComponentsInChildren<Renderer>(true))
+        {
+            if (renderer == null) continue;
+            renderer.enabled = true;
+            renderer.forceRenderingOff = false;
+            EditorUtility.SetDirty(renderer);
+        }
+
+        SceneView.RepaintAll();
+    }
+
+    private static void EnableAllPreviewRenderers()
+    {
+        foreach (var component in UnityEngine.Object.FindObjectsByType<MeshTrimmerComponent>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+        {
+            var avatarRoot = component != null ? PreviewCoordinator.FindAvatarRoot(component.gameObject) : null;
+            if (avatarRoot == null) continue;
+
+            foreach (var renderer in avatarRoot.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null) continue;
+                renderer.enabled = true;
+                renderer.forceRenderingOff = false;
+                EditorUtility.SetDirty(renderer);
+            }
+        }
     }
 
     private static void CleanupOrphanPreviewObjects()

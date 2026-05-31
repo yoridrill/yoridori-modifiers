@@ -633,7 +633,7 @@ namespace YoridoriModifiers.ArmPatch
             Rect buttonRect = EditorGUI.IndentedRect(rawButtonRect);
             if (GUI.Button(buttonRect, T("Reset Preview", "Reset Preview")))
             {
-                ArmPatchPreviewUtility.ResetAllPreviewArtifacts();
+                PreviewRecoveryUtility.ResetAllPreviewArtifacts();
                 GUIUtility.ExitGUI();
             }
 

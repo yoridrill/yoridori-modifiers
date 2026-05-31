@@ -88,9 +88,7 @@ namespace YoridoriModifiers.MToonToLilToon
                 .Distinct()
                 .ToList();
 
-            var nameMatched = distinctMaterials
-                .Where(m => m.name.IndexOf("HAIR_", StringComparison.OrdinalIgnoreCase) >= 0)
-                .ToList();
+            var nameMatched = FindNameMatchedHairMaterials(distinctMaterials);
 
             var transparentCount = nameMatched.Count(m => RenderTypeResolver.ResolveFromMaterial(m) == RenderType.Transparent);
             var nonTransparentCount = nameMatched.Count - transparentCount;
@@ -105,6 +103,22 @@ namespace YoridoriModifiers.MToonToLilToon
                         && IsInDominantRenderGroup(m, transparentDominant)
                         && CullModeResolver.ResolveFromMaterial(m) == dominantCullMode,
                 })
+                .ToList();
+        }
+
+        private static List<Material> FindNameMatchedHairMaterials(IEnumerable<Material> materials)
+        {
+            var materialList = materials
+                .Where(m => m != null)
+                .ToList();
+
+            var underscoreMatched = materialList
+                .Where(m => m.name.IndexOf("HAIR_", StringComparison.OrdinalIgnoreCase) >= 0)
+                .ToList();
+            if (underscoreMatched.Count > 0) return underscoreMatched;
+
+            return materialList
+                .Where(m => m.name.IndexOf("HAIR", StringComparison.OrdinalIgnoreCase) >= 0)
                 .ToList();
         }
 

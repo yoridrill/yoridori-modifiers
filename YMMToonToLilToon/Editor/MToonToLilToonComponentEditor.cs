@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using UnityEditor;
 using UnityEngine;
 using YoridoriModifiers.Core.Editor;
@@ -54,6 +55,7 @@ namespace YoridoriModifiers.MToonToLilToon
             serializedObject.Update();
             var component = (MToonToLilToonComponent)target;
             var previousPreviewing = MToonToLilToonPreviewUtility.IsPreviewing(component);
+            var previewRelevantStateBefore = BuildPreviewRelevantStateKey(component);
             _cachedRendererMaterials ??= GetRendererMaterials(component);
 
             DrawPreviewButton(component);
@@ -95,8 +97,9 @@ namespace YoridoriModifiers.MToonToLilToon
                 EditorUtility.SetDirty(component);
             }
 
+            var previewRelevantChanged = previewRelevantStateBefore != BuildPreviewRelevantStateKey(component);
             var onlyGlobalOverridesChanged = previousPreviewing
-                && serializedChanged
+                && previewRelevantChanged
                 && !directValueChanged
                 && globalOverridesChanged
                 && !hairSettingsChanged
@@ -107,10 +110,98 @@ namespace YoridoriModifiers.MToonToLilToon
             {
                 MToonToLilToonPreviewUtility.ApplyGlobalOverridesIfActive(component);
             }
-            else if ((serializedChanged || directValueChanged) && previousPreviewing)
+            else if ((previewRelevantChanged || directValueChanged) && previousPreviewing)
             {
                 MToonToLilToonPreviewUtility.RestartPreviewIfActive(component);
             }
+        }
+
+        private static string BuildPreviewRelevantStateKey(MToonToLilToonComponent component)
+        {
+            if (component == null) return string.Empty;
+
+            var builder = new StringBuilder();
+            AppendObject(builder, component.lilToonShader);
+            builder.Append('|').Append(component.enableHairMerge);
+            builder.Append('|').Append(component.enableHairOutlineCorrection);
+            builder.Append('|').Append(component.hairTipOutlineWidth);
+            builder.Append('|').Append(component.hairTipRange);
+            AppendHairSelections(builder, component.hairSelections);
+            AppendObject(builder, component.representativeHairMaterialOverride);
+            builder.Append('|').Append(component.enableEyebrowStencil);
+            AppendObject(builder, component.eyebrowStencilMaterial);
+            AppendObject(builder, component.fakeShadowFaceMaterial);
+            builder.Append('|').Append(component.enableFakeShadow);
+            AppendVector(builder, component.fakeShadowDirection);
+            builder.Append('|').Append(component.fakeShadowOffset);
+            builder.Append('|').Append(component.enableFaceShadowTuning);
+            AppendObject(builder, component.faceShadowFaceMaterial);
+            AppendObject(builder, component.faceShadowSdfTexture);
+            builder.Append('|').Append((int)component.faceShadowMaskType);
+            builder.Append('|').Append(component.shadowStrengthMaskLod);
+            builder.Append('|').Append(component.disableShadowReceiveForFace);
+            builder.Append('|').Append(component.disableBacklightStrengthForFace);
+            builder.Append('|').Append(component.useToonStandardFallback);
+            builder.Append('|').Append(component.verboseLog);
+            AppendGlobalOverrides(builder, component.globalOverrides);
+            return builder.ToString();
+        }
+
+        private static void AppendHairSelections(StringBuilder builder, IReadOnlyList<HairMaterialSelection> selections)
+        {
+            builder.Append("|hair:");
+            if (selections == null)
+            {
+                builder.Append("null");
+                return;
+            }
+
+            for (var i = 0; i < selections.Count; i++)
+            {
+                var selection = selections[i];
+                builder.Append('[');
+                AppendObject(builder, selection != null ? selection.material : null);
+                builder.Append(',').Append(selection != null && selection.selected);
+                builder.Append(']');
+            }
+        }
+
+        private static void AppendGlobalOverrides(StringBuilder builder, LilToonGlobalOverrides overrides)
+        {
+            builder.Append("|global:");
+            if (overrides == null)
+            {
+                builder.Append("null");
+                return;
+            }
+
+            builder.Append(overrides.enableShadowReceive);
+            builder.Append('|').Append(overrides.shadowReceive);
+            builder.Append('|').Append(overrides.enableShadowBorder);
+            AppendColor(builder, overrides.shadowBorderColor);
+            builder.Append('|').Append(overrides.shadowBorderStrength);
+            builder.Append('|').Append(overrides.enableBacklight);
+            AppendColor(builder, overrides.backlightColor);
+            builder.Append('|').Append(overrides.backlightMainStrength);
+            builder.Append('|').Append(overrides.enableDistanceFade);
+            AppendColor(builder, overrides.distanceFadeColor);
+            builder.Append('|').Append(overrides.distanceFadeStrength);
+            builder.Append('|').Append(overrides.outlineZBias);
+        }
+
+        private static void AppendObject(StringBuilder builder, Object obj)
+        {
+            builder.Append('|').Append(obj != null ? obj.GetInstanceID() : 0);
+        }
+
+        private static void AppendVector(StringBuilder builder, Vector3 value)
+        {
+            builder.Append('|').Append(value.x).Append(',').Append(value.y).Append(',').Append(value.z);
+        }
+
+        private static void AppendColor(StringBuilder builder, Color value)
+        {
+            builder.Append('|').Append(value.r).Append(',').Append(value.g).Append(',').Append(value.b).Append(',').Append(value.a);
         }
 
         private void DrawPreviewButton(MToonToLilToonComponent component)

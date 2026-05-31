@@ -28,7 +28,7 @@ MToon 1.0 / 互換 MToon マテリアルを lilToon へ変換するための Uni
 
 ## 髪周りのルック調整
 
-- `HAIR`（大小無視）を含む名前のマテリアルを候補化し、Cull Mode 多数派かつ描画系統多数派と一致するもののみを初期選択
+- `HAIR_`（大小無視）を含む名前のマテリアルを優先し、該当がなければ `HAIR`（大小無視）を含む名前を候補化。Cull Mode 多数派かつ描画系統多数派と一致するもののみを初期選択
 - 描画系統の多数派判定は `Transparent` と `Opaque+Cutout` の2系統で行い、`Opaque` は `Cutout` 側として扱う
 - 手動でチェックした項目は render type 混在でもそのまま merge 対象
 - merge 後マテリアルの render type は、`Transparent` が `Opaque+Cutout` より多い場合のみ `Transparent`、それ以外は `Cutout`

@@ -1042,11 +1042,19 @@ namespace YoridoriModifiers.ArmPatch
                 mesh.name = smr.sharedMesh.name + "_Twist";
                 var bones = smr.bones.ToList();
                 var bindposes = mesh.bindposes.ToList();
+                Matrix4x4 lowerBindpose = lowerIdx >= 0 && lowerIdx < bindposes.Count
+                    ? bindposes[lowerIdx]
+                    : lowerArm.worldToLocalMatrix * smr.transform.localToWorldMatrix;
+                Matrix4x4 currentLowerBindpose = lowerArm.worldToLocalMatrix * smr.transform.localToWorldMatrix;
                 var twistBoneIndices = new int[twistBones.Count];
                 for (int i = 0; i < twistBones.Count; i++)
                 {
                     bones.Add(twistBones[i]);
-                    bindposes.Add(twistBones[i].worldToLocalMatrix * smr.transform.localToWorldMatrix);
+                    bindposes.Add(BuildTwistBindposeFromLowerArmBindpose(
+                        twistBones[i],
+                        smr,
+                        currentLowerBindpose,
+                        lowerBindpose));
                     twistBoneIndices[i] = bones.Count - 1;
                 }
 
@@ -1123,6 +1131,17 @@ namespace YoridoriModifiers.ArmPatch
                 smr.bones = bones.ToArray();
                 if (verboseLog) Debug.Log($"[YM Arm Patch] Twist reweight: {GetPath(smr.transform)}");
             }
+        }
+
+        private static Matrix4x4 BuildTwistBindposeFromLowerArmBindpose(
+            Transform twistBone,
+            SkinnedMeshRenderer smr,
+            Matrix4x4 currentLowerBindpose,
+            Matrix4x4 lowerBindpose)
+        {
+            Matrix4x4 currentTwistBindpose = twistBone.worldToLocalMatrix * smr.transform.localToWorldMatrix;
+            Matrix4x4 lowerToTwist = currentTwistBindpose * currentLowerBindpose.inverse;
+            return lowerToTwist * lowerBindpose;
         }
 
         private static bool IsSkinVertex(SkinnedMeshRenderer smr, int vertexIndex, string skinMaterialName)

@@ -69,6 +69,8 @@ VRM 0.0 用プリセットは親指の初期角度が異なります。
 `VRChat Constraints` と `Unity Constraints` を選べます。  
 VRChat 用途では `VRChat Constraints` を推奨します。
 
+Advanced の `肘の形状を優先する` を ON にすると、Twist Bone は TwistAim 配下に作られます。OFF の場合は TwistAim を作らず、LowerArm 直下に Twist Bone を作ります。
+
 ### Build Order
 
 Modular Avatar の前後どちらで処理するかを選べます。

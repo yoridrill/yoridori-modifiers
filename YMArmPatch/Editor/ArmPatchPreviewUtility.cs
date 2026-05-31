@@ -385,8 +385,11 @@ namespace YoridoriModifiers.ArmPatch
             dst.forearmTwistBoneType = src.forearmTwistBoneType;
             dst.forearmTwistBoneCount = src.forearmTwistBoneCount;
             dst.forearmSkinMaterialName = src.forearmSkinMaterialName;
+            dst.forearmPreferElbowShape = src.forearmPreferElbowShape;
             dst.enableThumbFix = src.enableThumbFix;
             dst.thumbEulerOffset = src.thumbEulerOffset;
+            dst.constraintMode = src.constraintMode;
+            dst.buildOrder = src.buildOrder;
             dst.verboseLog = src.verboseLog;
         }
     }

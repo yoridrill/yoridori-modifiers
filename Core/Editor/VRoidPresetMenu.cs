@@ -330,8 +330,8 @@ namespace YoridoriModifiers.Core.Editor
             {
                 component.forearmTwistBoneCount = ForearmTwistBoneCount.Count8;
                 component.forearmTwistBoneType = ForearmTwistBoneType.AllTwist;
-                component.forearmElbowScale = new Vector3(1f, 0.8f, 0.95f);
-                component.forearmWristScale = new Vector3(1f, 1.1f, 0.9f);
+                component.forearmElbowScale = new Vector3(1f, 0.85f, 0.95f);
+                component.forearmWristScale = new Vector3(1f, 1.1f, 0.95f);
             }
             else if (preset == SleevePreset.Kimono)
             {
@@ -342,7 +342,7 @@ namespace YoridoriModifiers.Core.Editor
                     ? ForearmTwistBoneType.AllTwist
                     : ForearmTwistBoneType.SkinOnly;
                 component.forearmElbowScale = new Vector3(0.9f, 1f, 1f);
-                component.forearmWristScale = new Vector3(1f, 1.1f, 0.9f);
+                component.forearmWristScale = new Vector3(1f, 1.1f, 0.95f);
                 component.forearmElbowRollOffset = -70f;
             }
 

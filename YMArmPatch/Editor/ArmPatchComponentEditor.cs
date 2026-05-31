@@ -58,6 +58,7 @@ namespace YoridoriModifiers.ArmPatch
         private SerializedProperty forearmTwistBoneTypeProp;
         private SerializedProperty forearmTwistBoneCountProp;
         private SerializedProperty forearmSkinMaterialNameProp;
+        private SerializedProperty forearmPreferElbowShapeProp;
 
         private SerializedProperty enableThumbFixProp;
         private SerializedProperty thumbEulerOffsetProp;
@@ -98,6 +99,7 @@ namespace YoridoriModifiers.ArmPatch
             forearmTwistBoneTypeProp = serializedObject.FindProperty("forearmTwistBoneType");
             forearmTwistBoneCountProp = serializedObject.FindProperty("forearmTwistBoneCount");
             forearmSkinMaterialNameProp = serializedObject.FindProperty("forearmSkinMaterialName");
+            forearmPreferElbowShapeProp = serializedObject.FindProperty("forearmPreferElbowShape");
 
             enableThumbFixProp = serializedObject.FindProperty("enableThumbFix");
             thumbEulerOffsetProp = serializedObject.FindProperty("thumbEulerOffset");
@@ -179,7 +181,8 @@ namespace YoridoriModifiers.ArmPatch
             if (enableForearmFixProp.boolValue)
             {
                 int forearmCount = forearmTwistBoneCountProp != null ? forearmTwistBoneCountProp.intValue : 0;
-                int perSide = forearmCount == 0 ? 2 : 2 + forearmCount;
+                bool preferElbowShape = forearmPreferElbowShapeProp != null && forearmPreferElbowShapeProp.boolValue;
+                int perSide = forearmCount == 0 ? 2 : 1 + forearmCount + (preferElbowShape ? 1 : 0);
                 constraintCount += perSide * 2;
             }
             if (enableThumbFixProp.boolValue) constraintCount += 6;
@@ -610,6 +613,16 @@ namespace YoridoriModifiers.ArmPatch
 
             EditorGUI.indentLevel++;
 
+            EditorGUILayout.PropertyField(
+                forearmPreferElbowShapeProp,
+                new GUIContent(
+                    T("肘の形状を優先する", "Prioritize Elbow Shape"),
+                    T(
+                        "肘の形状を改善しますが、急激な反転が境界で発生しやすいため、撮影向けです。",
+                        "Improves the elbow shape, but sharp flipping can occur at the boundary, so this is intended for photoshoots."
+                    )
+                )
+            );
             DrawConstraintModePopup();
             DrawBuildOrderPopup();
 

@@ -100,6 +100,9 @@ namespace YoridoriModifiers.ArmPatch
         [FormerlySerializedAs("wristSkinMaterialName")]
         public string forearmSkinMaterialName = "Auto";
 
+        [Tooltip("Prioritize elbow shape by parenting twist bones under a TwistAim helper bone.")]
+        public bool forearmPreferElbowShape = false;
+
         [Header("Thumb")]
         [Tooltip("Enable thumb correction.")]
         public bool enableThumbFix = false;

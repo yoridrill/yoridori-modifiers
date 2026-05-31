@@ -131,6 +131,7 @@ namespace YoridoriModifiers.ArmPatch
                 forearmTwistBoneType = component.forearmTwistBoneType,
                 forearmTwistBoneCount = component.forearmTwistBoneCount,
                 forearmSkinMaterialName = component.forearmSkinMaterialName,
+                forearmPreferElbowShape = component.forearmPreferElbowShape,
                 enableThumbFix = component.enableThumbFix,
                 thumbEulerOffset = component.thumbEulerOffset,
                 constraintMode = component.constraintMode,
@@ -280,6 +281,7 @@ namespace YoridoriModifiers.ArmPatch
                 settings.forearmTwistBoneType,
                 settings.forearmTwistBoneCount,
                 settings.forearmSkinMaterialName,
+                settings.forearmPreferElbowShape,
                 settings.constraintMode,
                 settings.verboseLog,
                 replaceMap,
@@ -302,6 +304,7 @@ namespace YoridoriModifiers.ArmPatch
                 settings.forearmTwistBoneType,
                 settings.forearmTwistBoneCount,
                 settings.forearmSkinMaterialName,
+                settings.forearmPreferElbowShape,
                 settings.constraintMode,
                 settings.verboseLog,
                 replaceMap,
@@ -325,6 +328,7 @@ namespace YoridoriModifiers.ArmPatch
             ForearmTwistBoneType twistBoneType,
             ForearmTwistBoneCount twistBoneCount,
             string skinMaterialName,
+            bool preferElbowShape,
             ConstraintMode constraintMode,
             bool verboseLog,
             Dictionary<Transform, Transform> replaceMap,
@@ -353,6 +357,7 @@ namespace YoridoriModifiers.ArmPatch
                     AddUnityForearmTwistExtractorAimConstraint(forearmTwistExtractor, originalLowerArm, originalHand, sideLabel, forearmTwistAxis, forearmPitchAxis);
                 }
             }
+            var twistSource = forearmTwistExtractor;
 
             if (twistBoneType == ForearmTwistBoneType.None)
             {
@@ -369,11 +374,11 @@ namespace YoridoriModifiers.ArmPatch
                 }
                 else if (constraintMode == ConstraintMode.VRChatConstraints)
                 {
-                    AddVRCForearmRotateConstraint(forearmDef, forearmTwistExtractor, forearmTwistAxis, forearmTwistWeight);
+                    AddVRCForearmRotateConstraint(forearmDef, twistSource, forearmTwistAxis, forearmTwistWeight);
                 }
                 else
                 {
-                    AddUnityForearmRotateConstraint(forearmDef, forearmTwistExtractor, forearmTwistAxis, forearmTwistWeight);
+                    AddUnityForearmRotateConstraint(forearmDef, twistSource, forearmTwistAxis, forearmTwistWeight);
                 }
 
                 replaceMap[originalLowerArm] = forearmDef;
@@ -394,35 +399,43 @@ namespace YoridoriModifiers.ArmPatch
             else if (originalHand != null)
             {
                 int twistCount = (int)twistBoneCount;
-                var twistAim = CreateSiblingBone(originalLowerArm.name + "_TwistAim", originalLowerArm.parent, originalLowerArm);
-                if (constraintMode == ConstraintMode.VRChatConstraints) AddVRCUpperArmAimConstraint(twistAim, originalHand, sideLabel);
-                else AddUnityUpperArmAimConstraint(twistAim, originalHand, sideLabel);
+                Transform twistParent;
+                if (preferElbowShape)
+                {
+                    twistParent = CreateSiblingBone(originalLowerArm.name + "_TwistAim", originalLowerArm.parent, originalLowerArm);
+                    if (constraintMode == ConstraintMode.VRChatConstraints) AddVRCUpperArmAimConstraint(twistParent, originalHand, sideLabel);
+                    else AddUnityUpperArmAimConstraint(twistParent, originalHand, sideLabel);
+                }
+                else
+                {
+                    twistParent = originalLowerArm;
+                }
 
                 if (verboseLog)
                 {
                     Vector3 axis = (originalHand.position - originalLowerArm.position).normalized;
                     Debug.Log(
-                        $"[YM Arm Patch] [{sideLabel}] TwistAim created. " +
-                        $"name={twistAim.name}, parent={GetPath(twistAim.parent)}, " +
+                        $"[YM Arm Patch] [{sideLabel}] Twist parent selected. " +
+                        $"name={twistParent.name}, parent={GetPath(twistParent.parent)}, " +
                         $"lowerArm={originalLowerArm.name}, hand={originalHand.name}, " +
                         $"worldAxis=({axis.x:F4},{axis.y:F4},{axis.z:F4}), " +
                         $"distance={Vector3.Distance(originalLowerArm.position, originalHand.position):F6}, " +
-                        $"twistAxis={forearmTwistAxis}, count={twistCount}");
+                        $"twistAxis={forearmTwistAxis}, count={twistCount}, preferElbowShape={preferElbowShape}");
                 }
 
                 var twistBones = new List<Transform>(twistCount);
-                Vector3 handLocalFromAim = twistAim.InverseTransformPoint(originalHand.position);
-                Vector3 localDir = handLocalFromAim.sqrMagnitude > 1e-8f ? handLocalFromAim.normalized : Vector3.right;
-                float localDist = handLocalFromAim.magnitude;
+                Vector3 handLocalFromParent = twistParent.InverseTransformPoint(originalHand.position);
+                Vector3 localDir = handLocalFromParent.sqrMagnitude > 1e-8f ? handLocalFromParent.normalized : Vector3.right;
+                float localDist = handLocalFromParent.magnitude;
                 for (int i = 0; i < twistCount; i++)
                 {
                     float t = twistCount <= 1 ? 1f : (float)i / (twistCount - 1);
-                    var b = CreateChildAlignedBone($"{originalLowerArm.name}_Twist_{i:D2}", twistAim);
+                    var b = CreateChildAlignedBone($"{originalLowerArm.name}_Twist_{i:D2}", twistParent);
                     b.localPosition = localDir * (localDist * t);
                     b.localRotation = Quaternion.identity;
                     twistBones.Add(b);
-                    if (constraintMode == ConstraintMode.VRChatConstraints) AddVRCForearmRotateConstraintAllAxes(b, forearmTwistExtractor, t);
-                    else AddUnityForearmRotateConstraintAllAxes(b, forearmTwistExtractor, t);
+                    if (constraintMode == ConstraintMode.VRChatConstraints) AddVRCForearmRotateConstraintAllAxes(b, twistSource, t);
+                    else AddUnityForearmRotateConstraintAllAxes(b, twistSource, t);
 
                     if (verboseLog)
                     {
@@ -453,7 +466,14 @@ namespace YoridoriModifiers.ArmPatch
                     twistBones,
                     elbowScale,
                     wristScale);
-                ApplyElbowRollOffsetToTwistAim(twistAim, constraintMode, forearmTwistAxis, elbowRollOffset);
+                if (preferElbowShape)
+                {
+                    ApplyElbowRollOffsetToTwistAim(twistParent, constraintMode, forearmTwistAxis, elbowRollOffset);
+                }
+                else
+                {
+                    ApplyElbowRollOffsetToTwistBones(twistBones, forearmTwistAxis, elbowRollOffset);
+                }
 
                 if (verboseLog)
                 {
@@ -469,7 +489,7 @@ namespace YoridoriModifiers.ArmPatch
                 }
                 else
                 {
-                    Debug.Log($"[YM Arm Patch] [{sideLabel}] Twist mode active. type={twistBoneType}");
+                    Debug.Log($"[YM Arm Patch] [{sideLabel}] Twist mode active. type={twistBoneType}, preferElbowShape={preferElbowShape}");
                 }
             }
         }
@@ -1184,10 +1204,7 @@ namespace YoridoriModifiers.ArmPatch
         private static void ApplyElbowRollOffsetToTwistAim(Transform twistAim, ConstraintMode constraintMode, TwistAxis rollAxis, float offset)
         {
             if (twistAim == null) return;
-            var euler = Vector3.zero;
-            if (rollAxis == TwistAxis.X) euler.x = offset;
-            else if (rollAxis == TwistAxis.Y) euler.y = offset;
-            else euler.z = offset;
+            var euler = BuildElbowRollOffsetEuler(rollAxis, offset);
 
             if (constraintMode == ConstraintMode.VRChatConstraints)
             {
@@ -1202,6 +1219,45 @@ namespace YoridoriModifiers.ArmPatch
             {
                 var c = twistAim.GetComponent<AimConstraint>();
                 if (c != null) c.rotationOffset = euler;
+            }
+        }
+
+        private static Vector3 BuildElbowRollOffsetEuler(TwistAxis rollAxis, float offset)
+        {
+            var euler = Vector3.zero;
+            if (rollAxis == TwistAxis.X) euler.x = offset;
+            else if (rollAxis == TwistAxis.Y) euler.y = offset;
+            else euler.z = offset;
+            return euler;
+        }
+
+        private static void ApplyElbowRollOffsetToTwistBones(List<Transform> twistBones, TwistAxis rollAxis, float offset)
+        {
+            if (twistBones == null || twistBones.Count == 0) return;
+            var rotation = Quaternion.Euler(BuildElbowRollOffsetEuler(rollAxis, offset));
+            foreach (var twistBone in twistBones)
+            {
+                if (twistBone == null) continue;
+                twistBone.localRotation = rotation;
+                SyncRotationConstraintRestToCurrentLocalRotation(twistBone);
+            }
+        }
+
+        private static void SyncRotationConstraintRestToCurrentLocalRotation(Transform target)
+        {
+            if (target == null) return;
+
+            var vrcConstraint = target.GetComponent<VRCRotationConstraint>();
+            if (vrcConstraint != null)
+            {
+                vrcConstraint.RotationAtRest = target.localEulerAngles;
+                vrcConstraint.ApplyConfigurationChanges();
+            }
+
+            var unityConstraint = target.GetComponent<RotationConstraint>();
+            if (unityConstraint != null)
+            {
+                unityConstraint.rotationAtRest = target.localEulerAngles;
             }
         }
 
@@ -1299,6 +1355,7 @@ namespace YoridoriModifiers.ArmPatch
                 forearmTwistBoneType = c.forearmTwistBoneType,
                 forearmTwistBoneCount = c.forearmTwistBoneCount,
                 forearmSkinMaterialName = c.forearmSkinMaterialName,
+                forearmPreferElbowShape = c.forearmPreferElbowShape,
                 enableThumbFix = c.enableThumbFix,
                 thumbEulerOffset = c.thumbEulerOffset,
                 constraintMode = c.constraintMode,
@@ -1367,6 +1424,7 @@ namespace YoridoriModifiers.ArmPatch
             public ForearmTwistBoneType forearmTwistBoneType;
             public ForearmTwistBoneCount forearmTwistBoneCount;
             public string forearmSkinMaterialName;
+            public bool forearmPreferElbowShape;
             public bool enableThumbFix;
             public Vector3 thumbEulerOffset;
             public ConstraintMode constraintMode;

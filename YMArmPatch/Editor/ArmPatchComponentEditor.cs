@@ -329,6 +329,7 @@ namespace YoridoriModifiers.ArmPatch
                 DrawForearmPitchAxisRow(component); // pitch after roll in requested order
                 DrawTwistBoneCountRow();
                 DrawTwistTargetRow(component);
+                DrawSkipLowerArmRow();
                 using (new EditorGUI.DisabledScope(forearmTwistBoneCountProp.intValue == 0))
                 {
                     DrawSubRowSlider(
@@ -436,6 +437,31 @@ namespace YoridoriModifiers.ArmPatch
             if (forearmTwistBoneCountProp.intValue != 0 && forearmSkinMaterialNameProp.stringValue != "Auto" && !HasForearmWeightsOnMaterial(component, forearmSkinMaterialNameProp.stringValue))
             {
                 EditorGUILayout.HelpBox("前腕関連のウェイトが設定されていない部位のため、正常に動作しません。", MessageType.Warning);
+            }
+        }
+
+        private void DrawSkipLowerArmRow()
+        {
+            Rect rect = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
+            Rect spacerRect = new Rect(rect.x, rect.y, ToggleWidth, rect.height);
+            Rect mainLabelRect = new Rect(spacerRect.xMax + 2f, rect.y, MainLabelWidth, rect.height);
+            Rect subLabelRect = new Rect(mainLabelRect.xMax + Gap, rect.y, SubLabelWidth, rect.height);
+            Rect valueRect = new Rect(subLabelRect.xMax + 4f, rect.y, rect.xMax - (subLabelRect.xMax + 4f), rect.height);
+
+            using (new EditorGUI.DisabledScope(forearmTwistBoneCountProp.intValue == 0))
+            {
+                EditorGUI.LabelField(mainLabelRect, GUIContent.none);
+                EditorGUI.LabelField(
+                    subLabelRect,
+                    new GUIContent(
+                        T("Skip LowerArm", "Skip LowerArm"),
+                        T(
+                            "LowerArm 回転の影響をなくします。 肘が綺麗になりますが、ピクつきやすいです。 着物袖の固定にも使います。",
+                            "Removes the effect of LowerArm rotation. This improves the elbow shape, but jitter is more likely. It is also used to pin kimono sleeves."
+                        )
+                    )
+                );
+                forearmPreferElbowShapeProp.boolValue = EditorGUI.Toggle(valueRect, forearmPreferElbowShapeProp.boolValue);
             }
         }
 
@@ -613,16 +639,6 @@ namespace YoridoriModifiers.ArmPatch
 
             EditorGUI.indentLevel++;
 
-            EditorGUILayout.PropertyField(
-                forearmPreferElbowShapeProp,
-                new GUIContent(
-                    T("肘の形状を優先する", "Prioritize Elbow Shape"),
-                    T(
-                        "肘の形状を改善しますが、急激な反転が境界で発生しやすいため、撮影向けです。",
-                        "Improves the elbow shape, but sharp flipping can occur at the boundary, so this is intended for photoshoots."
-                    )
-                )
-            );
             DrawConstraintModePopup();
             DrawBuildOrderPopup();
 

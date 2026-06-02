@@ -402,7 +402,7 @@ namespace YoridoriModifiers.ArmPatch
                 Transform twistParent;
                 if (preferElbowShape)
                 {
-                    var twistAimUpAxis = GetNonRollAxis(forearmTwistAxis, forearmPitchAxis);
+                    var twistAimUpAxis = GetRemainingAxis(forearmTwistAxis, forearmPitchAxis);
                     twistParent = CreateSiblingBone(originalLowerArm.name + "_TwistAim", originalLowerArm.parent, originalLowerArm);
                     if (constraintMode == ConstraintMode.VRChatConstraints) AddVRCAimConstraint(twistParent, originalHand, sideLabel, twistAimUpAxis);
                     else AddUnityAimConstraint(twistParent, originalHand, sideLabel, twistAimUpAxis);
@@ -467,14 +467,7 @@ namespace YoridoriModifiers.ArmPatch
                     twistBones,
                     elbowScale,
                     wristScale);
-                if (preferElbowShape)
-                {
-                    ApplyElbowRollOffsetToTwistAim(twistParent, constraintMode, forearmTwistAxis, elbowRollOffset);
-                }
-                else
-                {
-                    ApplyElbowRollOffsetToTwistBones(twistBones, forearmTwistAxis, elbowRollOffset);
-                }
+                ApplyElbowRollOffsetToTwistBones(twistBones, forearmTwistAxis, elbowRollOffset);
 
                 if (verboseLog)
                 {
@@ -955,6 +948,17 @@ namespace YoridoriModifiers.ArmPatch
             return rollAxis == TwistAxis.X ? TwistAxis.Y : TwistAxis.X;
         }
 
+        private static TwistAxis GetRemainingAxis(TwistAxis firstAxis, TwistAxis secondAxis)
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                var axis = (TwistAxis)i;
+                if (axis != firstAxis && axis != secondAxis) return axis;
+            }
+
+            return GetNonRollAxis(firstAxis, secondAxis);
+        }
+
         private static Vector3 GetSignedAxisToward(Transform target, Transform source, TwistAxis axis, string sideLabel)
         {
             var axisVector = ToAxisVector(axis);
@@ -1194,27 +1198,6 @@ namespace YoridoriModifiers.ArmPatch
                 {
                     twistBones[i].localScale = Vector3.Lerp(elbowScale, wristScale, t);
                 }
-            }
-        }
-
-        private static void ApplyElbowRollOffsetToTwistAim(Transform twistAim, ConstraintMode constraintMode, TwistAxis rollAxis, float offset)
-        {
-            if (twistAim == null) return;
-            var euler = BuildElbowRollOffsetEuler(rollAxis, offset);
-
-            if (constraintMode == ConstraintMode.VRChatConstraints)
-            {
-                var c = twistAim.GetComponent<VRCAimConstraint>();
-                if (c != null)
-                {
-                    c.RotationOffset = euler;
-                    c.ApplyConfigurationChanges();
-                }
-            }
-            else
-            {
-                var c = twistAim.GetComponent<AimConstraint>();
-                if (c != null) c.rotationOffset = euler;
             }
         }
 

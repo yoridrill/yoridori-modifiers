@@ -333,7 +333,7 @@ namespace YoridoriModifiers.Core.Editor
             component.shoulderEulerOffset = preset switch
             {
                 SleevePreset.LongSleeves => new Vector3(0f, 0f, -10f),
-                SleevePreset.ShortSleeves => new Vector3(0f, 0f, -12f),
+                SleevePreset.ShortSleeves => new Vector3(0f, 0f, -10f),
                 SleevePreset.Kimono => new Vector3(0f, 0f, -5f),
                 _ => Vector3.zero
             };
@@ -346,6 +346,7 @@ namespace YoridoriModifiers.Core.Editor
             component.forearmTwistBoneCount = ForearmTwistBoneCount.Count0;
             component.forearmTwistBoneType = ForearmTwistBoneType.None;
             component.forearmSkinMaterialName = "Auto";
+            component.forearmPreferElbowShape = false;
 
             if (preset == SleevePreset.ShortSleeves)
             {
@@ -365,6 +366,7 @@ namespace YoridoriModifiers.Core.Editor
                 component.forearmElbowScale = new Vector3(0.9f, 1f, 1f);
                 component.forearmWristScale = new Vector3(1f, 1.1f, 0.95f);
                 component.forearmElbowRollOffset = -70f;
+                component.forearmPreferElbowShape = true;
             }
 
             component.thumbEulerOffset = fromVrm00

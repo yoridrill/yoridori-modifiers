@@ -752,7 +752,7 @@ namespace YoridoriModifiers.MToonToLilToon
 
             if (hairSelectionsProp == null || hairSelectionsProp.arraySize == 0)
             {
-                EditorGUILayout.HelpBox(T("まだスキャンされていません。", "No materials scanned yet."), MessageType.Info);
+                DrawEmptyHairSelectionsHelp(component);
                 return false;
             }
 
@@ -791,6 +791,36 @@ namespace YoridoriModifiers.MToonToLilToon
             }
 
             return changed;
+        }
+
+        private void DrawEmptyHairSelectionsHelp(MToonToLilToonComponent component)
+        {
+            var rendererMaterials = _cachedRendererMaterials ?? GetRendererMaterials(component);
+            if (rendererMaterials == null || rendererMaterials.Count == 0)
+            {
+                EditorGUILayout.HelpBox(
+                    T(
+                        "対象アバター配下のRendererにマテリアルが見つかりません。",
+                        "No materials were found on Renderers under the target avatar."),
+                    MessageType.Info);
+                return;
+            }
+
+            if (!rendererMaterials.Any(m => m != null && MToonDetector.IsMToonLike(m)))
+            {
+                EditorGUILayout.HelpBox(
+                    T(
+                        "MToonのマテリアルがありません。",
+                        "No MToon materials were found."),
+                    MessageType.Info);
+                return;
+            }
+
+            EditorGUILayout.HelpBox(
+                T(
+                    "検出できませんでした。 髪周りのルック調整を一度オフにしてからオンにしてください。",
+                    "No materials scanned yet. Turn Hair Look Adjustments off and on again."),
+                MessageType.Info);
         }
 
 

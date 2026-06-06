@@ -34,7 +34,6 @@ public static class MeshTrimProcessor
         public Texture2D texture;
         public bool enablePreSubdivide;
         public int preSubdivideLevel;
-        public bool preSubdivideQuadAware;
     }
 
 
@@ -112,7 +111,6 @@ public static class MeshTrimProcessor
         Dictionary<Texture2D, AlphaMaskProcessor.AlphaMaskData> maskCache = new Dictionary<Texture2D, AlphaMaskProcessor.AlphaMaskData>();
         Dictionary<SkinnedMeshRenderer, Dictionary<int, SubMeshTask>> tasksByRenderer = new Dictionary<SkinnedMeshRenderer, Dictionary<int, SubMeshTask>>();
         int preSubdivideEnabledTargetCount = 0;
-        int quadAwareEnabledTargetCount = 0;
 
         foreach (var target in trimmer.targets)
         {
@@ -131,7 +129,6 @@ public static class MeshTrimProcessor
             }
 
             if (target.enablePreSubdivide) preSubdivideEnabledTargetCount++;
-            if (target.enablePreSubdivide && target.preSubdivideQuadAware) quadAwareEnabledTargetCount++;
 
             foreach (var usage in target.usages)
             {
@@ -156,7 +153,6 @@ public static class MeshTrimProcessor
                 existingTask.texture = target.mainTexture;
                 existingTask.enablePreSubdivide = existingTask.enablePreSubdivide || target.enablePreSubdivide;
                 existingTask.preSubdivideLevel = Mathf.Max(existingTask.preSubdivideLevel, target.preSubdivideLevel);
-                existingTask.preSubdivideQuadAware = existingTask.preSubdivideQuadAware || target.preSubdivideQuadAware;
             }
         }
 
@@ -164,7 +160,7 @@ public static class MeshTrimProcessor
             ToolName,
             IsVerbose(trimmer),
             "Trim",
-            $"TaskRenderers={tasksByRenderer.Count}, PreSubdivideEnabledTargetCount={preSubdivideEnabledTargetCount}, QuadAwareEnabledTargetCount={quadAwareEnabledTargetCount}, TrimAlgorithm={trimmer.trimAlgorithm}");
+            $"TaskRenderers={tasksByRenderer.Count}, PreSubdivideEnabledTargetCount={preSubdivideEnabledTargetCount}, TrimAlgorithm={trimmer.trimAlgorithm}");
         foreach (var kv in tasksByRenderer)
         {
             ProcessRenderer(kv.Key, kv.Value, trimmer, preserveBlendShapes);
@@ -231,15 +227,9 @@ public static class MeshTrimProcessor
             int[] workingIndices = srcIndices;
             int triBeforeSub = srcIndices.Length / 3;
             int preAddedVertices = 0;
-            int quadCandidates = 0;
-            int acceptedQuads = 0;
-            int rejectedQuads = 0;
-            int triFallback = 0;
             var swPre = System.Diagnostics.Stopwatch.StartNew();
             if (task.enablePreSubdivide && task.preSubdivideLevel > 0)
             {
-                // Always use midpoint triangle subdivision.
-                // Quad-aware pre-subdivide is intentionally disabled due shape drift on non-planar quads.
                 workingIndices = PreSubdivideIndices(srcIndices, task.preSubdivideLevel, vertices, normals, tangents, uv, uv2, uv3, uv4, colors, boneWeights, hasNormals, hasTangents, hasUv2, hasUv3, hasUv4, hasColors, hasBoneWeights, vertexSources, ref preAddedVertices);
             }
             swPre.Stop();
@@ -280,7 +270,7 @@ public static class MeshTrimProcessor
                 ToolName,
                 IsVerbose(trimmer),
                 "Trim",
-                $"Renderer={renderer.name}, SubMesh={sub}, Texture={task.texture.name}, PreSubdivideEnabled={task.enablePreSubdivide}, PreSubdivideLevel={task.preSubdivideLevel}, QuadAware={task.preSubdivideQuadAware}, QuadCandidates={quadCandidates}, AcceptedQuads={acceptedQuads}, RejectedQuadCandidates={rejectedQuads}, TriangleFallbackCount={triFallback}, TrianglesBeforePreSubdivide={triBeforeSub}, TrianglesAfterPreSubdivide={workingIndices.Length / 3}, PreSubdivideAddedVertices={preAddedVertices}, PreSubdivideMs={swPre.ElapsedMilliseconds}, " +
+                $"Renderer={renderer.name}, SubMesh={sub}, Texture={task.texture.name}, PreSubdivideEnabled={task.enablePreSubdivide}, PreSubdivideLevel={task.preSubdivideLevel}, TrianglesBeforePreSubdivide={triBeforeSub}, TrianglesAfterPreSubdivide={workingIndices.Length / 3}, PreSubdivideAddedVertices={preAddedVertices}, PreSubdivideMs={swPre.ElapsedMilliseconds}, " +
                 $"OriginalTriangles={stats.originalTriangles}, OutputTriangles={stats.outputTriangles}, RemovedTriangles={stats.removedTriangles}, " +
                 $"AddedVertices={stats.addedVertices}, Intersections={stats.intersections}, " +
                 $"AllInsideButInteriorOutside={stats.allInsideButInteriorOutside}, AllOutsideButInteriorInside={stats.allOutsideButInteriorInside}, " +
@@ -390,141 +380,9 @@ public static class MeshTrimProcessor
         cache[key]=idx; addedVertices++; return idx;
     }
 
-
-
-    private struct QuadCandidate { public int triA; public int triB; public int v0; public int v1; public int v2; public int v3; public float score; }
-
-    private static int[] PreSubdivideIndicesQuadAware(
-        int[] srcIndices, int level,
-        List<Vector3> vertices, List<Vector3> normals, List<Vector4> tangents, List<Vector2> uv, List<Vector2> uv2, List<Vector2> uv3, List<Vector2> uv4,
-        List<Color> colors, List<BoneWeight> boneWeights, bool hasNormals, bool hasTangents, bool hasUv2, bool hasUv3, bool hasUv4, bool hasColors, bool hasBoneWeights,
-        List<VertexSource> vertexSources, ref int addedVertices, out int quadCandidates, out int acceptedQuads, out int rejectedQuads, out int triFallback)
-    {
-        int[] indices = srcIndices;
-        quadCandidates = 0; acceptedQuads = 0; rejectedQuads = 0; triFallback = 0;
-        int rejZero = 0, rejSelf = 0, rejWind = 0;
-        for (int lv = 0; lv < level; lv++)
-        {
-            int triCount = indices.Length / 3;
-            var edgeMap = new Dictionary<long, List<int>>();
-            for (int t = 0; t < triCount; t++)
-            {
-                int i0 = indices[t*3], i1 = indices[t*3+1], i2 = indices[t*3+2];
-                AddTriEdgeIndex(edgeMap, i0, i1, t);
-                AddTriEdgeIndex(edgeMap, i1, i2, t);
-                AddTriEdgeIndex(edgeMap, i2, i0, t);
-            }
-
-            var candidates = new List<QuadCandidate>();
-            foreach (var kv in edgeMap)
-            {
-                if (kv.Value.Count != 2) continue;
-                int ta = kv.Value[0], tb = kv.Value[1];
-                int a0=indices[ta*3],a1=indices[ta*3+1],a2=indices[ta*3+2];
-                int b0=indices[tb*3],b1=indices[tb*3+1],b2=indices[tb*3+2];
-                if (!TryBuildRelaxedQuad(a0,a1,a2,b0,b1,b2,uv,out int q0,out int q1,out int q2,out int q3,out float score,out int rej))
-                {
-                    if (rej==1) rejZero++; else if (rej==2) rejSelf++; else rejWind++;
-                    continue;
-                }
-                candidates.Add(new QuadCandidate{triA=ta,triB=tb,v0=q0,v1=q1,v2=q2,v3=q3,score=score});
-            }
-
-            candidates.Sort((x,y)=>y.score.CompareTo(x.score));
-            quadCandidates = candidates.Count;
-            var used = new bool[triCount];
-            var cache = new Dictionary<long,int>();
-            var next = new List<int>(indices.Length*4);
-
-            foreach (var c in candidates)
-            {
-                if (used[c.triA] || used[c.triB]) continue;
-                int q0=c.v0,q1=c.v1,q2=c.v2,q3=c.v3;
-                int m01 = GetOrCreateMid(q0,q1,cache,vertices,normals,tangents,uv,uv2,uv3,uv4,colors,boneWeights,hasNormals,hasTangents,hasUv2,hasUv3,hasUv4,hasColors,hasBoneWeights,vertexSources,ref addedVertices);
-                int m12 = GetOrCreateMid(q1,q2,cache,vertices,normals,tangents,uv,uv2,uv3,uv4,colors,boneWeights,hasNormals,hasTangents,hasUv2,hasUv3,hasUv4,hasColors,hasBoneWeights,vertexSources,ref addedVertices);
-                int m23 = GetOrCreateMid(q2,q3,cache,vertices,normals,tangents,uv,uv2,uv3,uv4,colors,boneWeights,hasNormals,hasTangents,hasUv2,hasUv3,hasUv4,hasColors,hasBoneWeights,vertexSources,ref addedVertices);
-                int m30 = GetOrCreateMid(q3,q0,cache,vertices,normals,tangents,uv,uv2,uv3,uv4,colors,boneWeights,hasNormals,hasTangents,hasUv2,hasUv3,hasUv4,hasColors,hasBoneWeights,vertexSources,ref addedVertices);
-                int center = GetOrCreateMid(m01,m23,cache,vertices,normals,tangents,uv,uv2,uv3,uv4,colors,boneWeights,hasNormals,hasTangents,hasUv2,hasUv3,hasUv4,hasColors,hasBoneWeights,vertexSources,ref addedVertices);
-                AddQuadAsTris(next,q0,m01,center,m30);
-                AddQuadAsTris(next,m01,q1,m12,center);
-                AddQuadAsTris(next,center,m12,q2,m23);
-                AddQuadAsTris(next,m30,center,m23,q3);
-                used[c.triA]=used[c.triB]=true; acceptedQuads++;
-            }
-
-            for (int t=0;t<triCount;t++)
-            {
-                if (used[t]) continue;
-                triFallback++;
-                int i0=indices[t*3],i1=indices[t*3+1],i2=indices[t*3+2];
-                int m01=GetOrCreateMid(i0,i1,cache,vertices,normals,tangents,uv,uv2,uv3,uv4,colors,boneWeights,hasNormals,hasTangents,hasUv2,hasUv3,hasUv4,hasColors,hasBoneWeights,vertexSources,ref addedVertices);
-                int m12=GetOrCreateMid(i1,i2,cache,vertices,normals,tangents,uv,uv2,uv3,uv4,colors,boneWeights,hasNormals,hasTangents,hasUv2,hasUv3,hasUv4,hasColors,hasBoneWeights,vertexSources,ref addedVertices);
-                int m20=GetOrCreateMid(i2,i0,cache,vertices,normals,tangents,uv,uv2,uv3,uv4,colors,boneWeights,hasNormals,hasTangents,hasUv2,hasUv3,hasUv4,hasColors,hasBoneWeights,vertexSources,ref addedVertices);
-                next.Add(i0); next.Add(m01); next.Add(m20);
-                next.Add(m01); next.Add(i1); next.Add(m12);
-                next.Add(m20); next.Add(m12); next.Add(i2);
-                next.Add(m01); next.Add(m12); next.Add(m20);
-            }
-            rejectedQuads = Math.Max(0, quadCandidates - acceptedQuads);
-            indices = next.ToArray();
-        }
-        return indices;
-    }
-
-    private static void AddTriEdgeIndex(Dictionary<long, List<int>> map, int a, int b, int tri)
-    {
-        int lo=Math.Min(a,b),hi=Math.Max(a,b); long key=((long)lo<<32)|(uint)hi;
-        if(!map.TryGetValue(key,out var list)){list=new List<int>(2); map[key]=list;}
-        if (!list.Contains(tri)) list.Add(tri);
-    }
-
-    private static bool TryBuildRelaxedQuad(int a0,int a1,int a2,int b0,int b1,int b2,List<Vector2> uv,out int q0,out int q1,out int q2,out int q3,out float score,out int reject)
-    {
-        q0=q1=q2=q3=-1; score=0f; reject=0;
-        var uniq = new List<int>(4);
-        AddUnique(uniq,a0); AddUnique(uniq,a1); AddUnique(uniq,a2); AddUnique(uniq,b0); AddUnique(uniq,b1); AddUnique(uniq,b2);
-        if (uniq.Count != 4) { reject=3; return false; }
-        float ta = Mathf.Abs(SignedArea(uv[a0],uv[a1],uv[a2]));
-        float tb = Mathf.Abs(SignedArea(uv[b0],uv[b1],uv[b2]));
-        if (ta < 1e-8f || tb < 1e-8f) { reject=1; return false; }
-        var center = (uv[uniq[0]]+uv[uniq[1]]+uv[uniq[2]]+uv[uniq[3]])*0.25f;
-        uniq.Sort((i,j)=>Mathf.Atan2(uv[i].y-center.y,uv[i].x-center.x).CompareTo(Mathf.Atan2(uv[j].y-center.y,uv[j].x-center.x)));
-        q0=uniq[0]; q1=uniq[1]; q2=uniq[2]; q3=uniq[3];
-        float area = SignedArea(uv[q0],uv[q1],uv[q2])+SignedArea(uv[q0],uv[q2],uv[q3]);
-        if (Mathf.Abs(area) < 1e-8f) { reject=1; return false; }
-        if (area < 0f) { int t=q1; q1=q3; q3=t; }
-        if (SegmentsIntersect(uv[q0],uv[q1],uv[q2],uv[q3])) { reject=2; return false; }
-        float quadArea = Mathf.Abs(SignedArea(uv[q0],uv[q1],uv[q2])) + Mathf.Abs(SignedArea(uv[q0],uv[q2],uv[q3]));
-        float balance = Mathf.Min(ta,tb)/Mathf.Max(ta,tb);
-        score = quadArea * (0.5f + 0.5f*balance);
-        return true;
-    }
-
-    private static void AddUnique(List<int> list, int v){ if (!list.Contains(v)) list.Add(v); }
-
-    private static bool IsSafeQuadUv(Vector2 q00, Vector2 q10, Vector2 q11, Vector2 q01)
-    {
-        float area = Mathf.Abs(SignedArea(q00, q10, q11)) + Mathf.Abs(SignedArea(q00, q11, q01));
-        if (area < 1e-8f) return false;
-        if (SegmentsIntersect(q00, q10, q11, q01)) return false;
-        if (!IsConvexLike(q00, q10, q11, q01)) return false;
-        return true;
-    }
-
     private static float SignedArea(Vector2 a, Vector2 b, Vector2 c)
     {
         return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-    }
-
-    private static bool IsConvexLike(Vector2 a, Vector2 b, Vector2 c, Vector2 d)
-    {
-        float z1 = SignedArea(a, b, c);
-        float z2 = SignedArea(b, c, d);
-        float z3 = SignedArea(c, d, a);
-        float z4 = SignedArea(d, a, b);
-        int pos = (z1 > 0 ? 1 : 0) + (z2 > 0 ? 1 : 0) + (z3 > 0 ? 1 : 0) + (z4 > 0 ? 1 : 0);
-        int neg = (z1 < 0 ? 1 : 0) + (z2 < 0 ? 1 : 0) + (z3 < 0 ? 1 : 0) + (z4 < 0 ? 1 : 0);
-        return pos == 0 || neg == 0 || pos == 1 || neg == 1;
     }
 
     private static bool SegmentsIntersect(Vector2 p1, Vector2 p2, Vector2 q1, Vector2 q2)
@@ -535,10 +393,6 @@ public static class MeshTrimProcessor
         float o4 = SignedArea(q1, q2, p2);
         return (o1 * o2 < 0f) && (o3 * o4 < 0f);
     }
-
-    private static void GetShared(int a0,int a1,int a2,int b0,int b1,int b2,out int s0,out int s1){s0=-1;s1=-1;int[] a={a0,a1,a2};int[] b={b0,b1,b2};foreach(var x in a){if(x==b0||x==b1||x==b2){if(s0<0)s0=x; else{s1=x;return;}}}}
-    private static int GetOther(int a0,int a1,int a2,int s0,int s1){if(a0!=s0&&a0!=s1)return a0; if(a1!=s0&&a1!=s1)return a1; if(a2!=s0&&a2!=s1)return a2; return -1;}
-    private static void AddQuadAsTris(List<int> dst,int q00,int q10,int q11,int q01){dst.Add(q00);dst.Add(q10);dst.Add(q11); dst.Add(q00);dst.Add(q11);dst.Add(q01);}
 
     private static TrimStats ProcessSubMesh(
         int[] srcIndices,

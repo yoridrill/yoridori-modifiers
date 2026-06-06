@@ -10,7 +10,7 @@ public static class AutoFillColorResolver
 {
     private const string ToolName = "YM Mesh Trimmer";
     private const string DefaultConfigGuid = "913b6d45eecf30e8e5727b508b630201";
-    private const string UserConfigPath = "Assets/NDMF-VRoid-Mesh-Trimmer-Setting.json";
+    private const string UserConfigPath = "Assets/YM-Mesh-Trimmer-Setting.json";
     private const float AlphaThreshold = 0.05f;
 
     [Serializable]
@@ -35,7 +35,6 @@ public static class AutoFillColorResolver
     {
         public string[] target;
         public int level;
-        public bool quadAware;
     }
 
     private enum ConfigSource
@@ -109,16 +108,14 @@ public static class AutoFillColorResolver
             if (target == null || target.usages == null) continue;
             target.enablePreSubdivide = false;
             target.preSubdivideLevel = 0;
-            target.preSubdivideQuadAware = false;
             foreach (var rule in config.preSubdivide)
             {
                 if (rule == null || rule.target == null) continue;
                 if (!TryMatchTarget(target, rule.target)) continue;
                 target.enablePreSubdivide = rule.level > 0;
                 target.preSubdivideLevel = Mathf.Clamp(rule.level, 0, 2);
-                target.preSubdivideQuadAware = rule.quadAware;
                 matched++;
-                LogUtility.Verbose(ToolName, verbose, "AutoConfig", $"PreSubdivideMatched TargetMaterial={GetFirstUsageMaterialName(target)}, Level={target.preSubdivideLevel}, QuadAware={target.preSubdivideQuadAware}");
+                LogUtility.Verbose(ToolName, verbose, "AutoConfig", $"PreSubdivideMatched TargetMaterial={GetFirstUsageMaterialName(target)}, Level={target.preSubdivideLevel}");
                 break;
             }
         }
@@ -366,13 +363,13 @@ public static class AutoFillColorResolver
         }
         catch (Exception ex)
         {
-            LogUtility.Warning(ToolName, "AutoConfig", "Failed to parse fill-color config JSON: " + ex.Message + " (" + path + ")");
+            LogUtility.Warning(ToolName, "AutoConfig", "Failed to parse mesh-trimmer config JSON: " + ex.Message + " (" + path + ")");
             return null;
         }
 
-        if (config == null || config.fillColors == null)
+        if (config == null)
         {
-            LogUtility.Warning(ToolName, "AutoConfig", "Failed to parse fill-color config JSON: deserialized object was null or missing fillColors. (" + path + ")");
+            LogUtility.Warning(ToolName, "AutoConfig", "Failed to parse mesh-trimmer config JSON: deserialized object was null. (" + path + ")");
             return null;
         }
 

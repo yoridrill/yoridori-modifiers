@@ -406,7 +406,7 @@ namespace YoridoriModifiers.Core.Editor
             component.enableForWindows = true;
             component.enableForAndroid = false;
             component.enableForiOS = false;
-            component.maskDilatePixels = 12;
+            component.maskDilatePixels = 20;
             component.alphaThreshold = 0.01f;
             EditorUtility.SetDirty(component);
         }

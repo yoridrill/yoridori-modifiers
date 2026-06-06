@@ -685,7 +685,6 @@ public class MeshTrimmerComponentEditor : Editor
                 fillColor = target.fillColor,
                 enablePreSubdivide = target.enablePreSubdivide,
                 preSubdivideLevel = target.preSubdivideLevel,
-                preSubdivideQuadAware = target.preSubdivideQuadAware,
                 usages = new List<MeshTrimmerComponent.RendererSubMeshRef>()
             };
 

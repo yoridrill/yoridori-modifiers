@@ -68,6 +68,70 @@ Inspector の警告には、そのコンポーネントがビルド時に使わ�
 
 `Solidify` は `alpha > 0` のピクセルを元に塗り広げます。  
 
+## カスタム設定 JSON
+
+プロジェクト内の `Assets/YM-Mesh-Trimmer-Setting.json` に設定 JSON を置くと、同梱の `YMMeshTrimmer/Settings.json` の代わりに使われます。
+ユーザー JSON は同梱設定への追加ではなく、完全な置き換えです。
+
+塗り足し色だけ指定する最小例です。
+
+```json
+{
+  "fillColors": [
+    {
+      "target": ["eyeline"],
+      "source": ["faceskin"],
+      "uv": [0.3242, 0.4902]
+    }
+  ]
+}
+```
+
+事前細分化だけ指定する最小例です。
+
+```json
+{
+  "preSubdivide": [
+    {
+      "target": ["eyelash"],
+      "level": 1
+    }
+  ]
+}
+```
+
+複数の設定をまとめて指定する例です。
+
+```json
+{
+  "fillColors": [
+    {
+      "target": ["eyeline", "アイライン"],
+      "source": ["faceskin", "face_00_skin", "顔"],
+      "uv": [0.3242, 0.4902]
+    }
+  ],
+  "preSubdivide": [
+    {
+      "target": ["eyelash", "まつげ", "睫毛"],
+      "level": 1
+    }
+  ]
+}
+```
+
+- `trimAlgorithm` (optional)
+  - 省略時は `edgeCrossing` です。
+  - `edgeCrossing`: 現在の標準方式です。透明領域との交差を使って切断形状を作ります。
+  - `legacyInsidePoint`: 旧方式です。既存の内側判定ルートを使います。新方式で欠けやとげが出るアバター向けの互換用です。
+- `fillColors` (optional)
+  - `target` に一致したマテリアルの塗り足しを `FillColor` にし、`source` に一致したマテリアルのメインテクスチャから `uv` 座標の色を取得します。
+- `preSubdivide` (optional)
+  - `target` に一致したマテリアルへ事前細分化の初期値を反映します。
+  - `level` は `0` から `2` の範囲です。
+  - `0` は無効、`1` は各三角形を1段階細分化、`2` はさらに細かく細分化します。
+  - 値が大きいほどトリミング精度は上がりやすくなりますが、処理後の頂点数と処理時間も増えます。
+
 ## プリセットでの追加
 
 Hierarchy でアバターを右クリックし、`Yoridori Modifiers/Create YM Components Object for VRoid` または `Yoridori Modifiers/Add Component with VRoid Defaults/YM Mesh Trimmer` から追加すると、Mesh Trimmer は2つ追加されます。

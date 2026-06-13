@@ -1253,9 +1253,12 @@ public class MeshTrimmerNdmfPlugin : Plugin<MeshTrimmerNdmfPlugin>
                     continue;
                 }
 
-                MeshTrimmerComponentEditor.EnsureAutoDetectedTargets(trimmer, false);
-                MeshTrimProcessor.ApplyTrim(trimmer, true);
-                TexturePostProcessProcessor.ApplyBuildTimeReplacement(trimmer);
+                ErrorReport.WithContextObject(trimmer, () =>
+                {
+                    MeshTrimmerComponentEditor.EnsureAutoDetectedTargets(trimmer, false);
+                    MeshTrimProcessor.ApplyTrim(trimmer, true, context);
+                    TexturePostProcessProcessor.ApplyBuildTimeReplacement(trimmer, context);
+                });
                 executedForCurrentPlatform = true;
             }
 

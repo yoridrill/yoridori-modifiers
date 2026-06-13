@@ -49,7 +49,7 @@ namespace YoridoriModifiers.EyeFreeze
 
             try
             {
-                Build(context, component);
+                ErrorReport.WithContextObject(component, () => Build(context, component));
             }
             finally
             {
@@ -196,6 +196,7 @@ namespace YoridoriModifiers.EyeFreeze
             var controller = sourceController != null
                 ? Object.Instantiate(sourceController)
                 : new AnimatorController();
+            RegisterReplacedObject(sourceController, controller);
 
             controller.name = "YM Eye Freeze FX";
             context.AssetSaver.SaveAsset(controller);
@@ -319,6 +320,7 @@ namespace YoridoriModifiers.EyeFreeze
             var parameters = descriptor.expressionParameters != null
                 ? Object.Instantiate(descriptor.expressionParameters)
                 : ScriptableObject.CreateInstance<VRCExpressionParameters>();
+            RegisterReplacedObject(descriptor.expressionParameters, parameters);
 
             parameters.name = "YM Eye Freeze Parameters";
             var list = parameters.parameters != null
@@ -363,6 +365,7 @@ namespace YoridoriModifiers.EyeFreeze
             var menu = descriptor.expressionsMenu != null
                 ? Object.Instantiate(descriptor.expressionsMenu)
                 : ScriptableObject.CreateInstance<VRCExpressionsMenu>();
+            RegisterReplacedObject(descriptor.expressionsMenu, menu);
 
             menu.name = "YM Eye Freeze Menu";
             menu.controls ??= new System.Collections.Generic.List<VRCExpressionsMenu.Control>();
@@ -401,6 +404,19 @@ namespace YoridoriModifiers.EyeFreeze
             {
                 if (components[i] == null) continue;
                 Object.DestroyImmediate(components[i]);
+            }
+        }
+
+        private static void RegisterReplacedObject(Object original, Object replacement)
+        {
+            if (original == null || replacement == null) return;
+            try
+            {
+                ObjectRegistry.RegisterReplacedObject(original, replacement);
+            }
+            catch (ArgumentException)
+            {
+                // The replacement may already be known to NDMF if another service touched it first.
             }
         }
     }

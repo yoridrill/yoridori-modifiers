@@ -19,6 +19,9 @@ Unity 2022.3 / VCC / ALCOM で作成した VRChat Avatars Project での利用�
 - `YM Eye Freeze`
   - Exメニューに Eye Look と Blink を一時停止し、目ボーンを初期状態で固定するモードを追加します。
   - カメラ目線化やターゲット追従は行いません。
+- `YM VRoid Skirt Refine`
+  - VRoid のワンピース、スカート、ロングコート裾まわりをビルド時に非破壊で整えるためのツールです。
+  - ワンピースの先端側延長、ロングコートの根本側追加、PhysBone統合、Rotation Constraint、PhysBoneCollider、ウェイト再配分に対応しています。
 
 ## 導入
 
@@ -39,8 +42,9 @@ https://yoridrill.github.io/vpm-repos/redirect.html
 - `Yoridori Modifiers/YM Mesh Trimmer`
 - `Yoridori Modifiers/YM MToon to lilToon`
 - `Yoridori Modifiers/YM Eye Freeze`
+- `Yoridori Modifiers/YM VRoid Skirt Refine`
 
-VRoid アバターでは、Hierarchy のアバターを右クリックして以下のメニューを使うと、4ツールをまとめた GameObject を追加できます。
+VRoid アバターでは、Hierarchy のアバターを右クリックして以下のメニューを使うと、5ツールをまとめた GameObject を追加できます。
 
 - `Yoridori Modifiers/Create YM Components Object for VRoid/Long Sleeves`
 - `Yoridori Modifiers/Create YM Components Object for VRoid/Short Sleeves`
@@ -52,6 +56,7 @@ VRoid アバターでは、Hierarchy のアバターを右クリックして以�
 個別に追加したい場合は、`Yoridori Modifiers/Add Component with VRoid Defaults` から選択できます。
 
 `YM Mesh Trimmer` は Android/iOS 用と Windows 用の2つが追加され、Windows 用は広めのマスク設定になります。
+`YM VRoid Skirt Refine` は `Yoridori Modifiers/Add Component with VRoid Defaults/YM VRoid Skirt Refine` から追加できます。Preset は Settings をまとめて変更するためのもので、ビルド時は Settings の値を参照して処理します。
 
 ## Preview
 
@@ -72,8 +77,9 @@ Yoridori Modifiers のどの `Reset Preview` からでも、各ツールの Prev
 - [YM Mesh Trimmer](./YMMeshTrimmer/README.md)
 - [YM MToon to lilToon](./YMMToonToLilToon/README.md)
 - [YM Eye Freeze](./YMEyeFreeze/README.md)
+- [YM VRoid Skirt Refine](./YMVRoidSkirtRefine/README.md)
 
-ビルド時は、`YM Arm Patch`、`YM Mesh Trimmer`、`YM MToon to lilToon`、`YM Eye Freeze` の順で処理します。  
+ビルド時は、`YM Arm Patch`、`YM VRoid Skirt Refine`、`YM Mesh Trimmer`、`YM MToon to lilToon`、`YM Eye Freeze` の順で処理します。  
 
 ## ライセンス
 

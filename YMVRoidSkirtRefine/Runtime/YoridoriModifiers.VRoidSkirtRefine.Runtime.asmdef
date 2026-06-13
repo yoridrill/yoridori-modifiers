@@ -1,0 +1,18 @@
+{
+    "name": "YoridoriModifiers.VRoidSkirtRefine.Runtime",
+    "rootNamespace": "YoridoriModifiers.VRoidSkirtRefine",
+    "references": [
+        "VRC.SDKBase",
+        "VRC.SDK3.Dynamics.PhysBone",
+        "VRC.Dynamics"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

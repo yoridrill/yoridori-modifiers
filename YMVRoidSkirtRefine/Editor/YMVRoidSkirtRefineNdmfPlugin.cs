@@ -58,7 +58,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
             try
             {
-                Build(context.AvatarRootObject, component);
+                ErrorReport.WithContextObject(component, () => Build(context.AvatarRootObject, component, context));
             }
             finally
             {
@@ -76,7 +76,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 .FirstOrDefault();
         }
 
-        private static void Build(GameObject avatarRoot, YMVRoidSkirtRefine component)
+        private static void Build(GameObject avatarRoot, YMVRoidSkirtRefine component, BuildContext context)
         {
             if (avatarRoot == null || component == null) return;
             UnpackPrefabInstanceForBuild(avatarRoot, component);
@@ -94,26 +94,26 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
             if (onePieceMatchesLongCoat)
             {
-                var longCoatResult = BuildLongCoatRefine(avatarRoot, component);
+                var longCoatResult = BuildLongCoatRefine(avatarRoot, component, context);
                 refineResults.Add(longCoatResult);
-                MatchOnePieceToLongCoat(avatarRoot, component, longCoatResult);
+                MatchOnePieceToLongCoat(avatarRoot, component, longCoatResult, context);
             }
             else if (longCoatMatchesOnePiece)
             {
-                var onePieceResult = BuildOnePieceRefine(avatarRoot, component);
+                var onePieceResult = BuildOnePieceRefine(avatarRoot, component, context);
                 refineResults.Add(onePieceResult);
-                MatchLongCoatToOnePiece(avatarRoot, component, onePieceResult);
+                MatchLongCoatToOnePiece(avatarRoot, component, onePieceResult, context);
             }
             else
             {
                 if (component.enableOnePieceRefine)
                 {
-                    refineResults.Add(BuildOnePieceRefine(avatarRoot, component));
+                    refineResults.Add(BuildOnePieceRefine(avatarRoot, component, context));
                 }
 
                 if (component.enableLongCoatRefine)
                 {
-                    refineResults.Add(BuildLongCoatRefine(avatarRoot, component));
+                    refineResults.Add(BuildLongCoatRefine(avatarRoot, component, context));
                 }
             }
 
@@ -300,7 +300,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             return true;
         }
 
-        private static RefineResult BuildOnePieceRefine(GameObject avatarRoot, YMVRoidSkirtRefine component)
+        private static RefineResult BuildOnePieceRefine(GameObject avatarRoot, YMVRoidSkirtRefine component, BuildContext context)
         {
             var animator = avatarRoot.GetComponentInChildren<Animator>(true);
             if (animator == null)
@@ -396,7 +396,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 component.verboseLog);
 
             RebindDeletedManagementBones(avatarRoot, oldToNewBoneMap, component.verboseLog);
-            ReweightSkirtVertices(avatarRoot, chainReweightInfos, hips, component.onePieceHipWeightReduction, null, 0.0f, component.verboseLog);
+            ReweightSkirtVertices(avatarRoot, chainReweightInfos, hips, component.onePieceHipWeightReduction, null, 0.0f, component.verboseLog, context);
             DeleteSourceChains(chainsToDelete);
 
             var rootPhysBone = unifiedRoot.gameObject.GetComponent<VRCPhysBone>();
@@ -464,7 +464,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             return result;
         }
 
-        private static void MatchOnePieceToLongCoat(GameObject avatarRoot, YMVRoidSkirtRefine component, RefineResult longCoatResult)
+        private static void MatchOnePieceToLongCoat(GameObject avatarRoot, YMVRoidSkirtRefine component, RefineResult longCoatResult, BuildContext context)
         {
             if (avatarRoot == null || component == null || longCoatResult == null || longCoatResult.IsEmpty)
             {
@@ -481,10 +481,10 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 .ToList();
             var animator = avatarRoot.GetComponentInChildren<Animator>(true);
             var hips = animator != null ? animator.GetBoneTransform(HumanBodyBones.Hips) : null;
-            MatchChainsToTarget(avatarRoot, chains, longCoatResult, false, null, false, hips, component.onePieceHipWeightReduction, null, 0.0f, component.verboseLog);
+            MatchChainsToTarget(avatarRoot, chains, longCoatResult, false, null, false, hips, component.onePieceHipWeightReduction, null, 0.0f, component.verboseLog, context);
         }
 
-        private static void MatchLongCoatToOnePiece(GameObject avatarRoot, YMVRoidSkirtRefine component, RefineResult onePieceResult)
+        private static void MatchLongCoatToOnePiece(GameObject avatarRoot, YMVRoidSkirtRefine component, RefineResult onePieceResult, BuildContext context)
         {
             if (avatarRoot == null || component == null || onePieceResult == null || onePieceResult.IsEmpty)
             {
@@ -512,7 +512,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 component.longCoatHipWeightReduction,
                 animator != null ? animator.GetBoneTransform(HumanBodyBones.Spine) : null,
                 component.longCoatSpineWeightReduction,
-                component.verboseLog);
+                component.verboseLog,
+                context);
         }
 
         private static void MatchChainsToTarget(
@@ -526,7 +527,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             float hipWeightReduction,
             Transform spineBone,
             float spineWeightReduction,
-            bool verboseLog)
+            bool verboseLog,
+            BuildContext context)
         {
             if (avatarRoot == null || sourceChains == null || sourceChains.Count == 0 || targetResult == null || targetResult.IsEmpty) return;
 
@@ -567,7 +569,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 targetBoneChains,
                 sharedSourceBones);
 
-            ReweightSkirtVertices(avatarRoot, chainReweightInfos, hipBone, hipWeightReduction, spineBone, spineWeightReduction, verboseLog);
+            ReweightSkirtVertices(avatarRoot, chainReweightInfos, hipBone, hipWeightReduction, spineBone, spineWeightReduction, verboseLog, context);
             foreach (var chain in chainsToDelete
                          .Where(c => c != null && c.SwingRoot != null)
                          .GroupBy(c => c.SwingRoot)
@@ -770,7 +772,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             return string.Empty;
         }
 
-        private static RefineResult BuildLongCoatRefine(GameObject avatarRoot, YMVRoidSkirtRefine component)
+        private static RefineResult BuildLongCoatRefine(GameObject avatarRoot, YMVRoidSkirtRefine component, BuildContext context)
         {
             var animator = avatarRoot.GetComponentInChildren<Animator>(true);
             if (animator == null)
@@ -929,7 +931,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 component.longCoatHipWeightReduction,
                 animator != null ? animator.GetBoneTransform(HumanBodyBones.Spine) : null,
                 component.longCoatSpineWeightReduction,
-                component.verboseLog);
+                component.verboseLog,
+                context);
             foreach (var originalChain in originalChainsToDelete)
             {
                 DeleteOriginalChainBones(originalChain);
@@ -2515,7 +2518,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             float hipWeightReduction,
             Transform spineBone,
             float spineWeightReduction,
-            bool verboseLog)
+            bool verboseLog,
+            BuildContext context)
         {
             if (avatarRoot == null || chainInfos == null || chainInfos.Count == 0) return;
             hipWeightReduction = Mathf.Clamp01(hipWeightReduction);
@@ -2568,6 +2572,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 if (!changedWeights) continue;
 
                 var newMesh = Object.Instantiate(mesh);
+                RegisterReplacedObject(mesh, newMesh);
+                context?.AssetSaver.SaveAsset(newMesh);
                 newMesh.name = mesh.name + "_YMVRoidSkirtRefine";
                 newMesh.bindposes = bindposes.ToArray();
                 newMesh.boneWeights = weights;
@@ -3121,6 +3127,19 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 var component = components[i];
                 if (component == null) continue;
                 Object.DestroyImmediate(component);
+            }
+        }
+
+        private static void RegisterReplacedObject(Object original, Object replacement)
+        {
+            if (original == null || replacement == null) return;
+            try
+            {
+                ObjectRegistry.RegisterReplacedObject(original, replacement);
+            }
+            catch (ArgumentException)
+            {
+                // The replacement may already have been referenced by NDMF.
             }
         }
 

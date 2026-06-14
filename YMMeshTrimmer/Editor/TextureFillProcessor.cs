@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using nadena.dev.ndmf;
 using UnityEditor;
 using UnityEngine;
 using YoridoriModifiers.Core.Editor;
@@ -10,7 +11,7 @@ public static class TexturePostProcessProcessor
 {
     private const string ToolName = "YM Mesh Trimmer";
 
-    public static void ApplyBuildTimeReplacement(MeshTrimmerComponent trimmer)
+    public static void ApplyBuildTimeReplacement(MeshTrimmerComponent trimmer, BuildContext context = null)
     {
         if (trimmer == null)
         {
@@ -36,6 +37,8 @@ public static class TexturePostProcessProcessor
                     continue;
                 }
 
+                RegisterReplacedObject(target.mainTexture, processedTexture);
+                context?.AssetSaver.SaveAsset(processedTexture);
                 processedTextureCache[target.mainTexture] = processedTexture;
             }
 
@@ -70,8 +73,10 @@ public static class TexturePostProcessProcessor
                     {
                         name = currentMaterial.name + "_YoridoriMeshTrimmerProcessed"
                     };
+                    RegisterReplacedObject(currentMaterial, replacement);
                     replacement.SetTexture(textureProperty, processedTexture);
                     ReplaceAllMatchingTextureSlots(replacement, sourceMainTexture, processedTexture);
+                    context?.AssetSaver.SaveAsset(replacement);
                     materialCache[key] = replacement;
                 }
 
@@ -95,6 +100,19 @@ public static class TexturePostProcessProcessor
         unchecked
         {
             return (material.GetInstanceID() * 397) ^ texture.GetInstanceID();
+        }
+    }
+
+    private static void RegisterReplacedObject(UnityEngine.Object original, UnityEngine.Object replacement)
+    {
+        if (original == null || replacement == null) return;
+        try
+        {
+            ObjectRegistry.RegisterReplacedObject(original, replacement);
+        }
+        catch (ArgumentException)
+        {
+            // The replacement may already have been referenced by NDMF.
         }
     }
 

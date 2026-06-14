@@ -42,7 +42,7 @@ namespace YoridoriModifiers.MToonToLilToon
                 foreach (var component in components)
                 {
                     if (component != selected) continue;
-                    ApplyOnBuild(component);
+                    ErrorReport.WithContextObject(component, () => ApplyOnBuild(component, context));
                 }
             }
             finally
@@ -62,9 +62,9 @@ namespace YoridoriModifiers.MToonToLilToon
             return avatarRootTransform != null ? avatarRootTransform.gameObject : null;
         }
 
-        private static void ApplyOnBuild(MToonToLilToonComponent component)
+        private static void ApplyOnBuild(MToonToLilToonComponent component, BuildContext context)
         {
-            MToonToLilToonProcessor.ApplyOnBuild(component);
+            MToonToLilToonProcessor.ApplyOnBuild(component, buildContext: context);
         }
 
         private static MToonToLilToonComponent SelectPreferredComponent(

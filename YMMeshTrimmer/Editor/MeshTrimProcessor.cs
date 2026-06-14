@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using nadena.dev.ndmf;
 using UnityEngine;
 using UnityEngine.Rendering;
 using YoridoriModifiers.Core.Editor;
@@ -104,7 +105,7 @@ public static class MeshTrimProcessor
         ApplyTrim(trimmer, true);
     }
 
-    public static void ApplyTrim(MeshTrimmerComponent trimmer, bool preserveBlendShapes)
+    public static void ApplyTrim(MeshTrimmerComponent trimmer, bool preserveBlendShapes, BuildContext context = null)
     {
         if (trimmer == null) return;
 
@@ -163,7 +164,7 @@ public static class MeshTrimProcessor
             $"TaskRenderers={tasksByRenderer.Count}, PreSubdivideEnabledTargetCount={preSubdivideEnabledTargetCount}, TrimAlgorithm={trimmer.trimAlgorithm}");
         foreach (var kv in tasksByRenderer)
         {
-            ProcessRenderer(kv.Key, kv.Value, trimmer, preserveBlendShapes);
+            ProcessRenderer(kv.Key, kv.Value, trimmer, preserveBlendShapes, context);
         }
     }
 
@@ -171,7 +172,8 @@ public static class MeshTrimProcessor
         SkinnedMeshRenderer renderer,
         Dictionary<int, SubMeshTask> tasks,
         MeshTrimmerComponent trimmer,
-        bool preserveBlendShapes)
+        bool preserveBlendShapes,
+        BuildContext context)
     {
         ApplyDerivedMeshSettings(trimmer);
         Mesh src = renderer.sharedMesh;
@@ -308,8 +310,23 @@ public static class MeshTrimProcessor
         CopyBlendShapes(src, dst, vertexSources, renderer.name, preserveBlendShapes, trimmer != null && trimmer.debugEdgeCrossingRoutes);
 
         dst.RecalculateBounds();
+        RegisterReplacedObject(src, dst);
+        context?.AssetSaver.SaveAsset(dst);
         renderer.sharedMesh = dst;
         RestoreBlendShapeWeights(renderer, dst, savedBlendShapeNames, savedBlendShapeWeights);
+    }
+
+    private static void RegisterReplacedObject(UnityEngine.Object original, UnityEngine.Object replacement)
+    {
+        if (original == null || replacement == null) return;
+        try
+        {
+            ObjectRegistry.RegisterReplacedObject(original, replacement);
+        }
+        catch (ArgumentException)
+        {
+            // The replacement may already have been referenced by NDMF.
+        }
     }
 
     private static void ApplyDerivedMeshSettings(MeshTrimmerComponent trimmer)

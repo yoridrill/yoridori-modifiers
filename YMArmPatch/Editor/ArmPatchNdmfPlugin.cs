@@ -25,22 +25,25 @@ namespace YoridoriModifiers.ArmPatch
                 .BeforePlugin("nadena.dev.modular-avatar")
                 .Run("Build YM Arm Patch rig (Before MA)", ctx =>
                 {
-                    ApplyFix(ctx, PatchBuildOrder.BeforeModularAvatar);
+                    ErrorReport.WithContextObject(ctx?.AvatarRootObject, () => ApplyFix(ctx, PatchBuildOrder.BeforeModularAvatar));
                 });
 
             InPhase(BuildPhase.Transforming)
                 .AfterPlugin("nadena.dev.modular-avatar")
                 .Run("Build YM Arm Patch rig (After MA)", ctx =>
                 {
-                    ApplyFix(ctx, PatchBuildOrder.AfterModularAvatar);
+                    ErrorReport.WithContextObject(ctx?.AvatarRootObject, () => ApplyFix(ctx, PatchBuildOrder.AfterModularAvatar));
                 });
 
             InPhase(BuildPhase.Optimizing)
                 .BeforePlugin("com.anatawa12.avatar-optimizer")
                 .Run("Reset preview and remove patch components", ctx =>
                 {
-                    ArmPatchPreviewUtility.ResetAllPreviewArtifacts();
-                    RemovePatchComponentsBeforeAO(ctx);
+                    ErrorReport.WithContextObject(ctx?.AvatarRootObject, () =>
+                    {
+                        ArmPatchPreviewUtility.ResetAllPreviewArtifacts();
+                        RemovePatchComponentsBeforeAO(ctx);
+                    });
                 });
         }
 
@@ -51,6 +54,7 @@ namespace YoridoriModifiers.ArmPatch
             var components = ctx.AvatarRootObject.GetComponentsInChildren<ArmPatchComponent>(true);
             if (components == null || components.Length == 0) return;
 
+            using var errorContext = ErrorReport.WithContextObject(components.FirstOrDefault(c => c != null));
             var settings = Aggregate(components, ctx.AvatarRootObject);
             if (settings.buildOrder != currentPassOrder) return;
 
@@ -75,7 +79,7 @@ namespace YoridoriModifiers.ArmPatch
 
             if (settings.enableForearmFix)
             {
-                BuildForearmFix(ctx.AvatarRootObject, animator, settings, replaceMap);
+                BuildForearmFix(ctx.AvatarRootObject, animator, settings, replaceMap, ctx);
             }
 
             if (settings.enableThumbFix)
@@ -148,7 +152,7 @@ namespace YoridoriModifiers.ArmPatch
 
             if (settings.enableForearmFix)
             {
-                BuildForearmFix(avatarRoot, animator, settings, replaceMap);
+                BuildForearmFix(avatarRoot, animator, settings, replaceMap, null);
             }
 
             if (settings.enableThumbFix)
@@ -263,7 +267,8 @@ namespace YoridoriModifiers.ArmPatch
             GameObject avatarRoot,
             Animator animator,
             AggregatedSettings settings,
-            Dictionary<Transform, Transform> replaceMap)
+            Dictionary<Transform, Transform> replaceMap,
+            BuildContext context)
         {
             BuildForearmSide(
                 "L",
@@ -285,7 +290,8 @@ namespace YoridoriModifiers.ArmPatch
                 settings.constraintMode,
                 settings.verboseLog,
                 replaceMap,
-                avatarRoot
+                avatarRoot,
+                context
             );
 
             BuildForearmSide(
@@ -308,7 +314,8 @@ namespace YoridoriModifiers.ArmPatch
                 settings.constraintMode,
                 settings.verboseLog,
                 replaceMap,
-                avatarRoot
+                avatarRoot,
+                context
             );
         }
 
@@ -332,7 +339,8 @@ namespace YoridoriModifiers.ArmPatch
             ConstraintMode constraintMode,
             bool verboseLog,
             Dictionary<Transform, Transform> replaceMap,
-            GameObject avatarRoot)
+            GameObject avatarRoot,
+            BuildContext context)
         {
             if (twistBoneCount == ForearmTwistBoneCount.Count0) twistBoneType = ForearmTwistBoneType.None;
             else if (string.IsNullOrEmpty(skinMaterialName) || skinMaterialName == "Auto") twistBoneType = ForearmTwistBoneType.AllTwist;
@@ -462,7 +470,8 @@ namespace YoridoriModifiers.ArmPatch
                     twistBones,
                     twistBoneType,
                     skinMaterialName,
-                    verboseLog);
+                    verboseLog,
+                    context);
                 ApplyForearmTwistBoneScales(
                     twistBones,
                     elbowScale,
@@ -1029,7 +1038,8 @@ namespace YoridoriModifiers.ArmPatch
             List<Transform> twistBones,
             ForearmTwistBoneType twistBoneType,
             string skinMaterialName,
-            bool verboseLog)
+            bool verboseLog,
+            BuildContext context)
         {
             var renderers = avatarRoot.GetComponentsInChildren<SkinnedMeshRenderer>(true);
             foreach (var smr in renderers)
@@ -1058,8 +1068,11 @@ namespace YoridoriModifiers.ArmPatch
                     continue;
                 }
 
-                var mesh = UnityEngine.Object.Instantiate(smr.sharedMesh);
-                mesh.name = smr.sharedMesh.name + "_Twist";
+                var sourceMesh = smr.sharedMesh;
+                var mesh = UnityEngine.Object.Instantiate(sourceMesh);
+                RegisterReplacedObject(sourceMesh, mesh);
+                context?.AssetSaver.SaveAsset(mesh);
+                mesh.name = sourceMesh.name + "_Twist";
                 var bones = smr.bones.ToList();
                 var bindposes = mesh.bindposes.ToList();
                 Matrix4x4 lowerBindpose = lowerIdx >= 0 && lowerIdx < bindposes.Count
@@ -1372,6 +1385,19 @@ namespace YoridoriModifiers.ArmPatch
                 {
                     UnityEngine.Object.DestroyImmediate(components[i]);
                 }
+            }
+        }
+
+        private static void RegisterReplacedObject(UnityEngine.Object original, UnityEngine.Object replacement)
+        {
+            if (original == null || replacement == null) return;
+            try
+            {
+                ObjectRegistry.RegisterReplacedObject(original, replacement);
+            }
+            catch (ArgumentException)
+            {
+                // The replacement may already have been referenced by NDMF.
             }
         }
 

@@ -1,10 +1,12 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using nadena.dev.ndmf;
 using UnityEditor;
 using UnityEngine;
 using YoridoriModifiers.Core.Editor;
 using UnityEngine.Rendering;
+using Object = UnityEngine.Object;
 
 namespace YoridoriModifiers.MToonToLilToon
 {
@@ -79,7 +81,11 @@ namespace YoridoriModifiers.MToonToLilToon
             }
         }
 
-        internal static void ApplyOnBuild(MToonToLilToonComponent component, System.Action<string> onProgress = null, ConversionRoute route = ConversionRoute.Build)
+        internal static void ApplyOnBuild(
+            MToonToLilToonComponent component,
+            System.Action<string> onProgress = null,
+            ConversionRoute route = ConversionRoute.Build,
+            BuildContext buildContext = null)
         {
             if (component == null) return;
             EnsureHairSelectionsMatchAvatarMaterials(component);
@@ -151,7 +157,8 @@ namespace YoridoriModifiers.MToonToLilToon
                     component.verboseLog,
                     false,
                     report,
-                    onProgress);
+                    onProgress,
+                    buildContext);
             }
 
             var resolvedFaceMaterial = fakeShadowFaceMaterial != null
@@ -393,7 +400,8 @@ namespace YoridoriModifiers.MToonToLilToon
             bool verboseLog,
             bool useHairMergeCache,
             ConversionReport report,
-            System.Action<string> onProgress)
+            System.Action<string> onProgress,
+            BuildContext buildContext)
         {
             if (renderer == null) return;
 
@@ -423,6 +431,7 @@ namespace YoridoriModifiers.MToonToLilToon
                 var canMerge = selectedForMerge.Contains(source);
                 if (MToonToLilToonMapper.TryConvert(source, lilToonShader, globalOverrides, useToonStandardFallback, out var converted, report))
                 {
+                    RegisterReplacedObject(source, converted);
                     ApplyMToon10ShadingShiftStrengthMask(source, converted, report);
                     result.Add(converted);
                     report.ConvertedMaterialCount++;
@@ -495,11 +504,12 @@ namespace YoridoriModifiers.MToonToLilToon
                     out mergedMaterial,
                     out fakeShadowMaterial,
                     out mergedRects,
-                    onProgress))
+                    onProgress,
+                    buildContext))
             {
                 mergedMaterialCreated = true;
                 onProgress?.Invoke("Rebuilding mesh...");
-                ApplyMergedMaterialAndMesh(renderer, result, resultSourceIndices, mergedIndices, mergedRepresentativeIndex, mergedMaterial, fakeShadowMaterial, mergedRects, enableHairOutlineCorrection, hairTipOutlineWidth, hairTipRange, report);
+                ApplyMergedMaterialAndMesh(renderer, result, resultSourceIndices, mergedIndices, mergedRepresentativeIndex, mergedMaterial, fakeShadowMaterial, mergedRects, enableHairOutlineCorrection, hairTipOutlineWidth, hairTipRange, report, buildContext);
                 if (mergedHairMaterials != null && mergedMaterial != null)
                 {
                     mergedHairMaterials.Add(mergedMaterial);
@@ -517,6 +527,13 @@ namespace YoridoriModifiers.MToonToLilToon
 
             ReindexTransparentQueues(result, resultSourceIndices, transparentRanks);
             renderer.sharedMaterials = result.ToArray();
+            if (buildContext != null)
+            {
+                foreach (var material in result.Where(m => m != null).Distinct())
+                {
+                    buildContext.AssetSaver.SaveAsset(material);
+                }
+            }
         }
 
         private static Shader ResolveLilToonShader(MToonToLilToonComponent component)
@@ -560,29 +577,31 @@ namespace YoridoriModifiers.MToonToLilToon
             out Material mergedMaterial,
             out Material fakeShadowMaterial,
             out List<Rect> atlasRects,
-            System.Action<string> onProgress)
+            System.Action<string> onProgress,
+            BuildContext buildContext)
         {
             mergedMaterial = null;
             fakeShadowMaterial = null;
             atlasRects = null;
 
+            var baseIndex = mergedRepresentativeIndex >= 0 && mergedRepresentativeIndex < original.Count
+                ? mergedRepresentativeIndex
+                : mergedIndices[0];
             var cacheKey = BuildHairMergeCacheKey(original, mergedIndices, mergedRepresentativeIndex, mergedOutputRenderType, enableFakeShadow);
             if (useHairMergeCache
                 && TryGetCachedHairMergeResult(cacheKey, overrides, fakeShadowDirection, fakeShadowOffset, out mergedMaterial, out fakeShadowMaterial, out atlasRects)
                 && IsValidHairMergeCacheHit(mergedMaterial, atlasRects, mergedIndices.Count))
             {
+                RegisterReplacedObject(original[baseIndex], mergedMaterial);
                 ValidateMergedMaterialTextureReferences(mergedMaterial, report, verboseLog);
                 return true;
             }
-
-            var baseIndex = mergedRepresentativeIndex >= 0 && mergedRepresentativeIndex < original.Count
-                ? mergedRepresentativeIndex
-                : mergedIndices[0];
 
             if (!MToonToLilToonMapper.TryConvert(original[baseIndex], lilToonShader, overrides, useToonStandardFallback, out mergedMaterial, report))
             {
                 return false;
             }
+            RegisterReplacedObject(original[baseIndex], mergedMaterial);
             EnsureReferenceTrackableObjectFlags(mergedMaterial);
             ForceMergedRenderType(mergedMaterial, original[baseIndex], mergedOutputRenderType);
             fakeShadowMaterial = CreateFakeShadowMaterial(mergedMaterial, enableFakeShadow, fakeShadowDirection, fakeShadowOffset, report);
@@ -625,6 +644,10 @@ namespace YoridoriModifiers.MToonToLilToon
             atlas.Apply(true, false);
             BleedTransparentPixels(atlas, 2);
             atlas = CompressGeneratedAtlas(atlas, "_MainTex");
+            if (buildContext != null)
+            {
+                buildContext.AssetSaver.SaveAsset(atlas);
+            }
             mergedMaterial.SetTexture("_MainTex", atlas);
             if (mergedMaterial.HasProperty("_MainTex"))
             {
@@ -633,12 +656,12 @@ namespace YoridoriModifiers.MToonToLilToon
             }
             SetColorIfAnyExists(mergedMaterial, new[] { "_Color", "_BaseColor" }, Color.white);
 
-            BakeOptionalAtlas(new[] { "_ShadowColorTex", "_Shadow1stColorTex" }, original, mergedIndices, mergedMaterial, new[] { "_ShadeTex", "_ShadeTexture", "_ShadeMap", "_ShadeMultiplyTexture", "_ShadeColorTexture" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.Color, verboseLog);
-            BakeOptionalAtlas(new[] { "_EmissionMap" }, original, mergedIndices, mergedMaterial, new[] { "_EmissiveMap", "_EmissionMap" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.Color, verboseLog);
-            BakeOptionalAtlas(new[] { "_BumpMap" }, original, mergedIndices, mergedMaterial, new[] { "_NormalMap", "_BumpMap" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.NormalMap, verboseLog);
-            BakeOptionalAtlas(new[] { "_ShadowStrengthMask" }, original, mergedIndices, mergedMaterial, new[] { "_ShadingShiftTex" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.InvertedLinearMask, verboseLog);
-            BakeOptionalAtlas(new[] { "_ShadowBorderMask" }, original, mergedIndices, mergedMaterial, new[] { "_ShadingGradeTexture", "_ShadowBorderMask" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.LinearMask, verboseLog);
-            BakeOptionalAtlas(new[] { "_OutlineTex", "_OutlineMask" }, original, mergedIndices, mergedMaterial, new[] { "_OutlineWidthTex", "_OutlineWidthTexture", "_OutlineWidthMultiplyTexture", "_OutlineMask" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.LinearMask, verboseLog);
+            BakeOptionalAtlas(new[] { "_ShadowColorTex", "_Shadow1stColorTex" }, original, mergedIndices, mergedMaterial, new[] { "_ShadeTex", "_ShadeTexture", "_ShadeMap", "_ShadeMultiplyTexture", "_ShadeColorTexture" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.Color, verboseLog, buildContext: buildContext);
+            BakeOptionalAtlas(new[] { "_EmissionMap" }, original, mergedIndices, mergedMaterial, new[] { "_EmissiveMap", "_EmissionMap" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.Color, verboseLog, buildContext: buildContext);
+            BakeOptionalAtlas(new[] { "_BumpMap" }, original, mergedIndices, mergedMaterial, new[] { "_NormalMap", "_BumpMap" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.NormalMap, verboseLog, buildContext: buildContext);
+            BakeOptionalAtlas(new[] { "_ShadowStrengthMask" }, original, mergedIndices, mergedMaterial, new[] { "_ShadingShiftTex" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.InvertedLinearMask, verboseLog, buildContext: buildContext);
+            BakeOptionalAtlas(new[] { "_ShadowBorderMask" }, original, mergedIndices, mergedMaterial, new[] { "_ShadingGradeTexture", "_ShadowBorderMask" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.LinearMask, verboseLog, buildContext: buildContext);
+            BakeOptionalAtlas(new[] { "_OutlineTex", "_OutlineMask" }, original, mergedIndices, mergedMaterial, new[] { "_OutlineWidthTex", "_OutlineWidthTexture", "_OutlineWidthMultiplyTexture", "_OutlineMask" }, atlas.width, atlas.height, atlasRects, generatedAssetScopeId, renderer, report, TextureBakeKind.LinearMask, verboseLog, buildContext: buildContext);
             NormalizeMergedEmissionAndMatCapState(original, mergedIndices, mergedMaterial);
             ValidateMergedMaterialTextureReferences(mergedMaterial, report, verboseLog);
             if (useHairMergeCache && HasCacheableMergedAtlasTextures(mergedMaterial) && IsValidHairMergeCacheHit(mergedMaterial, atlasRects, mergedIndices.Count))
@@ -1260,7 +1283,7 @@ namespace YoridoriModifiers.MToonToLilToon
             return resized;
         }
 
-        private static void BakeOptionalAtlas(IReadOnlyList<string> destinationProperties, IReadOnlyList<Material> original, IReadOnlyList<int> mergedIndices, Material mergedMaterial, IReadOnlyList<string> sourceProperties, int atlasWidth, int atlasHeight, IReadOnlyList<Rect> rects, string generatedAssetScopeId, Renderer renderer, ConversionReport report, TextureBakeKind bakeKind, bool verboseLog, BuildTarget? atlasBuildTarget = null)
+        private static void BakeOptionalAtlas(IReadOnlyList<string> destinationProperties, IReadOnlyList<Material> original, IReadOnlyList<int> mergedIndices, Material mergedMaterial, IReadOnlyList<string> sourceProperties, int atlasWidth, int atlasHeight, IReadOnlyList<Rect> rects, string generatedAssetScopeId, Renderer renderer, ConversionReport report, TextureBakeKind bakeKind, bool verboseLog, BuildTarget? atlasBuildTarget = null, BuildContext buildContext = null)
         {
             var destinationProperty = destinationProperties.FirstOrDefault(mergedMaterial.HasProperty);
             if (string.IsNullOrEmpty(destinationProperty)) return;
@@ -1354,6 +1377,10 @@ namespace YoridoriModifiers.MToonToLilToon
                 LogBumpMapSample("atlasBeforeCompress", SampleTextureCenterColor(atlas), atlas.format.ToString());
             }
             atlas = CompressGeneratedAtlas(atlas, destinationProperty, atlasBuildTarget);
+            if (buildContext != null)
+            {
+                buildContext.AssetSaver.SaveAsset(atlas);
+            }
             if (verboseLog && bakeKind == TextureBakeKind.NormalMap)
             {
                 LogBumpMapSample("atlasAfterCompress", SampleTextureCenterColor(atlas), atlas.format.ToString());
@@ -1371,49 +1398,6 @@ namespace YoridoriModifiers.MToonToLilToon
                 SetFloatIfAnyExists(mergedMaterial, new[] { "_UseShadowMask", "_UseShadowStrengthMask" }, 1f);
                 SetFloatIfAnyExists(mergedMaterial, new[] { "_ShadowMaskType" }, 0f);
             }
-        }
-
-
-        private static Texture2D SaveGeneratedAtlasTexture(string scopeId, Renderer renderer, string propertyName, Texture2D atlas)
-        {
-            if (atlas == null) return null;
-            var rendererId = renderer != null ? SanitizePathSegment(renderer.name) : "Renderer";
-            var directory = $"Assets/YoridoriModifiers.MToonToLilToon.Generated/{SanitizePathSegment(scopeId)}";
-            EnsureAssetFolder(directory);
-            var propertyId = SanitizePathSegment(propertyName).TrimStart('_');
-            var fileName = $"Hair_{rendererId}_{propertyId}.png";
-            var assetPath = $"{directory}/{fileName}";
-            var png = atlas.EncodeToPNG();
-            if (png == null || png.Length == 0) return null;
-            System.IO.File.WriteAllBytes(assetPath, png);
-            if (!System.IO.File.Exists(assetPath))
-            {
-                return null;
-            }
-
-            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
-            AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
-            var importer = AssetImporter.GetAtPath(assetPath) as TextureImporter;
-            if (importer != null)
-            {
-                ConfigureAtlasImporter(importer, propertyName, Mathf.Max(atlas.width, atlas.height));
-                importer.SaveAndReimport();
-            }
-            AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceSynchronousImport | ImportAssetOptions.ForceUpdate);
-            var imported = AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath);
-            if (imported != null) return imported;
-
-            var guid = AssetDatabase.AssetPathToGUID(assetPath);
-            if (!string.IsNullOrEmpty(guid))
-            {
-                var resolvedPath = AssetDatabase.GUIDToAssetPath(guid);
-                if (!string.IsNullOrEmpty(resolvedPath))
-                {
-                    imported = AssetDatabase.LoadAssetAtPath<Texture2D>(resolvedPath);
-                }
-            }
-
-            return imported;
         }
 
         private static bool HasCacheableMergedAtlasTextures(Material mergedMaterial)
@@ -1463,16 +1447,6 @@ namespace YoridoriModifiers.MToonToLilToon
         {
             var isNormal = string.Equals(propertyName, "_BumpMap", System.StringComparison.OrdinalIgnoreCase);
             return GeneratedTextureUtility.CompressGeneratedTexture(atlas, propertyName, isNormal, buildTarget);
-        }
-
-        private static void ConfigureAtlasImporter(TextureImporter importer, string propertyName, int maxTextureSize)
-        {
-            var isNormal = string.Equals(propertyName, "_BumpMap", System.StringComparison.OrdinalIgnoreCase);
-            var isMask = string.Equals(propertyName, "_OutlineTex", System.StringComparison.OrdinalIgnoreCase)
-                || string.Equals(propertyName, "_OutlineMask", System.StringComparison.OrdinalIgnoreCase)
-                || string.Equals(propertyName, "_ShadowBorderMask", System.StringComparison.OrdinalIgnoreCase)
-                || string.Equals(propertyName, "_ShadowStrengthMask", System.StringComparison.OrdinalIgnoreCase);
-            GeneratedTextureUtility.ConfigureGeneratedTextureImporter(importer, isNormal, isMask, true, maxTextureSize);
         }
 
         private static Color NeutralNormalColor()
@@ -1609,22 +1583,6 @@ namespace YoridoriModifiers.MToonToLilToon
         private static string FormatVector3(Vector3 v) => $"({v.x:F4},{v.y:F4},{v.z:F4})";
         private static float EncodedX(Color c) => c.r * c.a;
         private static float EncodedY(Color c) => c.g;
-
-        private static void EnsureAssetFolder(string folderPath)
-        {
-            var segments = folderPath.Split('/');
-            var current = segments[0];
-            for (var i = 1; i < segments.Length; i++)
-            {
-                var next = $"{current}/{segments[i]}";
-                if (!AssetDatabase.IsValidFolder(next))
-                {
-                    AssetDatabase.CreateFolder(current, segments[i]);
-                }
-
-                current = next;
-            }
-        }
 
         private static string BuildGeneratedAssetScopeId(MToonToLilToonComponent component)
         {
@@ -1829,7 +1787,7 @@ namespace YoridoriModifiers.MToonToLilToon
             return Mathf.Clamp01(wrapped);
         }
 
-        private static void ApplyMergedMaterialAndMesh(Renderer renderer, List<Material> materials, List<int> materialSourceIndices, IReadOnlyList<int> mergedIndices, int mergedRepresentativeSourceIndex, Material mergedMaterial, Material fakeShadowMaterial, IReadOnlyList<Rect> rects, bool enableHairOutlineCorrection, float hairTipOutlineWidth, float hairTipRange, ConversionReport report)
+        private static void ApplyMergedMaterialAndMesh(Renderer renderer, List<Material> materials, List<int> materialSourceIndices, IReadOnlyList<int> mergedIndices, int mergedRepresentativeSourceIndex, Material mergedMaterial, Material fakeShadowMaterial, IReadOnlyList<Rect> rects, bool enableHairOutlineCorrection, float hairTipOutlineWidth, float hairTipRange, ConversionReport report, BuildContext buildContext)
         {
             var mergedIndexSet = mergedIndices.ToHashSet();
             var newMaterials = new List<Material>();
@@ -1864,6 +1822,8 @@ namespace YoridoriModifiers.MToonToLilToon
             }
 
             var meshCopy = Object.Instantiate(mesh);
+            RegisterReplacedObject(mesh, meshCopy);
+            buildContext?.AssetSaver.SaveAsset(meshCopy);
             var vertices = meshCopy.vertices.ToList();
             var uv = meshCopy.uv;
             if (uv == null || uv.Length == 0) uv = Enumerable.Repeat(Vector2.zero, vertices.Count).ToArray();
@@ -2296,6 +2256,19 @@ namespace YoridoriModifiers.MToonToLilToon
             if (generatedObject == null) return;
             var dontSaveFlags = HideFlags.DontSave | HideFlags.DontSaveInBuild | HideFlags.DontSaveInEditor | HideFlags.HideAndDontSave;
             generatedObject.hideFlags &= ~dontSaveFlags;
+        }
+
+        private static void RegisterReplacedObject(Object original, Object replacement)
+        {
+            if (original == null || replacement == null) return;
+            try
+            {
+                ObjectRegistry.RegisterReplacedObject(original, replacement);
+            }
+            catch (System.ArgumentException)
+            {
+                // NDMF requires registration before the replacement receives a reference.
+            }
         }
 
         private static void ValidateRendererMaterialTextureReferencesBeforeAao(MToonToLilToonComponent component, ConversionReport report)

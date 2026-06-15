@@ -109,6 +109,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         private SerializedProperty longCoatMatchOnePieceProp;
         private SerializedProperty longCoatUseUpperLegCollidersProp;
         private SerializedProperty longCoatUseLowerLegCollidersProp;
+        private SerializedProperty longCoatUseFloorColliderProp;
         private SerializedProperty longCoatPhysBoneProp;
         private SerializedProperty constraintModeProp;
         private SerializedProperty addGeneratedDynamicsToVqtKeepListProp;
@@ -154,6 +155,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             longCoatMatchOnePieceProp = serializedObject.FindProperty("longCoatMatchOnePiece");
             longCoatUseUpperLegCollidersProp = serializedObject.FindProperty("longCoatUseUpperLegColliders");
             longCoatUseLowerLegCollidersProp = serializedObject.FindProperty("longCoatUseLowerLegColliders");
+            longCoatUseFloorColliderProp = serializedObject.FindProperty("longCoatUseFloorCollider");
             longCoatPhysBoneProp = serializedObject.FindProperty("longCoatPhysBone");
             constraintModeProp = serializedObject.FindProperty("constraintMode");
             addGeneratedDynamicsToVqtKeepListProp = serializedObject.FindProperty("addGeneratedDynamicsToVqtKeepList");
@@ -407,6 +409,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             estimate.GeneratedPhysBoneColliders += CountGeneratedLegColliders(
                 component.longCoatUseUpperLegColliders,
                 component.longCoatUseLowerLegColliders);
+            if (component.longCoatUseFloorCollider) estimate.GeneratedPhysBoneColliders += 1;
         }
 
         private static int CountGeneratedLegColliders(bool upperLeg, bool lowerLeg)
@@ -624,13 +627,14 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                         longCoatMatchOnePieceProp.boolValue = preset == LongCoatPreset.MatchOnePiece;
                         enableLongCoatBoneExtensionProp.boolValue = true;
                         longCoatShortSkirtUsePrependedRootsOnlyProp.boolValue = IsShortLongCoatPreset(preset);
-                        longCoatMoveFrontBonesOutwardProp.boolValue = preset == LongCoatPreset.OpenFront;
+                        longCoatMoveFrontBonesOutwardProp.boolValue = false;
                         longCoatUseRotationConstraintsProp.boolValue = IsLongCoatLongSkirtPreset(preset);
                         longCoatUseFrontRootRotationConstraintsProp.boolValue = IsShortLongCoatPreset(preset);
                         longCoatMoveConstrainedRootsTowardUpperLegProp.boolValue = true;
                         longCoatAimFrontLimitsForwardProp.boolValue = IsShortLongCoatPreset(preset) || IsLongCoatLongSkirtPreset(preset);
                         longCoatUseUpperLegCollidersProp.boolValue = UsesLongCoatUpperLegColliders(preset);
                         longCoatUseLowerLegCollidersProp.boolValue = UsesLongCoatLowerLegColliders(preset);
+                        longCoatUseFloorColliderProp.boolValue = UsesLongCoatFloorCollider(preset);
                         longCoatRootHeightOffsetMultiplierProp.floatValue = preset == LongCoatPreset.OpenFront ? 2.0f : 1.0f;
                         longCoatHipWeightReductionProp.floatValue = preset == LongCoatPreset.OpenFront ? 0.8f : 0.5f;
                         longCoatSpineWeightReductionProp.floatValue = preset == LongCoatPreset.OpenFront ? 0.8f : 0.0f;
@@ -671,7 +675,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                                 longCoatMoveFrontBonesOutwardProp,
                                 false);
                             DrawLongCoatRotationConstraintSettings();
-                            DrawLegColliderSettings(longCoatUseUpperLegCollidersProp, longCoatUseLowerLegCollidersProp, null);
+                            DrawLegColliderSettings(longCoatUseUpperLegCollidersProp, longCoatUseLowerLegCollidersProp, longCoatUseFloorColliderProp);
                             DrawPhysBoneSettings(longCoatPhysBoneProp);
                         }
                     });
@@ -909,9 +913,9 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                         floorEnableProp,
                         TT(
                             "床を追加",
-                            "アバタールート直下に2.4m四方の床コライダーを追加し、ワンピースの揺れボーンに設定します。",
+                            "アバタールート直下に2.4m四方の床コライダーを追加し、対象の揺れボーンに設定します。",
                             "Add Floor",
-                            "Adds a 2.4m square floor collider under the avatar root and assigns it to the one-piece swing PhysBones."));
+                            "Adds a 2.4m square floor collider under the avatar root and assigns it to the target swing PhysBones."));
                 }
             }
         }
@@ -1161,7 +1165,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             }
             else if (preset == LongCoatPreset.OpenFront)
             {
-                ApplyOpenFrontPhysBonePreset(settingsProp, 0.1f);
+                ApplyOpenFrontPhysBonePreset(settingsProp, 0.08f);
             }
             else
             {
@@ -1181,7 +1185,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
         private static void ApplyOpenFrontPhysBonePreset(SerializedProperty settingsProp, float radius = 0.05f)
         {
-            ApplyPhysBoneValues(settingsProp, 0.18f, 0.45f, 0.25f, 0.35f, 0.9f, 0.7f, SkirtRefinePhysBoneLimitType.Polar, 45.0f, -45.0f, SkirtRefinePhysBonePermission.False, SkirtRefinePhysBonePermission.Other, 0.0f, 5.0f, radius, CreateConvexRadiusCurve());
+            ApplyPhysBoneValues(settingsProp, 0.18f, 0.45f, 0.25f, 0.35f, 0.9f, 0.7f, SkirtRefinePhysBoneLimitType.Polar, 45.0f, -45.0f, SkirtRefinePhysBonePermission.False, SkirtRefinePhysBonePermission.Other, 0.0f, 30.0f, radius, CreateConvexRadiusCurve(), AnimationCurve.Linear(0.0f, 0.0f, 1.0f, 1.0f));
         }
 
         private static void ApplyLongCoatLongSkirtLightPhysBonePreset(SerializedProperty settingsProp)
@@ -1215,7 +1219,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             float stretchAndSquish,
             float maxYaw = 0.0f,
             float radius = 0.05f,
-            AnimationCurve radiusCurve = null)
+            AnimationCurve radiusCurve = null,
+            AnimationCurve maxYawCurve = null)
         {
             settingsProp.FindPropertyRelative("version").enumValueIndex = (int)SkirtRefinePhysBoneVersion.Version1_1;
             settingsProp.FindPropertyRelative("endpointPosition").vector3Value = Vector3.zero;
@@ -1239,7 +1244,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             settingsProp.FindPropertyRelative("maxAngle").floatValue = maxAngle;
             settingsProp.FindPropertyRelative("maxAngleCurve").animationCurveValue = AnimationCurve.Constant(0.0f, 1.0f, 1.0f);
             settingsProp.FindPropertyRelative("maxYaw").floatValue = maxYaw;
-            settingsProp.FindPropertyRelative("maxYawCurve").animationCurveValue = AnimationCurve.Constant(0.0f, 1.0f, 1.0f);
+            settingsProp.FindPropertyRelative("maxYawCurve").animationCurveValue = maxYawCurve ?? AnimationCurve.Constant(0.0f, 1.0f, 1.0f);
             settingsProp.FindPropertyRelative("limitRotation").vector3Value = new Vector3(rotationPitch, 0.0f, 0.0f);
             settingsProp.FindPropertyRelative("allowCollision").enumValueIndex = (int)allowCollision;
             settingsProp.FindPropertyRelative("collisionContentTypes").intValue = (int)DynamicsUsageFlags.Everything;
@@ -1271,7 +1276,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         {
             return new AnimationCurve(
                 new Keyframe(0.0f, 0.0f, 0.0f, 0.0f),
-                new Keyframe(0.5f, 0.25f, 1.0f, 1.0f),
+                new Keyframe(0.5f, 0.35f, 1.0f, 1.0f),
                 new Keyframe(1.0f, 1.0f, 2.0f, 2.0f));
         }
 
@@ -1325,6 +1330,11 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             return preset == LongCoatPreset.LongSkirtLight
                 || preset == LongCoatPreset.LongSkirtHeavy
                 || preset == LongCoatPreset.OpenFront;
+        }
+
+        private static bool UsesLongCoatFloorCollider(LongCoatPreset preset)
+        {
+            return preset == LongCoatPreset.OpenFront;
         }
 
         private void DrawOnePieceRotationConstraintSettings()
@@ -1558,6 +1568,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             serialized.FindProperty("longCoatAimFrontLimitsForward").boolValue = true;
             serialized.FindProperty("longCoatUseUpperLegColliders").boolValue = UsesLongCoatUpperLegColliders(preset);
             serialized.FindProperty("longCoatUseLowerLegColliders").boolValue = UsesLongCoatLowerLegColliders(preset);
+            serialized.FindProperty("longCoatUseFloorCollider").boolValue = UsesLongCoatFloorCollider(preset);
             serialized.FindProperty("longCoatRootHeightOffsetMultiplier").floatValue = preset == LongCoatPreset.OpenFront ? 2.0f : 1.0f;
             serialized.FindProperty("longCoatHipWeightReduction").floatValue = preset == LongCoatPreset.OpenFront ? 0.8f : 0.5f;
             serialized.FindProperty("longCoatSpineWeightReduction").floatValue = preset == LongCoatPreset.OpenFront ? 0.8f : 0.0f;

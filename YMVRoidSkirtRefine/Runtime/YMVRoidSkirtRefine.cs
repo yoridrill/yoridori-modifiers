@@ -261,6 +261,9 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         [Tooltip("Add generated capsule PhysBone colliders under both LowerLeg bones for long coat refinement.")]
         public bool longCoatUseLowerLegColliders = true;
 
+        [Tooltip("Add a generated floor PhysBone collider under the avatar root for long coat refinement.")]
+        public bool longCoatUseFloorCollider = false;
+
         [Tooltip("PhysBone settings applied to the generated long coat unified root.")]
         public SkirtRefinePhysBoneSettings longCoatPhysBone = new SkirtRefinePhysBoneSettings();
 
@@ -306,6 +309,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             longCoatAimFrontLimitsForward = true;
             longCoatUseUpperLegColliders = false;
             longCoatUseLowerLegColliders = true;
+            longCoatUseFloorCollider = false;
             ApplyShortHeavyPhysBoneDefaults(longCoatPhysBone);
             longCoatPhysBone.radius = 0.05f;
             longCoatPhysBone.radiusCurve = AnimationCurve.Constant(0.0f, 1.0f, 1.0f);

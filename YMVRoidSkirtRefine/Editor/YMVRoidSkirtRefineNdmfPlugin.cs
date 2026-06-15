@@ -25,7 +25,12 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         private const float GeneratedUpperLegColliderRadiusRatio = 0.24f;
         private const float GeneratedLowerLegColliderRadiusRatio = 0.16f;
         private const float GeneratedFallbackLegColliderHeight = 0.5f;
-        private const int QuestPhysBoneComponentLimit = 8;
+        private const int NearestJudgmentWeightFalloffPower = 8;
+        private const int TopologyWeightJaggednessCorrectionIterations = 5;
+        private const float TopologyWeightJaggednessCorrectionStrength = 1.0f;
+        private const float TopologyWeightJaggednessThreshold = 0.01f;
+        private const int TopologyWeightDirectionalSearchDepth = 10;
+        private const int QuestPhysBoneComponentLimit = 6;
         private const int QuestPhysBoneColliderLimit = 16;
 
         public override string QualifiedName => QualifiedPluginName;
@@ -389,9 +394,11 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 component.onePieceUseUpperLegColliders,
                 component.onePieceUseLowerLegColliders,
                 component.verboseLog);
-            AddOnePieceFloorCollider(
+            AddFloorCollider(
                 avatarRoot.transform,
                 onePieceColliders,
+                "YM_VRoidSkirtRefine_OnePieceFloorCollider",
+                "one-piece",
                 component.onePieceUseFloorCollider,
                 component.verboseLog);
 
@@ -891,6 +898,13 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 animator,
                 component.longCoatUseUpperLegColliders,
                 component.longCoatUseLowerLegColliders,
+                component.verboseLog);
+            AddFloorCollider(
+                avatarRoot.transform,
+                longCoatColliders,
+                "YM_VRoidSkirtRefine_LongCoatFloorCollider",
+                "long coat",
+                component.longCoatUseFloorCollider,
                 component.verboseLog);
 
             if (!useRotationConstraint)
@@ -1936,15 +1950,16 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             return colliders;
         }
 
-        private static void AddOnePieceFloorCollider(
+        private static void AddFloorCollider(
             Transform avatarRoot,
             List<VRCPhysBoneColliderBase> colliders,
+            string colliderName,
+            string logLabel,
             bool enabled,
             bool verboseLog)
         {
             if (!enabled || avatarRoot == null || colliders == null) return;
 
-            const string colliderName = "YM_VRoidSkirtRefine_OnePieceFloorCollider";
             var colliderTransform = avatarRoot.Find(colliderName);
             if (colliderTransform == null)
             {
@@ -1972,7 +1987,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
             if (verboseLog)
             {
-                Debug.Log($"[{ToolName}] Added one-piece floor PhysBone collider: {GetPath(colliderTransform)}");
+                Debug.Log($"[{ToolName}] Added {logLabel} floor PhysBone collider: {GetPath(colliderTransform)}");
             }
         }
 
@@ -2294,7 +2309,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 if (processed.FinalBones.Count > 2)
                 {
                     var lowerLegSource = ResolveLowerLegForChain(animator, processed.Chain);
-                    AddOrUpdateRotationConstraint(processed.FinalBones[2], lowerLegSource, 0.5f, constraintMode, verboseLog);
+                    var lowerLegConstraintWeight = IsFrontChain(processed.Chain) ? 0.4f : 0.5f;
+                    AddOrUpdateRotationConstraint(processed.FinalBones[2], lowerLegSource, lowerLegConstraintWeight, constraintMode, verboseLog);
                 }
 
                 if (processed.FinalBones.Count > 3)
@@ -2538,6 +2554,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 var replacedSourceIndexList = replacedSourceIndices.ToList();
                 var judgmentPoints = BuildBoneJudgmentPoints(rendererChainInfos);
                 if (judgmentPoints.Count == 0) continue;
+                var generatedFinalIndices = BuildGeneratedFinalIndexSet(rendererChainInfos);
                 var hipIndex = hipBone != null ? rendererBones.IndexOf(hipBone) : -1;
                 var spineIndex = spineBone != null ? rendererBones.IndexOf(spineBone) : -1;
 
@@ -2570,6 +2587,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 }
 
                 if (!changedWeights) continue;
+                SmoothGeneratedWeightsByTopology(mesh, weights, verticesInCoatWeightedSubmesh, generatedFinalIndices);
 
                 var newMesh = Object.Instantiate(mesh);
                 RegisterReplacedObject(mesh, newMesh);
@@ -2656,6 +2674,23 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 if (!sharedNames.Contains(bone.name)) continue;
                 if (!sharedOriginalIndices.Contains(i)) sharedOriginalIndices.Add(i);
             }
+        }
+
+        private static HashSet<int> BuildGeneratedFinalIndexSet(List<RendererChainInfo> rendererChainInfos)
+        {
+            var result = new HashSet<int>();
+            if (rendererChainInfos == null) return result;
+
+            foreach (var info in rendererChainInfos)
+            {
+                if (info == null || info.FinalIndices == null) continue;
+                foreach (var index in info.FinalIndices)
+                {
+                    if (index >= 0) result.Add(index);
+                }
+            }
+
+            return result;
         }
 
         private static HashSet<int> BuildReplacedSourceIndexSet(List<RendererChainInfo> rendererChainInfos)
@@ -2822,9 +2857,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             {
                 var ratio = Mathf.Clamp(selected[i].Distance / firstDistance, 1.0f, 2.0f);
                 var score = Mathf.Max(0.0f, 2.0f - ratio);
-                // TODO: Tune the nearest-point falloff if skirt boundary waviness remains visible on dense VRoid skirts.
-                score *= score;
-                score *= score;
+                score = Mathf.Pow(score, NearestJudgmentWeightFalloffPower);
                 result.Add(score);
                 total += score;
             }
@@ -2842,6 +2875,305 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 result[i] /= total;
             }
             return result;
+        }
+
+        private static void SmoothGeneratedWeightsByTopology(
+            Mesh mesh,
+            BoneWeight[] weights,
+            bool[] affectedVertices,
+            HashSet<int> generatedIndices)
+        {
+            if (mesh == null || weights == null || affectedVertices == null || generatedIndices == null || generatedIndices.Count == 0) return;
+
+            var adjacency = BuildMeshAdjacency(mesh, affectedVertices);
+            if (adjacency.Count == 0) return;
+            var vertices = mesh.vertices;
+            if (vertices == null || vertices.Length == 0) return;
+            var affectedYs = Enumerable.Range(0, Mathf.Min(vertices.Length, affectedVertices.Length))
+                .Where(index => affectedVertices[index])
+                .Select(index => vertices[index].y)
+                .ToList();
+            if (affectedYs.Count == 0) return;
+            var verticalEpsilon = Mathf.Max(1e-5f, (affectedYs.Max() - affectedYs.Min()) * 0.002f);
+            var current = new Dictionary<int, float>[weights.Length];
+            var generatedSums = new float[weights.Length];
+            for (var vi = 0; vi < weights.Length && vi < affectedVertices.Length; vi++)
+            {
+                if (!affectedVertices[vi]) continue;
+
+                var pairs = ExtractPairs(weights[vi]);
+                var generated = ExtractGeneratedWeights(pairs, generatedIndices);
+                if (generated.Count == 0) continue;
+
+                var sum = generated.Values.Sum();
+                if (sum <= 1e-6f) continue;
+
+                NormalizeDictionary(generated, sum);
+                current[vi] = generated;
+                generatedSums[vi] = sum;
+            }
+
+            for (var iteration = 0; iteration < TopologyWeightJaggednessCorrectionIterations; iteration++)
+            {
+                var next = CloneGeneratedWeights(current);
+                for (var vi = 0; vi < current.Length && vi < vertices.Length; vi++)
+                {
+                    var generated = current[vi];
+                    if (generated == null || !adjacency.TryGetValue(vi, out var neighbors)) continue;
+
+                    foreach (var index in generated.Keys.ToList())
+                    {
+                        if (!TryAverageDirectionalGeneratedWeight(current, adjacency, vertices, neighbors, vi, index, true, verticalEpsilon, out var lowerAverage)) continue;
+                        if (!TryAverageDirectionalGeneratedWeight(current, adjacency, vertices, neighbors, vi, index, false, verticalEpsilon, out var upperAverage)) continue;
+
+                        var value = generated[index];
+                        var isPeak = value > lowerAverage + TopologyWeightJaggednessThreshold
+                            && value > upperAverage + TopologyWeightJaggednessThreshold;
+                        var isValley = value + TopologyWeightJaggednessThreshold < lowerAverage
+                            && value + TopologyWeightJaggednessThreshold < upperAverage;
+                        if (!isPeak && !isValley) continue;
+
+                        var target = (lowerAverage + upperAverage) * 0.5f;
+                        next[vi][index] = Mathf.Lerp(value, target, TopologyWeightJaggednessCorrectionStrength);
+                    }
+
+                    NormalizeDictionary(next[vi], next[vi].Values.Sum());
+                }
+
+                current = next;
+            }
+
+            for (var vi = 0; vi < weights.Length && vi < current.Length; vi++)
+            {
+                if (current[vi] == null || generatedSums[vi] <= 1e-6f) continue;
+
+                var pairs = ExtractPairs(weights[vi]);
+                var preservedIndices = pairs
+                    .Where(p => !generatedIndices.Contains(p.idx))
+                    .Select(p => p.idx)
+                    .Distinct()
+                    .ToList();
+                pairs.RemoveAll(p => generatedIndices.Contains(p.idx));
+                foreach (var pair in current[vi])
+                {
+                    AddOrAccumulate(pairs, pair.Key, pair.Value * generatedSums[vi]);
+                }
+                TrimBoneWeights(pairs, preservedIndices);
+                weights[vi] = ToBoneWeight(pairs);
+            }
+        }
+
+        private static Dictionary<int, float>[] CloneGeneratedWeights(Dictionary<int, float>[] source)
+        {
+            if (source == null) return Array.Empty<Dictionary<int, float>>();
+
+            var result = new Dictionary<int, float>[source.Length];
+            for (var i = 0; i < source.Length; i++)
+            {
+                if (source[i] == null) continue;
+                result[i] = new Dictionary<int, float>(source[i]);
+            }
+
+            return result;
+        }
+
+        private static bool TryAverageDirectionalGeneratedWeight(
+            Dictionary<int, float>[] generatedWeightsByVertex,
+            Dictionary<int, HashSet<int>> adjacency,
+            Vector3[] vertices,
+            HashSet<int> neighbors,
+            int currentIndex,
+            int generatedIndex,
+            bool lower,
+            float verticalEpsilon,
+            out float average)
+        {
+            average = 0.0f;
+            if (generatedWeightsByVertex == null || adjacency == null || vertices == null || neighbors == null) return false;
+            if (currentIndex < 0 || currentIndex >= vertices.Length) return false;
+
+            var sum = 0.0f;
+            var weightSum = 0.0f;
+            foreach (var neighbor in SelectDirectionalFlowVertices(adjacency, vertices, neighbors, currentIndex, lower, verticalEpsilon))
+            {
+                var vertexIndex = neighbor.Index;
+                if (vertexIndex < 0 || vertexIndex >= generatedWeightsByVertex.Length) continue;
+                if (generatedWeightsByVertex[vertexIndex] == null) continue;
+                if (!generatedWeightsByVertex[vertexIndex].TryGetValue(generatedIndex, out var value)) value = 0.0f;
+
+                var sampleWeight = 1.0f / neighbor.Depth;
+                sum += value * sampleWeight;
+                weightSum += sampleWeight;
+            }
+
+            if (weightSum <= 1e-6f) return false;
+            average = sum / weightSum;
+            return true;
+        }
+
+        private static List<DirectionalVertexSample> SelectDirectionalFlowVertices(
+            Dictionary<int, HashSet<int>> adjacency,
+            Vector3[] vertices,
+            HashSet<int> neighbors,
+            int currentIndex,
+            bool lower,
+            float verticalEpsilon)
+        {
+            var result = new List<DirectionalVertexSample>();
+            if (adjacency == null || vertices == null || neighbors == null || currentIndex < 0 || currentIndex >= vertices.Length) return result;
+
+            var current = vertices[currentIndex];
+            var bestRatio = float.PositiveInfinity;
+            foreach (var neighbor in neighbors)
+            {
+                if (!TryGetVerticalNeighborRatio(vertices, current, neighbor, lower, verticalEpsilon, out var ratio)) continue;
+                if (ratio < bestRatio) bestRatio = ratio;
+            }
+            if (float.IsPositiveInfinity(bestRatio)) return result;
+
+            var maxRatio = Mathf.Min(1.0f, bestRatio + 0.25f);
+            var queue = new Queue<DirectionalVertexSample>();
+            var visited = new HashSet<int> { currentIndex };
+            foreach (var neighbor in neighbors)
+            {
+                if (!TryGetVerticalNeighborRatio(vertices, current, neighbor, lower, verticalEpsilon, out var ratio)) continue;
+                if (ratio > maxRatio) continue;
+                if (!visited.Add(neighbor)) continue;
+                var sample = new DirectionalVertexSample(neighbor, 1);
+                result.Add(sample);
+                queue.Enqueue(sample);
+            }
+
+            while (queue.Count > 0)
+            {
+                var sample = queue.Dequeue();
+                if (sample.Depth >= TopologyWeightDirectionalSearchDepth) continue;
+                if (sample.Index < 0 || sample.Index >= vertices.Length) continue;
+
+                var samplePosition = vertices[sample.Index];
+                if (!adjacency.TryGetValue(sample.Index, out var sampleNeighbors)) continue;
+                foreach (var next in sampleNeighbors)
+                {
+                    if (!TryGetVerticalNeighborRatio(vertices, samplePosition, next, lower, verticalEpsilon, out var ratio)) continue;
+                    if (ratio > maxRatio) continue;
+                    if (!visited.Add(next)) continue;
+
+                    var nextSample = new DirectionalVertexSample(next, sample.Depth + 1);
+                    result.Add(nextSample);
+                    queue.Enqueue(nextSample);
+                }
+            }
+
+            return result;
+        }
+
+        private static bool TryGetVerticalNeighborRatio(
+            Vector3[] vertices,
+            Vector3 current,
+            int neighbor,
+            bool lower,
+            float verticalEpsilon,
+            out float ratio)
+        {
+            ratio = 0.0f;
+            if (vertices == null || neighbor < 0 || neighbor >= vertices.Length) return false;
+
+            var delta = vertices[neighbor] - current;
+            var dy = delta.y;
+            if (lower && dy >= -verticalEpsilon) return false;
+            if (!lower && dy <= verticalEpsilon) return false;
+
+            var absY = Mathf.Abs(dy);
+            var horizontal = new Vector2(delta.x, delta.z).magnitude;
+            ratio = horizontal / Mathf.Max(absY, 1e-6f);
+            return ratio <= 1.25f;
+        }
+
+        private static Dictionary<int, HashSet<int>> BuildMeshAdjacency(Mesh mesh, bool[] affectedVertices)
+        {
+            var adjacency = new Dictionary<int, HashSet<int>>();
+            if (mesh == null || affectedVertices == null) return adjacency;
+
+            for (var subMesh = 0; subMesh < mesh.subMeshCount; subMesh++)
+            {
+                var indices = mesh.GetIndices(subMesh);
+                var topology = mesh.GetTopology(subMesh);
+                if (topology == MeshTopology.Triangles)
+                {
+                    for (var i = 0; i + 2 < indices.Length; i += 3)
+                    {
+                        AddAdjacencyTriangle(adjacency, affectedVertices, indices[i], indices[i + 1], indices[i + 2]);
+                    }
+                }
+                else if (topology == MeshTopology.Quads)
+                {
+                    for (var i = 0; i + 3 < indices.Length; i += 4)
+                    {
+                        AddAdjacencyTriangle(adjacency, affectedVertices, indices[i], indices[i + 1], indices[i + 2]);
+                        AddAdjacencyTriangle(adjacency, affectedVertices, indices[i], indices[i + 2], indices[i + 3]);
+                    }
+                }
+            }
+
+            return adjacency;
+        }
+
+        private static void AddAdjacencyTriangle(Dictionary<int, HashSet<int>> adjacency, bool[] affectedVertices, int a, int b, int c)
+        {
+            AddAdjacencyEdge(adjacency, affectedVertices, a, b);
+            AddAdjacencyEdge(adjacency, affectedVertices, b, c);
+            AddAdjacencyEdge(adjacency, affectedVertices, c, a);
+        }
+
+        private static void AddAdjacencyEdge(Dictionary<int, HashSet<int>> adjacency, bool[] affectedVertices, int a, int b)
+        {
+            if (!IsAffectedVertex(affectedVertices, a) || !IsAffectedVertex(affectedVertices, b)) return;
+            if (!adjacency.TryGetValue(a, out var aSet))
+            {
+                aSet = new HashSet<int>();
+                adjacency[a] = aSet;
+            }
+            if (!adjacency.TryGetValue(b, out var bSet))
+            {
+                bSet = new HashSet<int>();
+                adjacency[b] = bSet;
+            }
+
+            aSet.Add(b);
+            bSet.Add(a);
+        }
+
+        private static bool IsAffectedVertex(bool[] affectedVertices, int index)
+        {
+            return index >= 0 && index < affectedVertices.Length && affectedVertices[index];
+        }
+
+        private static Dictionary<int, float> ExtractGeneratedWeights(List<(int idx, float w)> pairs, HashSet<int> generatedIndices)
+        {
+            var result = new Dictionary<int, float>();
+            if (pairs == null || generatedIndices == null) return result;
+
+            for (var i = 0; i < pairs.Count; i++)
+            {
+                var pair = pairs[i];
+                if (pair.w <= 1e-6f || !generatedIndices.Contains(pair.idx)) continue;
+                result[pair.idx] = result.TryGetValue(pair.idx, out var existing)
+                    ? existing + pair.w
+                    : pair.w;
+            }
+
+            return result;
+        }
+
+        private static void NormalizeDictionary(Dictionary<int, float> weights, float sum)
+        {
+            if (weights == null || sum <= 1e-6f) return;
+
+            var keys = weights.Keys.ToList();
+            foreach (var key in keys)
+            {
+                weights[key] /= sum;
+            }
         }
 
         private static bool[] BuildVerticesInCoatWeightedSubmeshes(
@@ -3316,6 +3648,18 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             {
                 BoneIndex = boneIndex;
                 Position = position;
+            }
+        }
+
+        private readonly struct DirectionalVertexSample
+        {
+            public readonly int Index;
+            public readonly int Depth;
+
+            public DirectionalVertexSample(int index, int depth)
+            {
+                Index = index;
+                Depth = Mathf.Max(1, depth);
             }
         }
     }

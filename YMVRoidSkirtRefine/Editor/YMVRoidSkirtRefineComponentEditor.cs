@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -119,6 +120,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         private bool advancedFoldout;
         private bool onePieceSettingsFoldout;
         private bool longCoatSettingsFoldout;
+        private bool previewFailed;
 
         private void OnEnable()
         {
@@ -173,6 +175,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         public override void OnInspectorGUI()
         {
             var component = (YMVRoidSkirtRefine)target;
+            var isPreviewing = YMVRoidSkirtRefinePreviewUtility.IsPreviewing(component);
 
             serializedObject.Update();
             onePieceBoneExtensionModeProp.enumValueIndex = (int)BoneExtensionMode.AppendToTip;
@@ -183,12 +186,13 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             bool changed;
             try
             {
-                DrawTopRow();
+                DrawTopRow(component, isPreviewing || YMVRoidSkirtRefinePreviewUtility.IsStarting(component));
                 EditorGUILayout.Space(4);
 
                 DrawMatchTargetWarning();
                 DrawPlacementStatus(component);
                 DrawMultipleComponentsWarning(component);
+                EditorGUILayout.Space(4);
 
                 DrawDynamicsUsageAndVqtKeepList(component);
                 EditorGUILayout.Space(12);
@@ -211,13 +215,23 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             if (changed)
             {
                 EditorUtility.SetDirty(component);
+                YMVRoidSkirtRefinePreviewUtility.SyncPhysBonesIfPreviewing(component);
             }
         }
 
-        private void DrawTopRow()
+        private void DrawTopRow(YMVRoidSkirtRefine component, bool isPreviewing)
         {
             using (new EditorGUILayout.HorizontalScope())
             {
+                if (PreviewInspectorGui.DrawPreviewButton(isPreviewing, isPreviewing ? "Save" : "Preview"))
+                {
+                    serializedObject.ApplyModifiedProperties();
+                    previewFailed = !YMVRoidSkirtRefinePreviewUtility.TogglePreview(component);
+                    GUIUtility.ExitGUI();
+                }
+
+                PreviewInspectorGui.DrawStatus(false, previewFailed || YMVRoidSkirtRefinePreviewUtility.HasPreviewFailed());
+
                 GUILayout.FlexibleSpace();
                 EditorGUI.BeginChangeCheck();
                 var newLanguage = (Language)EditorGUILayout.EnumPopup(language, GUILayout.Width(90f));
@@ -315,8 +329,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             var message = string.Join(
                 "\n",
                 T("今の設定で増える Rotation Constraint 数", "Rotation Constraints added by current settings") + $": {estimate.GeneratedRotationConstraints}",
-                T("下半身の PhysBone コンポーネント数", "Lower-body PhysBone components") + $": {estimate.SourcePhysBones} \u2192 {estimate.GeneratedPhysBones}",
-                T("下半身の PhysBone コライダー数", "Lower-body PhysBone colliders") + $": {estimate.SourcePhysBoneColliders} \u2192 {estimate.GeneratedPhysBoneColliders}");
+                T("スカート関連の PhysBone コンポーネント数", "Skirt-related PhysBone components") + $": {estimate.SourcePhysBones} \u2192 {estimate.GeneratedPhysBones}",
+                T("スカート関連の PhysBone コライダー数", "Skirt-related PhysBone colliders") + $": {estimate.SourcePhysBoneColliders} \u2192 {estimate.GeneratedPhysBoneColliders}");
             EditorGUILayout.HelpBox(message, MessageType.Info);
 
             EditorGUILayout.PropertyField(
@@ -340,14 +354,6 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             var estimate = new DynamicsUsageEstimate();
             if (component == null) return estimate;
 
-            var animator = avatarRoot != null ? avatarRoot.GetComponentInChildren<Animator>(true) : null;
-            var hips = animator != null ? animator.GetBoneTransform(HumanBodyBones.Hips) : null;
-            if (hips != null)
-            {
-                estimate.SourcePhysBones = CountLowerBodyPhysBones(avatarRoot, animator);
-                estimate.SourcePhysBoneColliders = CountLowerBodyPhysBoneColliders(avatarRoot, animator);
-            }
-
             var onePieceMatchesLongCoat = component.enableOnePieceRefine && component.onePieceMatchLongCoat;
             var longCoatMatchesOnePiece = component.enableLongCoatRefine && component.longCoatMatchOnePiece;
             if ((onePieceMatchesLongCoat && longCoatMatchesOnePiece)
@@ -355,6 +361,17 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 || (longCoatMatchesOnePiece && !component.enableOnePieceRefine))
             {
                 return estimate;
+            }
+
+            var buildsOnePiece = component.enableOnePieceRefine && !onePieceMatchesLongCoat;
+            var buildsLongCoat = component.enableLongCoatRefine && !longCoatMatchesOnePiece;
+            estimate.SourcePhysBones = CountSkirtRelatedSourcePhysBones(
+                component,
+                component.enableOnePieceRefine,
+                component.enableLongCoatRefine);
+            if (buildsOnePiece || buildsLongCoat)
+            {
+                estimate.SourcePhysBoneColliders = CountExistingLegPhysBoneColliders(avatarRoot);
             }
 
             if (onePieceMatchesLongCoat)
@@ -372,6 +389,54 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             }
 
             return estimate;
+        }
+
+        private static int CountSkirtRelatedSourcePhysBones(
+            YMVRoidSkirtRefine component,
+            bool includeOnePiece,
+            bool includeLongCoat)
+        {
+            if (component == null) return 0;
+
+            var physBones = new HashSet<VRCPhysBone>();
+            if (includeOnePiece) AddPhysBonesFromTargets(physBones, component.onePieceBones, false);
+            if (includeLongCoat) AddPhysBonesFromTargets(physBones, component.longCoatBones, true);
+            return physBones.Count;
+        }
+
+        private static void AddPhysBonesFromTargets(
+            HashSet<VRCPhysBone> physBones,
+            SkirtRefineBoneTargets targets,
+            bool longCoat)
+        {
+            if (physBones == null || targets == null) return;
+
+            AddPhysBonesFromTarget(physBones, targets.frontLeft, longCoat ? "L_CoatSkirtFront" : "L_SkirtFront");
+            AddPhysBonesFromTarget(physBones, targets.frontRight, longCoat ? "R_CoatSkirtFront" : "R_SkirtFront");
+            AddPhysBonesFromTarget(physBones, targets.sideLeft, longCoat ? "L_CoatSkirtSide" : "L_SkirtSide");
+            AddPhysBonesFromTarget(physBones, targets.sideRight, longCoat ? "R_CoatSkirtSide" : "R_SkirtSide");
+            AddPhysBonesFromTarget(physBones, targets.backLeft, longCoat ? "L_CoatSkirtBack" : "L_SkirtBack");
+            AddPhysBonesFromTarget(physBones, targets.backRight, longCoat ? "R_CoatSkirtBack" : "R_SkirtBack");
+        }
+
+        private static void AddPhysBonesFromTarget(
+            HashSet<VRCPhysBone> physBones,
+            Transform target,
+            string partialName)
+        {
+            if (physBones == null || target == null) return;
+
+            if (!string.IsNullOrEmpty(partialName)
+                && target.name.IndexOf(partialName, StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                var descendant = FindDescendantByPartialName(target, partialName);
+                if (descendant != null) target = descendant;
+            }
+
+            foreach (var physBone in target.GetComponentsInChildren<VRCPhysBone>(true))
+            {
+                if (physBone != null) physBones.Add(physBone);
+            }
         }
 
         private static void AddOnePieceGeneratedDynamics(YMVRoidSkirtRefine component, DynamicsUsageEstimate estimate)
@@ -420,43 +485,29 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             return count;
         }
 
-        private static int CountLowerBodyPhysBones(GameObject avatarRoot, Animator animator)
+        private static int CountExistingLegPhysBoneColliders(GameObject avatarRoot)
         {
-            if (avatarRoot == null || animator == null) return 0;
+            var animator = avatarRoot != null ? avatarRoot.GetComponentInChildren<Animator>(true) : null;
+            if (animator == null) return 0;
 
-            return avatarRoot.GetComponentsInChildren<VRCPhysBone>(true)
-                .Count(physBone =>
-                {
-                    var root = physBone != null && physBone.rootTransform != null
-                        ? physBone.rootTransform
-                        : physBone != null ? physBone.transform : null;
-                    return IsLowerBodyTransform(root, animator);
-                });
+            var colliders = new HashSet<VRCPhysBoneCollider>();
+            AddExistingLegPhysBoneColliders(colliders, animator.GetBoneTransform(HumanBodyBones.LeftUpperLeg));
+            AddExistingLegPhysBoneColliders(colliders, animator.GetBoneTransform(HumanBodyBones.RightUpperLeg));
+            AddExistingLegPhysBoneColliders(colliders, animator.GetBoneTransform(HumanBodyBones.LeftLowerLeg));
+            AddExistingLegPhysBoneColliders(colliders, animator.GetBoneTransform(HumanBodyBones.RightLowerLeg));
+            return colliders.Count;
         }
 
-        private static int CountLowerBodyPhysBoneColliders(GameObject avatarRoot, Animator animator)
+        private static void AddExistingLegPhysBoneColliders(HashSet<VRCPhysBoneCollider> colliders, Transform leg)
         {
-            if (avatarRoot == null || animator == null) return 0;
+            if (colliders == null || leg == null) return;
 
-            return avatarRoot.GetComponentsInChildren<VRCPhysBoneCollider>(true)
-                .Count(collider =>
-                {
-                    var root = collider != null && collider.rootTransform != null
-                        ? collider.rootTransform
-                        : collider != null ? collider.transform : null;
-                    return IsLowerBodyTransform(root, animator);
-                });
-        }
-
-        private static bool IsLowerBodyTransform(Transform transform, Animator animator)
-        {
-            if (transform == null || animator == null) return false;
-
-            var hips = animator.GetBoneTransform(HumanBodyBones.Hips);
-            if (hips == null || !transform.IsChildOf(hips)) return false;
-
-            var spine = animator.GetBoneTransform(HumanBodyBones.Spine);
-            return spine == null || !transform.IsChildOf(spine);
+            foreach (var collider in leg.GetComponentsInChildren<VRCPhysBoneCollider>(true))
+            {
+                if (collider == null) continue;
+                if (collider.name.StartsWith("YM_VRoidSkirtRefine_", StringComparison.Ordinal)) continue;
+                colliders.Add(collider);
+            }
         }
 
         private bool TryGetVqtKeepListStatus(GameObject avatarRoot, DynamicsUsageEstimate estimate, out string message)
@@ -560,7 +611,9 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                         onePieceHipWeightReductionProp.floatValue = 0.5f;
                     });
 
-                if (enableOnePieceRefineProp.boolValue && HasMissingBone(onePieceBonesProp))
+                if (enableOnePieceRefineProp.boolValue
+                    && !YMVRoidSkirtRefinePreviewUtility.IsActivePlayPreview
+                    && HasMissingBone(onePieceBonesProp))
                 {
                     EditorGUILayout.HelpBox(
                         T(
@@ -640,7 +693,9 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                         longCoatSpineWeightReductionProp.floatValue = preset == LongCoatPreset.OpenFront ? 0.8f : 0.0f;
                     });
 
-                if (enableLongCoatRefineProp.boolValue && HasMissingBone(longCoatBonesProp))
+                if (enableLongCoatRefineProp.boolValue
+                    && !YMVRoidSkirtRefinePreviewUtility.IsActivePlayPreview
+                    && HasMissingBone(longCoatBonesProp))
                 {
                     EditorGUILayout.HelpBox(
                         T(
@@ -1083,7 +1138,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             float max)
         {
             var prop = settingsProp.FindPropertyRelative(propertyName);
-            EditorGUILayout.PropertyField(prop, label);
+            EditorGUILayout.Slider(prop, min, max, label);
             prop.floatValue = Mathf.Clamp(prop.floatValue, min, max);
         }
 

@@ -36,6 +36,48 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         public override string QualifiedName => QualifiedPluginName;
         public override string DisplayName => ToolName;
 
+        internal static PreviewBuildResult BuildForPreviewWithResult(GameObject avatarRoot, YMVRoidSkirtRefine component)
+        {
+            if (avatarRoot == null || component == null) return PreviewBuildResult.Empty;
+            var results = Build(avatarRoot, component, null);
+            return new PreviewBuildResult(
+                SelectGeneratedPhysBones(results, RefineKind.OnePiece),
+                SelectGeneratedPhysBones(results, RefineKind.LongCoat));
+        }
+
+        private static VRCPhysBone[] SelectGeneratedPhysBones(List<RefineResult> results, RefineKind kind)
+        {
+            return results != null
+                ? results
+                    .Where(result => result != null && result.Kind == kind)
+                    .SelectMany(result => result.GeneratedPhysBones)
+                    .Where(physBone => physBone != null)
+                    .Distinct()
+                    .ToArray()
+                : Array.Empty<VRCPhysBone>();
+        }
+
+        internal static void ApplyPreviewPhysBoneSettings(
+            VRCPhysBone physBone,
+            SkirtRefinePhysBoneSettings settings)
+        {
+            if (physBone == null) return;
+
+            var multiChildType = physBone.transform != null
+                && (physBone.transform.name == OnePieceUnifiedRootName || physBone.transform.name == LongCoatUnifiedRootName)
+                    ? SkirtRefinePhysBoneMultiChildType.Ignore
+                    : SkirtRefinePhysBoneMultiChildType.First;
+            ApplyPhysBoneSettings(
+                physBone,
+                settings,
+                physBone.colliders,
+                physBone.endpointPosition,
+                multiChildType,
+                physBone.ignoreTransforms);
+            physBone.configHasUpdated = true;
+            physBone.collidersHaveUpdated = true;
+        }
+
         protected override void Configure()
         {
             InPhase(BuildPhase.Transforming)
@@ -63,7 +105,10 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
             try
             {
-                ErrorReport.WithContextObject(component, () => Build(context.AvatarRootObject, component, context));
+                ErrorReport.WithContextObject(component, () =>
+                {
+                    Build(context.AvatarRootObject, component, context);
+                });
             }
             finally
             {
@@ -81,9 +126,9 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 .FirstOrDefault();
         }
 
-        private static void Build(GameObject avatarRoot, YMVRoidSkirtRefine component, BuildContext context)
+        private static List<RefineResult> Build(GameObject avatarRoot, YMVRoidSkirtRefine component, BuildContext context)
         {
-            if (avatarRoot == null || component == null) return;
+            if (avatarRoot == null || component == null) return new List<RefineResult>();
             UnpackPrefabInstanceForBuild(avatarRoot, component);
             var refineResults = new List<RefineResult>();
 
@@ -94,7 +139,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 || (longCoatMatchesOnePiece && !component.enableOnePieceRefine))
             {
                 Debug.LogWarning($"[{ToolName}] Match target is missing. Skirt refine matching skipped.");
-                return;
+                return refineResults;
             }
 
             if (onePieceMatchesLongCoat)
@@ -130,6 +175,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     $"[{ToolName}] Build pass finished. " +
                     $"onePiece={component.enableOnePieceRefine}, longCoat={component.enableLongCoatRefine}");
             }
+
+            return refineResults;
         }
 
         private static void TryAddGeneratedDynamicsToVqtKeepList(
@@ -443,7 +490,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 Debug.Log($"[{ToolName}] One-piece refine finished. chains={sourceGroups.Count}, root={GetPath(unifiedRoot)}");
             }
 
-            return new RefineResult(processedChains, generatedPhysBones, onePieceColliders, removedPhysBones, null);
+            return new RefineResult(RefineKind.OnePiece, processedChains, generatedPhysBones, onePieceColliders, removedPhysBones, null);
         }
 
         private static void UnpackPrefabInstanceForBuild(GameObject avatarRoot, YMVRoidSkirtRefine component)
@@ -983,7 +1030,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     $"unifiedRoot={GetPath(unifiedRoot)}");
             }
 
-            return new RefineResult(processedChains, generatedPhysBones, longCoatColliders, removedPhysBones, null);
+            return new RefineResult(RefineKind.LongCoat, processedChains, generatedPhysBones, longCoatColliders, removedPhysBones, null);
         }
 
         private static List<OnePieceChain> DetectLongCoatChains(SkirtRefineBoneTargets targets)
@@ -3561,11 +3608,33 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             }
         }
 
+        internal sealed class PreviewBuildResult
+        {
+            public static readonly PreviewBuildResult Empty = new PreviewBuildResult(null, null);
+
+            public readonly VRCPhysBone[] OnePiecePhysBones;
+            public readonly VRCPhysBone[] LongCoatPhysBones;
+
+            internal PreviewBuildResult(VRCPhysBone[] onePiecePhysBones, VRCPhysBone[] longCoatPhysBones)
+            {
+                OnePiecePhysBones = onePiecePhysBones ?? Array.Empty<VRCPhysBone>();
+                LongCoatPhysBones = longCoatPhysBones ?? Array.Empty<VRCPhysBone>();
+            }
+        }
+
+        private enum RefineKind
+        {
+            Unknown,
+            OnePiece,
+            LongCoat
+        }
+
         private sealed class RefineResult
         {
-            public static readonly RefineResult Empty = new RefineResult(null, null, null, null, null);
+            public static readonly RefineResult Empty = new RefineResult(RefineKind.Unknown, null, null, null, null, null);
 
             private readonly Dictionary<string, List<Transform>> finalBonesByLabel;
+            public readonly RefineKind Kind;
             public readonly List<VRCPhysBone> GeneratedPhysBones;
             public readonly List<VRCPhysBoneColliderBase> GeneratedPhysBoneColliders;
             public readonly List<VRCPhysBone> RemovedPhysBones;
@@ -3574,6 +3643,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             public bool IsEmpty => finalBonesByLabel.Count == 0;
 
             public RefineResult(
+                RefineKind kind,
                 List<LongCoatProcessedChain> chains,
                 List<VRCPhysBone> generatedPhysBones,
                 List<VRCPhysBoneColliderBase> generatedPhysBoneColliders,
@@ -3581,6 +3651,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 List<VRCPhysBoneColliderBase> removedPhysBoneColliders)
             {
                 finalBonesByLabel = new Dictionary<string, List<Transform>>(StringComparer.OrdinalIgnoreCase);
+                Kind = kind;
                 GeneratedPhysBones = generatedPhysBones != null
                     ? generatedPhysBones.Where(pb => pb != null).Distinct().ToList()
                     : new List<VRCPhysBone>();

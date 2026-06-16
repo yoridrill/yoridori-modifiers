@@ -436,11 +436,15 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     component.verboseLog);
             }
 
+            var vqtSettings = GetVqtSettingsForKeepList(avatarRoot, component);
+            var removedPhysBoneColliders = new List<VRCPhysBoneColliderBase>();
             var onePieceColliders = CreateLegCapsuleColliders(
                 animator,
                 component.onePieceUseUpperLegColliders,
                 component.onePieceUseLowerLegColliders,
-                component.verboseLog);
+                component.verboseLog,
+                vqtSettings,
+                removedPhysBoneColliders);
             AddFloorCollider(
                 avatarRoot.transform,
                 onePieceColliders,
@@ -490,7 +494,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 Debug.Log($"[{ToolName}] One-piece refine finished. chains={sourceGroups.Count}, root={GetPath(unifiedRoot)}");
             }
 
-            return new RefineResult(RefineKind.OnePiece, processedChains, generatedPhysBones, onePieceColliders, removedPhysBones, null);
+            return new RefineResult(RefineKind.OnePiece, processedChains, generatedPhysBones, onePieceColliders, removedPhysBones, removedPhysBoneColliders);
         }
 
         private static void UnpackPrefabInstanceForBuild(GameObject avatarRoot, YMVRoidSkirtRefine component)
@@ -941,11 +945,15 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 }
             }
 
+            var vqtSettings = GetVqtSettingsForKeepList(avatarRoot, component);
+            var removedPhysBoneColliders = new List<VRCPhysBoneColliderBase>();
             var longCoatColliders = CreateLegCapsuleColliders(
                 animator,
                 component.longCoatUseUpperLegColliders,
                 component.longCoatUseLowerLegColliders,
-                component.verboseLog);
+                component.verboseLog,
+                vqtSettings,
+                removedPhysBoneColliders);
             AddFloorCollider(
                 avatarRoot.transform,
                 longCoatColliders,
@@ -1030,7 +1038,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     $"unifiedRoot={GetPath(unifiedRoot)}");
             }
 
-            return new RefineResult(RefineKind.LongCoat, processedChains, generatedPhysBones, longCoatColliders, removedPhysBones, null);
+            return new RefineResult(RefineKind.LongCoat, processedChains, generatedPhysBones, longCoatColliders, removedPhysBones, removedPhysBoneColliders);
         }
 
         private static List<OnePieceChain> DetectLongCoatChains(SkirtRefineBoneTargets targets)
@@ -1929,7 +1937,9 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             Animator animator,
             bool includeUpperLeg,
             bool includeLowerLeg,
-            bool verboseLog)
+            bool verboseLog,
+            Component vqtSettings,
+            List<VRCPhysBoneColliderBase> removedColliders)
         {
             var colliders = new List<VRCPhysBoneColliderBase>();
             if (animator == null) return colliders;
@@ -1941,10 +1951,10 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             var leftFoot = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
             var rightFoot = animator.GetBoneTransform(HumanBodyBones.RightFoot);
 
-            RemoveExistingLegColliders(leftUpperLeg, verboseLog);
-            RemoveExistingLegColliders(rightUpperLeg, verboseLog);
-            RemoveExistingLegColliders(leftLowerLeg, verboseLog);
-            RemoveExistingLegColliders(rightLowerLeg, verboseLog);
+            RemoveExistingLegColliders(leftUpperLeg, verboseLog, vqtSettings, removedColliders);
+            RemoveExistingLegColliders(rightUpperLeg, verboseLog, vqtSettings, removedColliders);
+            RemoveExistingLegColliders(leftLowerLeg, verboseLog, vqtSettings, removedColliders);
+            RemoveExistingLegColliders(rightLowerLeg, verboseLog, vqtSettings, removedColliders);
 
             if (includeUpperLeg)
             {
@@ -2097,15 +2107,28 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             return height > 1e-4f ? height : GeneratedFallbackLegColliderHeight;
         }
 
-        private static void RemoveExistingLegColliders(Transform leg, bool verboseLog)
+        private static void RemoveExistingLegColliders(
+            Transform leg,
+            bool verboseLog,
+            Component vqtSettings,
+            List<VRCPhysBoneColliderBase> removedColliders)
         {
             if (leg == null) return;
 
-            var colliders = leg.GetComponentsInChildren<VRCPhysBoneCollider>(true);
+            var colliders = leg.GetComponentsInChildren<VRCPhysBoneCollider>(true)
+                .Where(collider => collider != null
+                    && !collider.name.StartsWith("YM_VRoidSkirtRefine_", StringComparison.Ordinal))
+                .ToList();
+            if (colliders.Count == 0) return;
+
+            RemoveObjectsFromArrayField(
+                vqtSettings,
+                "physBoneCollidersToKeep",
+                colliders.Cast<Component>().ToList());
+            if (removedColliders != null) removedColliders.AddRange(colliders);
+
             foreach (var collider in colliders)
             {
-                if (collider == null) continue;
-                if (collider.name.StartsWith("YM_VRoidSkirtRefine_", StringComparison.Ordinal)) continue;
                 if (verboseLog) Debug.Log($"[{ToolName}] Removed existing leg PhysBone collider: {GetPath(collider.transform)}");
                 if (collider.transform == leg)
                 {
@@ -2116,6 +2139,12 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     Object.DestroyImmediate(collider.gameObject);
                 }
             }
+        }
+
+        private static Component GetVqtSettingsForKeepList(GameObject avatarRoot, YMVRoidSkirtRefine component)
+        {
+            if (avatarRoot == null || component == null || !component.addGeneratedDynamicsToVqtKeepList) return null;
+            return TryFindVqtAvatarConverterSettings(avatarRoot, out var settings) ? settings : null;
         }
 
         private static Vector3 EstimateAverageEndpointPosition(List<LongCoatProcessedChain> processedChains)

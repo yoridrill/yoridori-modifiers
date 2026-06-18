@@ -680,17 +680,17 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                         longCoatMatchOnePieceProp.boolValue = preset == LongCoatPreset.MatchOnePiece;
                         enableLongCoatBoneExtensionProp.boolValue = true;
                         longCoatShortSkirtUsePrependedRootsOnlyProp.boolValue = IsShortLongCoatPreset(preset);
-                        longCoatMoveFrontBonesOutwardProp.boolValue = false;
+                        longCoatMoveFrontBonesOutwardProp.boolValue = preset == LongCoatPreset.OpenFront;
                         longCoatUseRotationConstraintsProp.boolValue = IsLongCoatLongSkirtPreset(preset);
-                        longCoatUseFrontRootRotationConstraintsProp.boolValue = IsShortLongCoatPreset(preset);
+                        longCoatUseFrontRootRotationConstraintsProp.boolValue = IsShortLongCoatPreset(preset) || preset == LongCoatPreset.OpenFront;
                         longCoatMoveConstrainedRootsTowardUpperLegProp.boolValue = true;
                         longCoatAimFrontLimitsForwardProp.boolValue = IsShortLongCoatPreset(preset) || IsLongCoatLongSkirtPreset(preset);
                         longCoatUseUpperLegCollidersProp.boolValue = UsesLongCoatUpperLegColliders(preset);
                         longCoatUseLowerLegCollidersProp.boolValue = UsesLongCoatLowerLegColliders(preset);
                         longCoatUseFloorColliderProp.boolValue = UsesLongCoatFloorCollider(preset);
                         longCoatRootHeightOffsetMultiplierProp.floatValue = preset == LongCoatPreset.OpenFront ? 2.0f : 1.0f;
-                        longCoatHipWeightReductionProp.floatValue = preset == LongCoatPreset.OpenFront ? 0.8f : 0.5f;
-                        longCoatSpineWeightReductionProp.floatValue = preset == LongCoatPreset.OpenFront ? 0.8f : 0.0f;
+                        longCoatHipWeightReductionProp.floatValue = preset == LongCoatPreset.OpenFront ? 0.4f : 0.4f;
+                        longCoatSpineWeightReductionProp.floatValue = preset == LongCoatPreset.OpenFront ? 0.4f : 0.0f;
                     });
 
                 if (enableLongCoatRefineProp.boolValue

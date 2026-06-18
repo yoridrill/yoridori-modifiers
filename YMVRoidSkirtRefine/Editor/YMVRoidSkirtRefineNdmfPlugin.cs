@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using nadena.dev.ndmf;
+using Unity.Collections;
 using UnityEditor;
 using UnityEngine;
 using VRC.Dynamics;
@@ -30,6 +31,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         private const float TopologyWeightJaggednessCorrectionStrength = 1.0f;
         private const float TopologyWeightJaggednessThreshold = 0.01f;
         private const int TopologyWeightDirectionalSearchDepth = 10;
+        private const float GeometricTargetSourceMinimumWeight = 0.001f;
         private const int QuestPhysBoneComponentLimit = 6;
         private const int QuestPhysBoneColliderLimit = 16;
 
@@ -414,6 +416,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     AdjustConstrainedRoots(finalBones, ResolveUpperLegForChain(animator, chain), 1);
                 }
 
+                EnsureLinearChainHierarchy(finalBones);
                 AddDistanceReweightInfos(
                     chainReweightInfos,
                     chain.Label,
@@ -454,7 +457,15 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 component.verboseLog);
 
             RebindDeletedManagementBones(avatarRoot, oldToNewBoneMap, component.verboseLog);
-            ReweightSkirtVertices(avatarRoot, chainReweightInfos, hips, component.onePieceHipWeightReduction, null, 0.0f, component.verboseLog, context);
+            ReweightSkirtVertices(
+                avatarRoot,
+                chainReweightInfos,
+                hips,
+                component.onePieceHipWeightReduction,
+                animator != null ? animator.GetBoneTransform(HumanBodyBones.Spine) : null,
+                0.0f,
+                component,
+                context);
             DeleteSourceChains(chainsToDelete);
 
             var rootPhysBone = unifiedRoot.gameObject.GetComponent<VRCPhysBone>();
@@ -539,7 +550,19 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 .ToList();
             var animator = avatarRoot.GetComponentInChildren<Animator>(true);
             var hips = animator != null ? animator.GetBoneTransform(HumanBodyBones.Hips) : null;
-            MatchChainsToTarget(avatarRoot, chains, longCoatResult, false, null, false, hips, component.onePieceHipWeightReduction, null, 0.0f, component.verboseLog, context);
+            MatchChainsToTarget(
+                avatarRoot,
+                chains,
+                longCoatResult,
+                false,
+                null,
+                false,
+                hips,
+                component.onePieceHipWeightReduction,
+                animator != null ? animator.GetBoneTransform(HumanBodyBones.Spine) : null,
+                0.0f,
+                component,
+                context);
         }
 
         private static void MatchLongCoatToOnePiece(GameObject avatarRoot, YMVRoidSkirtRefine component, RefineResult onePieceResult, BuildContext context)
@@ -570,7 +593,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 component.longCoatHipWeightReduction,
                 animator != null ? animator.GetBoneTransform(HumanBodyBones.Spine) : null,
                 component.longCoatSpineWeightReduction,
-                component.verboseLog,
+                component,
                 context);
         }
 
@@ -585,7 +608,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             float hipWeightReduction,
             Transform spineBone,
             float spineWeightReduction,
-            bool verboseLog,
+            YMVRoidSkirtRefine component,
             BuildContext context)
         {
             if (avatarRoot == null || sourceChains == null || sourceChains.Count == 0 || targetResult == null || targetResult.IsEmpty) return;
@@ -627,7 +650,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 targetBoneChains,
                 sharedSourceBones);
 
-            ReweightSkirtVertices(avatarRoot, chainReweightInfos, hipBone, hipWeightReduction, spineBone, spineWeightReduction, verboseLog, context);
+            ReweightSkirtVertices(avatarRoot, chainReweightInfos, hipBone, hipWeightReduction, spineBone, spineWeightReduction, component, context);
             foreach (var chain in chainsToDelete
                          .Where(c => c != null && c.SwingRoot != null)
                          .GroupBy(c => c.SwingRoot)
@@ -636,7 +659,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 DeleteMatchedSourceChain(chain);
             }
 
-            if (verboseLog)
+            if (component != null && component.verboseLog)
             {
                 Debug.Log($"[{ToolName}] Matched skirt swing bones to target chains. chains={chainReweightInfos.Count}");
             }
@@ -761,7 +784,9 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 ? new List<Transform>()
                 : chains
                     .Where(c => c != null && c.SwingBones != null)
-                    .SelectMany(c => c.SwingBones)
+                    .SelectMany(c => c.ManagerRoot != null
+                        ? c.SwingBones.Concat(new[] { c.ManagerRoot })
+                        : c.SwingBones)
                     .Where(b => b != null)
                     .Distinct()
                     .ToList();
@@ -1000,7 +1025,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 component.longCoatHipWeightReduction,
                 animator != null ? animator.GetBoneTransform(HumanBodyBones.Spine) : null,
                 component.longCoatSpineWeightReduction,
-                component.verboseLog,
+                component,
                 context);
             foreach (var originalChain in originalChainsToDelete)
             {
@@ -2610,6 +2635,41 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             float hipWeightReduction,
             Transform spineBone,
             float spineWeightReduction,
+            YMVRoidSkirtRefine component,
+            BuildContext context)
+        {
+            if (component != null && component.useGeometricSkirtWeights)
+            {
+                ReweightSkirtVerticesGeometric(
+                    avatarRoot,
+                    chainInfos,
+                    hipBone,
+                    hipWeightReduction,
+                    spineBone,
+                    spineWeightReduction,
+                    component,
+                    context);
+                return;
+            }
+
+            ReweightSkirtVerticesLegacy(
+                avatarRoot,
+                chainInfos,
+                hipBone,
+                hipWeightReduction,
+                spineBone,
+                spineWeightReduction,
+                component != null && component.verboseLog,
+                context);
+        }
+
+        private static void ReweightSkirtVerticesLegacy(
+            GameObject avatarRoot,
+            List<ChainReweightInfo> chainInfos,
+            Transform hipBone,
+            float hipWeightReduction,
+            Transform spineBone,
+            float spineWeightReduction,
             bool verboseLog,
             BuildContext context)
         {
@@ -2677,6 +2737,145 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 if (verboseLog)
                 {
                     Debug.Log($"[{ToolName}] Reweighted skirt vertices: {GetPath(smr.transform)}");
+                }
+            }
+        }
+
+        private static void ReweightSkirtVerticesGeometric(
+            GameObject avatarRoot,
+            List<ChainReweightInfo> chainInfos,
+            Transform hipBone,
+            float hipWeightReduction,
+            Transform spineBone,
+            float spineWeightReduction,
+            YMVRoidSkirtRefine component,
+            BuildContext context)
+        {
+            if (avatarRoot == null || chainInfos == null || chainInfos.Count == 0 || component == null) return;
+
+            var settings = new GeometricSkirtWeightSettings(component);
+            hipWeightReduction = Mathf.Clamp01(hipWeightReduction);
+            spineWeightReduction = Mathf.Clamp01(spineWeightReduction);
+
+            foreach (var smr in avatarRoot.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                if (smr == null || smr.sharedMesh == null || smr.bones == null || smr.bones.Length == 0) continue;
+
+                var mesh = smr.sharedMesh;
+                var rendererBones = smr.bones.ToList();
+                var bindposes = mesh.bindposes.ToList();
+                var rendererChainInfos = BuildRendererChainInfos(smr, rendererBones, bindposes, chainInfos);
+                if (rendererChainInfos.Count == 0) continue;
+
+                var replacedSourceIndices = BuildReplacedSourceIndexSet(rendererChainInfos);
+                AddSkirtNamedBoneIndices(rendererBones, replacedSourceIndices);
+                AddRootFallbackSourceBoneIndices(rendererBones, replacedSourceIndices);
+                var hipIndex = hipBone != null ? rendererBones.IndexOf(hipBone) : -1;
+                var spineIndex = spineBone != null ? rendererBones.IndexOf(spineBone) : -1;
+                var bodyWeightIndices = BuildGeometricBodyWeightIndexSet(rendererBones, hipIndex, spineIndex);
+                var earlyLegWeightIndices = BuildGeometricLegWeightIndexSet(rendererBones);
+                var protectedHoleWeightIndices = BuildGeometricHoleProtectedWeightIndexSet(rendererBones, bodyWeightIndices, earlyLegWeightIndices);
+                var originalWeights = ReadAllBoneWeightsByVertex(mesh);
+                if (originalWeights.Length == 0) continue;
+
+                var vertices = mesh.vertices;
+                if (vertices == null || vertices.Length == 0) continue;
+
+                var verticesInCoatWeightedSubmesh = BuildVerticesInCoatWeightedSubmeshes(mesh, originalWeights, rendererChainInfos);
+                var targetVertices = BuildGeometricTargetVertices(
+                    mesh,
+                    vertices,
+                    originalWeights,
+                    verticesInCoatWeightedSubmesh,
+                    replacedSourceIndices,
+                    hipIndex,
+                    hipWeightReduction,
+                    spineIndex,
+                    spineWeightReduction,
+                    protectedHoleWeightIndices,
+                    settings,
+                    out var sourceWeightedVertices);
+                if (!targetVertices.Any(v => v)) continue;
+                RestrictTargetVerticesToGeneratedBoneVerticalRange(targetVertices, sourceWeightedVertices, vertices, rendererChainInfos, smr.transform);
+                FillGeometricTargetHolesByMesh(mesh, verticesInCoatWeightedSubmesh, targetVertices, originalWeights, protectedHoleWeightIndices);
+                if (!targetVertices.Any(v => v)) continue;
+
+                if (!TryBuildSkirtCoordinateFrame(vertices, targetVertices, out var centerXZ, out var maxY, out var yRange)) continue;
+                var boneChains = BuildGeometricBoneChains(smr, rendererChainInfos, centerXZ, maxY, yRange, settings);
+                if (boneChains.Count == 0) continue;
+                var generatedWeights = GenerateGeometricSkirtWeights(
+                    vertices,
+                    targetVertices,
+                    boneChains,
+                    centerXZ,
+                    maxY,
+                    yRange,
+                    settings,
+                    hipWeightReduction,
+                    out var skirtCoverages);
+                if (!generatedWeights.Any(w => w != null && w.Count > 0)) continue;
+                SmoothSkirtCoveragesByMesh(mesh, targetVertices, skirtCoverages);
+                if (settings.EnableRingSmoothing)
+                {
+                    SmoothGeometricWeightsByRings(generatedWeights, vertices, targetVertices, centerXZ, maxY, yRange, settings);
+                }
+
+                if (settings.EnableMeshSmoothing)
+                {
+                    SmoothGeometricWeightsByMesh(mesh, generatedWeights, targetVertices, settings);
+                }
+
+                var outputWeights = new List<(int idx, float w)>[originalWeights.Length];
+                var changedWeights = false;
+                for (var vi = 0; vi < outputWeights.Length; vi++)
+                {
+                    var generated = vi < generatedWeights.Length ? generatedWeights[vi] : null;
+                    if (!IsAffectedVertex(targetVertices, vi) || generated == null || generated.Count == 0)
+                    {
+                        outputWeights[vi] = originalWeights[vi] != null
+                            ? new List<(int idx, float w)>(originalWeights[vi])
+                            : new List<(int idx, float w)>();
+                        continue;
+                    }
+
+                    PruneAndNormalizeDictionary(generated, settings.MaxInfluencesAfterPrune, settings.MinimumWeight);
+                    if (generated.Count == 0)
+                    {
+                        outputWeights[vi] = originalWeights[vi] != null
+                            ? new List<(int idx, float w)>(originalWeights[vi])
+                            : new List<(int idx, float w)>();
+                        continue;
+                    }
+
+                    outputWeights[vi] = BuildGeometricOutputWeightsForVertex(
+                        originalWeights[vi],
+                        generated,
+                        replacedSourceIndices,
+                        hipIndex,
+                        hipWeightReduction,
+                        spineIndex,
+                        spineWeightReduction,
+                        bodyWeightIndices,
+                        earlyLegWeightIndices,
+                        GetSkirtCoverage(skirtCoverages, vi),
+                        settings);
+                    changedWeights = true;
+                }
+
+                if (!changedWeights) continue;
+
+                var newMesh = Object.Instantiate(mesh);
+                RegisterReplacedObject(mesh, newMesh);
+                context?.AssetSaver.SaveAsset(newMesh);
+                newMesh.name = mesh.name + "_YMVRoidSkirtRefine";
+                newMesh.bindposes = bindposes.ToArray();
+                ApplyAllBoneWeights(newMesh, outputWeights);
+                smr.sharedMesh = newMesh;
+                smr.bones = rendererBones.ToArray();
+
+                if (component.verboseLog)
+                {
+                    Debug.Log($"[{ToolName}] Geometrically reweighted skirt vertices: {GetPath(smr.transform)}");
                 }
             }
         }
@@ -2786,6 +2985,115 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 foreach (var index in info.SharedOriginalIndices)
                 {
                     if (index >= 0) result.Add(index);
+                }
+            }
+
+            return result;
+        }
+
+        private static void AddSkirtNamedBoneIndices(List<Transform> rendererBones, HashSet<int> indices)
+        {
+            if (rendererBones == null || indices == null) return;
+
+            for (var i = 0; i < rendererBones.Count; i++)
+            {
+                var bone = rendererBones[i];
+                if (bone == null || string.IsNullOrEmpty(bone.name)) continue;
+                if (bone.name.IndexOf("Skirt", StringComparison.OrdinalIgnoreCase) < 0
+                    && bone.name.IndexOf("Coat", StringComparison.OrdinalIgnoreCase) < 0) continue;
+
+                indices.Add(i);
+            }
+        }
+
+        private static void AddRootFallbackSourceBoneIndices(List<Transform> rendererBones, HashSet<int> indices)
+        {
+            if (rendererBones == null || indices == null) return;
+
+            for (var i = 0; i < rendererBones.Count; i++)
+            {
+                var bone = rendererBones[i];
+                if (bone == null || string.IsNullOrEmpty(bone.name)) continue;
+                if (!string.Equals(bone.name, "Root", StringComparison.OrdinalIgnoreCase)) continue;
+                indices.Add(i);
+            }
+        }
+
+        private static HashSet<int> BuildGeometricBodyWeightIndexSet(List<Transform> rendererBones, int hipIndex, int spineIndex)
+        {
+            var result = new HashSet<int>();
+            if (hipIndex >= 0) result.Add(hipIndex);
+            if (spineIndex >= 0) result.Add(spineIndex);
+            if (rendererBones == null) return result;
+
+            for (var i = 0; i < rendererBones.Count; i++)
+            {
+                var bone = rendererBones[i];
+                if (bone == null || string.IsNullOrEmpty(bone.name)) continue;
+                var name = bone.name;
+                if (name.IndexOf("Hips", StringComparison.OrdinalIgnoreCase) >= 0
+                    || name.IndexOf("Spine", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    result.Add(i);
+                }
+            }
+
+            return result;
+        }
+
+        private static HashSet<int> BuildGeometricLegWeightIndexSet(List<Transform> rendererBones)
+        {
+            var result = new HashSet<int>();
+            if (rendererBones == null) return result;
+
+            for (var i = 0; i < rendererBones.Count; i++)
+            {
+                var bone = rendererBones[i];
+                if (bone == null || string.IsNullOrEmpty(bone.name)) continue;
+                var name = bone.name;
+                if (name.IndexOf("UpperLeg", StringComparison.OrdinalIgnoreCase) >= 0
+                    || name.IndexOf("LowerLeg", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    result.Add(i);
+                }
+            }
+
+            return result;
+        }
+
+        private static HashSet<int> BuildGeometricHoleProtectedWeightIndexSet(
+            List<Transform> rendererBones,
+            HashSet<int> bodyWeightIndices,
+            HashSet<int> legWeightIndices)
+        {
+            var result = new HashSet<int>();
+            if (bodyWeightIndices != null)
+            {
+                foreach (var index in bodyWeightIndices) result.Add(index);
+            }
+
+            if (legWeightIndices != null)
+            {
+                foreach (var index in legWeightIndices) result.Add(index);
+            }
+
+            if (rendererBones == null) return result;
+            for (var i = 0; i < rendererBones.Count; i++)
+            {
+                var bone = rendererBones[i];
+                if (bone == null || string.IsNullOrEmpty(bone.name)) continue;
+                var name = bone.name;
+                if (name.IndexOf("Chest", StringComparison.OrdinalIgnoreCase) >= 0
+                    || name.IndexOf("Bust", StringComparison.OrdinalIgnoreCase) >= 0
+                    || name.IndexOf("Shoulder", StringComparison.OrdinalIgnoreCase) >= 0
+                    || name.IndexOf("Arm", StringComparison.OrdinalIgnoreCase) >= 0
+                    || name.IndexOf("Hand", StringComparison.OrdinalIgnoreCase) >= 0
+                    || name.IndexOf("Neck", StringComparison.OrdinalIgnoreCase) >= 0
+                    || name.IndexOf("Head", StringComparison.OrdinalIgnoreCase) >= 0
+                    || name.IndexOf("Foot", StringComparison.OrdinalIgnoreCase) >= 0
+                    || name.IndexOf("Toe", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    result.Add(i);
                 }
             }
 
@@ -3252,6 +3560,1152 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             }
         }
 
+        private static List<(int idx, float w)>[] ReadAllBoneWeightsByVertex(Mesh mesh)
+        {
+            if (mesh == null || mesh.vertexCount <= 0) return Array.Empty<List<(int idx, float w)>>();
+
+            var result = new List<(int idx, float w)>[mesh.vertexCount];
+            var bonesPerVertex = mesh.GetBonesPerVertex();
+            var allWeights = mesh.GetAllBoneWeights();
+            if (bonesPerVertex.Length == mesh.vertexCount && allWeights.Length > 0)
+            {
+                var weightIndex = 0;
+                for (var vi = 0; vi < bonesPerVertex.Length; vi++)
+                {
+                    var pairs = new List<(int idx, float w)>();
+                    var count = bonesPerVertex[vi];
+                    for (var i = 0; i < count && weightIndex < allWeights.Length; i++, weightIndex++)
+                    {
+                        var weight = allWeights[weightIndex];
+                        AddOrAccumulate(pairs, weight.boneIndex, weight.weight);
+                    }
+                    Normalize(pairs);
+                    result[vi] = pairs;
+                }
+                return result;
+            }
+
+            var legacyWeights = mesh.boneWeights;
+            for (var vi = 0; vi < result.Length; vi++)
+            {
+                result[vi] = legacyWeights != null && vi < legacyWeights.Length
+                    ? ExtractPairs(legacyWeights[vi])
+                    : new List<(int idx, float w)>();
+            }
+            return result;
+        }
+
+        private static void ApplyAllBoneWeights(Mesh mesh, List<(int idx, float w)>[] weightsByVertex)
+        {
+            if (mesh == null || weightsByVertex == null) return;
+
+            var bonesPerVertex = new NativeArray<byte>(weightsByVertex.Length, Allocator.Temp);
+            var allWeights = new List<BoneWeight1>();
+            for (var vi = 0; vi < weightsByVertex.Length; vi++)
+            {
+                var pairs = weightsByVertex[vi] ?? new List<(int idx, float w)>();
+                PruneListWeights(pairs, byte.MaxValue, 1e-8f);
+                if (pairs.Count == 0)
+                {
+                    pairs.Add((0, 1.0f));
+                }
+
+                bonesPerVertex[vi] = (byte)Mathf.Min(byte.MaxValue, pairs.Count);
+                for (var i = 0; i < pairs.Count && i < byte.MaxValue; i++)
+                {
+                    allWeights.Add(new BoneWeight1
+                    {
+                        boneIndex = pairs[i].idx,
+                        weight = pairs[i].w
+                    });
+                }
+            }
+
+            var allWeightsArray = new NativeArray<BoneWeight1>(allWeights.Count, Allocator.Temp);
+            for (var i = 0; i < allWeights.Count; i++)
+            {
+                allWeightsArray[i] = allWeights[i];
+            }
+
+            mesh.SetBoneWeights(bonesPerVertex, allWeightsArray);
+            bonesPerVertex.Dispose();
+            allWeightsArray.Dispose();
+        }
+
+        private static List<(int idx, float w)> BuildGeometricOutputWeightsForVertex(
+            List<(int idx, float w)> originalPairs,
+            Dictionary<int, float> generatedWeights,
+            HashSet<int> replacedSourceIndices,
+            int hipIndex,
+            float hipWeightReduction,
+            int spineIndex,
+            float spineWeightReduction,
+            HashSet<int> bodyWeightIndices,
+            HashSet<int> earlyLegWeightIndices,
+            float skirtCoverage,
+            GeometricSkirtWeightSettings settings)
+        {
+            skirtCoverage = Mathf.Clamp01(skirtCoverage);
+            var pairs = originalPairs != null
+                ? new List<(int idx, float w)>(originalPairs)
+                : new List<(int idx, float w)>();
+            var replacedTargetWeight = pairs
+                .Where(p => p.w > 1e-6f && replacedSourceIndices.Contains(p.idx))
+                .Sum(p => p.w);
+            RemoveBones(pairs, replacedSourceIndices.ToList());
+
+            var targetWeight = replacedTargetWeight;
+            MoveBodyWeightsToSkirtByCoverage(pairs, earlyLegWeightIndices, 1.0f, ref targetWeight);
+            MoveBodyWeightsToSkirtByCoverage(pairs, bodyWeightIndices, skirtCoverage, ref targetWeight);
+
+            if (settings.ForceGeneratedWeightsForTargetVertices && targetWeight <= 1e-6f && skirtCoverage > 1e-6f)
+            {
+                targetWeight = skirtCoverage;
+            }
+
+            if (settings.ForceGeneratedWeightsForTargetVertices && targetWeight >= 1.0f - 1e-6f)
+            {
+                pairs.Clear();
+                targetWeight = 1.0f;
+            }
+
+            var generatedToAdd = LimitGeneratedWeightsToAvailableSlots(pairs, generatedWeights, settings.MaxInfluencesAfterPrune, settings.MinimumWeight);
+            if (generatedToAdd.Count == 0)
+            {
+                PruneListWeights(pairs, settings.MaxInfluencesAfterPrune, settings.MinimumWeight);
+                return pairs;
+            }
+
+            foreach (var pair in generatedToAdd)
+            {
+                AddOrAccumulate(pairs, pair.Key, pair.Value * targetWeight);
+            }
+
+            if (skirtCoverage < 1.0f - 1e-6f && spineIndex != hipIndex && spineWeightReduction > 1e-6f)
+            {
+                AddSpineTransferIfGeneratedSlotsAvailable(pairs, generatedToAdd, spineIndex, spineWeightReduction, settings.MaxInfluencesAfterPrune);
+            }
+
+            PruneListWeights(pairs, settings.MaxInfluencesAfterPrune, settings.MinimumWeight);
+            return pairs;
+        }
+
+        private static void MoveBodyWeightsToSkirtByCoverage(
+            List<(int idx, float w)> pairs,
+            HashSet<int> boneIndices,
+            float coverage,
+            ref float targetWeight)
+        {
+            if (pairs == null || boneIndices == null || boneIndices.Count == 0 || coverage <= 1e-6f) return;
+
+            foreach (var boneIndex in boneIndices.ToList())
+            {
+                var bodyWeight = RemoveBoneAndReturnWeight(pairs, boneIndex);
+                if (bodyWeight <= 1e-6f) continue;
+
+                var transfer = bodyWeight * Mathf.Clamp01(coverage);
+                var retained = bodyWeight - transfer;
+                if (retained > 1e-6f)
+                {
+                    AddOrAccumulate(pairs, boneIndex, retained);
+                }
+
+                targetWeight += transfer;
+            }
+        }
+
+        private static Dictionary<int, float> LimitGeneratedWeightsToAvailableSlots(
+            List<(int idx, float w)> pairs,
+            Dictionary<int, float> generatedWeights,
+            int maxInfluences,
+            float minimumWeight)
+        {
+            var result = new Dictionary<int, float>();
+            if (pairs == null || generatedWeights == null || generatedWeights.Count == 0) return result;
+
+            var existingIndices = pairs
+                .Where(p => p.w >= minimumWeight)
+                .Select(p => p.idx)
+                .Distinct()
+                .ToList();
+            var reusable = generatedWeights
+                .Where(pair => existingIndices.Contains(pair.Key))
+                .OrderByDescending(pair => pair.Value)
+                .ToList();
+            foreach (var pair in reusable)
+            {
+                result[pair.Key] = pair.Value;
+            }
+
+            var availableSlots = Mathf.Max(0, maxInfluences - existingIndices.Count - result.Count(pair => !existingIndices.Contains(pair.Key)));
+            foreach (var pair in generatedWeights
+                         .Where(pair => !existingIndices.Contains(pair.Key))
+                         .OrderByDescending(pair => pair.Value))
+            {
+                if (availableSlots <= 0) break;
+                result[pair.Key] = pair.Value;
+                availableSlots--;
+            }
+
+            PruneAndNormalizeDictionary(result, Mathf.Max(1, maxInfluences), 1e-8f);
+            return result;
+        }
+
+        private static void AddSpineTransferIfGeneratedSlotsAvailable(
+            List<(int idx, float w)> pairs,
+            Dictionary<int, float> generatedWeights,
+            int spineIndex,
+            float spineWeightReduction,
+            int maxInfluences)
+        {
+            if (pairs == null || generatedWeights == null || generatedWeights.Count == 0 || spineIndex < 0) return;
+
+            var uniqueCount = pairs
+                .Where(p => p.w > 1e-6f)
+                .Select(p => p.idx)
+                .Distinct()
+                .Count();
+            var missingGeneratedCount = generatedWeights.Keys
+                .Where(index => !pairs.Any(p => p.idx == index && p.w > 1e-6f))
+                .Distinct()
+                .Count();
+            if (uniqueCount + missingGeneratedCount > Mathf.Max(1, maxInfluences)) return;
+
+            var transfer = ExtractTransferWeight(pairs, spineIndex, spineWeightReduction);
+            if (transfer <= 1e-6f) return;
+
+            foreach (var pair in generatedWeights)
+            {
+                AddOrAccumulate(pairs, pair.Key, pair.Value * transfer);
+            }
+        }
+
+        private static bool[] BuildGeometricTargetVertices(
+            Mesh mesh,
+            Vector3[] vertices,
+            List<(int idx, float w)>[] originalWeights,
+            bool[] verticesInCoatWeightedSubmesh,
+            HashSet<int> replacedSourceIndices,
+            int hipIndex,
+            float hipWeightReduction,
+            int spineIndex,
+            float spineWeightReduction,
+            HashSet<int> protectedWeightIndices,
+            GeometricSkirtWeightSettings settings,
+            out bool[] sourceWeightedVertices)
+        {
+            var count = originalWeights != null ? originalWeights.Length : 0;
+            var result = new bool[count];
+            var seed = new bool[count];
+            sourceWeightedVertices = seed;
+            for (var vi = 0; vi < count; vi++)
+            {
+                if (!IsAffectedVertex(verticesInCoatWeightedSubmesh, vi)) continue;
+
+                var pairs = originalWeights[vi];
+                if (pairs == null || pairs.Count == 0) continue;
+
+                var sourceWeight = pairs
+                    .Where(p => p.w > 1e-6f && replacedSourceIndices.Contains(p.idx))
+                    .Sum(p => p.w);
+                var hasSourceWeight = sourceWeight >= GeometricTargetSourceMinimumWeight;
+                var hasHipTransfer = hipIndex >= 0 && hipWeightReduction > 1e-6f && pairs.Any(p => p.idx == hipIndex && p.w > 1e-6f);
+                seed[vi] = hasSourceWeight;
+                result[vi] = hasSourceWeight || hasHipTransfer;
+            }
+
+            if (settings.ExpandTargetVerticesGeometrically)
+            {
+                ExpandTargetVerticesFromSeeds(
+                    mesh,
+                    vertices,
+                    verticesInCoatWeightedSubmesh,
+                    seed,
+                    result,
+                    originalWeights,
+                    protectedWeightIndices,
+                    settings.TargetBoundsPadding);
+            }
+
+            return result;
+        }
+
+        private static void ExpandTargetVerticesFromSeeds(
+            Mesh mesh,
+            Vector3[] vertices,
+            bool[] verticesInCoatWeightedSubmesh,
+            bool[] seedVertices,
+            bool[] targetVertices,
+            List<(int idx, float w)>[] originalWeights,
+            HashSet<int> protectedWeightIndices,
+            float padding)
+        {
+            if (vertices == null || verticesInCoatWeightedSubmesh == null || seedVertices == null || targetVertices == null) return;
+
+            var count = Mathf.Min(vertices.Length, Mathf.Min(seedVertices.Length, targetVertices.Length));
+            var seedIndices = Enumerable.Range(0, count)
+                .Where(i => seedVertices[i])
+                .ToList();
+            if (seedIndices.Count == 0) return;
+
+            var minY = seedIndices.Min(i => vertices[i].y);
+            var maxY = seedIndices.Max(i => vertices[i].y);
+            var yRange = Mathf.Max(1e-5f, maxY - minY);
+            var center = Vector2.zero;
+            for (var i = 0; i < seedIndices.Count; i++)
+            {
+                var vertex = vertices[seedIndices[i]];
+                center += new Vector2(vertex.x, vertex.z);
+            }
+            center /= seedIndices.Count;
+
+            var maxRadius = 0.0f;
+            for (var i = 0; i < seedIndices.Count; i++)
+            {
+                var vertex = vertices[seedIndices[i]];
+                maxRadius = Mathf.Max(maxRadius, Vector2.Distance(new Vector2(vertex.x, vertex.z), center));
+            }
+
+            var yPadding = yRange * Mathf.Max(0.0f, padding);
+            var radiusPadding = Mathf.Max(0.02f, maxRadius * Mathf.Max(0.0f, padding));
+            var lowerY = minY - yPadding;
+            var upperY = maxY + yPadding;
+            var upperRadius = maxRadius + radiusPadding;
+            var allVertices = Enumerable
+                .Range(0, targetVertices.Length)
+                .Select(_ => true)
+                .ToArray();
+            var connectedToSeeds = BuildVerticesConnectedToSeeds(mesh, allVertices, seedVertices);
+
+            for (var vi = 0; vi < count; vi++)
+            {
+                if (connectedToSeeds != null && !IsAffectedVertex(connectedToSeeds, vi)) continue;
+                if (!IsAffectedVertex(verticesInCoatWeightedSubmesh, vi)
+                    && HasAnyProtectedWeight(originalWeights, vi, protectedWeightIndices))
+                {
+                    continue;
+                }
+
+                var vertex = vertices[vi];
+                if (vertex.y < lowerY || vertex.y > upperY) continue;
+                var radius = Vector2.Distance(new Vector2(vertex.x, vertex.z), center);
+                if (radius > upperRadius) continue;
+
+                targetVertices[vi] = true;
+            }
+        }
+
+        private static bool[] BuildVerticesConnectedToSeeds(Mesh mesh, bool[] allowedVertices, bool[] seedVertices)
+        {
+            if (mesh == null || allowedVertices == null || seedVertices == null) return null;
+
+            var adjacency = BuildMeshAdjacency(mesh, allowedVertices);
+            if (adjacency.Count == 0) return null;
+
+            var result = new bool[Mathf.Min(allowedVertices.Length, seedVertices.Length)];
+            var queue = new Queue<int>();
+            for (var i = 0; i < result.Length; i++)
+            {
+                if (!seedVertices[i] || !allowedVertices[i]) continue;
+                result[i] = true;
+                queue.Enqueue(i);
+            }
+
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                if (!adjacency.TryGetValue(current, out var neighbors)) continue;
+
+                foreach (var neighbor in neighbors)
+                {
+                    if (neighbor < 0 || neighbor >= result.Length) continue;
+                    if (result[neighbor] || !allowedVertices[neighbor]) continue;
+                    result[neighbor] = true;
+                    queue.Enqueue(neighbor);
+                }
+            }
+
+            return result;
+        }
+
+        private static void FillGeometricTargetHolesByMesh(
+            Mesh mesh,
+            bool[] allowedVertices,
+            bool[] targetVertices,
+            List<(int idx, float w)>[] originalWeights,
+            HashSet<int> protectedWeightIndices)
+        {
+            if (mesh == null || allowedVertices == null || targetVertices == null) return;
+
+            var allVertices = Enumerable
+                .Range(0, targetVertices.Length)
+                .Select(_ => true)
+                .ToArray();
+            var adjacency = BuildMeshAdjacency(mesh, allVertices);
+            if (adjacency.Count == 0) return;
+            FillTargetHolesWithoutProtectedWeights(adjacency, targetVertices, originalWeights, protectedWeightIndices);
+
+            var changed = true;
+            while (changed)
+            {
+                changed = false;
+                var additions = new List<int>();
+                for (var vi = 0; vi < targetVertices.Length; vi++)
+                {
+                    if (targetVertices[vi]) continue;
+                    if (HasAnyProtectedWeight(originalWeights, vi, protectedWeightIndices)) continue;
+                    if (!adjacency.TryGetValue(vi, out var neighbors)) continue;
+
+                    var targetNeighborCount = neighbors.Count(n => IsAffectedVertex(targetVertices, n));
+                    if (targetNeighborCount < 2) continue;
+                    additions.Add(vi);
+                }
+
+                if (additions.Count == 0) return;
+                foreach (var vi in additions)
+                {
+                    targetVertices[vi] = true;
+                }
+                changed = true;
+            }
+        }
+
+        private static void FillTargetHolesWithoutProtectedWeights(
+            Dictionary<int, HashSet<int>> adjacency,
+            bool[] targetVertices,
+            List<(int idx, float w)>[] originalWeights,
+            HashSet<int> protectedWeightIndices)
+        {
+            if (adjacency == null || targetVertices == null || originalWeights == null || protectedWeightIndices == null) return;
+
+            var visited = new bool[targetVertices.Length];
+            for (var start = 0; start < targetVertices.Length; start++)
+            {
+                if (visited[start] || targetVertices[start]) continue;
+
+                var component = new List<int>();
+                var queue = new Queue<int>();
+                var touchesTarget = false;
+                var hasProtectedWeight = false;
+                visited[start] = true;
+                queue.Enqueue(start);
+
+                while (queue.Count > 0)
+                {
+                    var current = queue.Dequeue();
+                    component.Add(current);
+                    if (HasAnyProtectedWeight(originalWeights, current, protectedWeightIndices)) hasProtectedWeight = true;
+                    if (!adjacency.TryGetValue(current, out var neighbors)) continue;
+
+                    foreach (var neighbor in neighbors)
+                    {
+                        if (neighbor < 0 || neighbor >= targetVertices.Length) continue;
+                        if (targetVertices[neighbor])
+                        {
+                            touchesTarget = true;
+                            continue;
+                        }
+
+                        if (visited[neighbor]) continue;
+                        visited[neighbor] = true;
+                        queue.Enqueue(neighbor);
+                    }
+                }
+
+                if (hasProtectedWeight || !touchesTarget) continue;
+                foreach (var index in component)
+                {
+                    targetVertices[index] = true;
+                }
+            }
+        }
+
+        private static bool HasAnyProtectedWeight(
+            List<(int idx, float w)>[] weights,
+            int vertexIndex,
+            HashSet<int> protectedWeightIndices)
+        {
+            if (weights == null || protectedWeightIndices == null || vertexIndex < 0 || vertexIndex >= weights.Length) return false;
+
+            var pairs = weights[vertexIndex];
+            return pairs != null && pairs.Any(pair => pair.w > 1e-6f && protectedWeightIndices.Contains(pair.idx));
+        }
+
+        private static void RestrictTargetVerticesToGeneratedBoneVerticalRange(
+            bool[] targetVertices,
+            bool[] protectedVertices,
+            Vector3[] vertices,
+            List<RendererChainInfo> rendererChainInfos,
+            Transform rendererTransform)
+        {
+            if (targetVertices == null || vertices == null || rendererChainInfos == null || rendererTransform == null) return;
+
+            var boneYs = rendererChainInfos
+                .Where(info => info != null && info.FinalBones != null)
+                .SelectMany(info => info.FinalBones)
+                .Where(bone => bone != null)
+                .Select(bone => rendererTransform.InverseTransformPoint(bone.position).y)
+                .ToList();
+            if (boneYs.Count == 0) return;
+
+            var minY = boneYs.Min();
+            var maxY = boneYs.Max();
+            var padding = Mathf.Max(0.03f, (maxY - minY) * 0.2f);
+            var upperY = maxY + padding;
+            var count = Mathf.Min(targetVertices.Length, vertices.Length);
+            for (var vi = 0; vi < count; vi++)
+            {
+                if (!targetVertices[vi]) continue;
+                if (IsAffectedVertex(protectedVertices, vi)) continue;
+                var y = vertices[vi].y;
+                if (y > upperY)
+                {
+                    targetVertices[vi] = false;
+                }
+            }
+        }
+
+        private static bool TryBuildSkirtCoordinateFrame(Vector3[] vertices, bool[] targetVertices, out Vector2 centerXZ, out float maxY, out float yRange)
+        {
+            centerXZ = Vector2.zero;
+            maxY = 0.0f;
+            yRange = 0.0f;
+            if (vertices == null || targetVertices == null) return false;
+
+            var minY = float.PositiveInfinity;
+            maxY = float.NegativeInfinity;
+            var sum = Vector2.zero;
+            var count = 0;
+            for (var vi = 0; vi < vertices.Length && vi < targetVertices.Length; vi++)
+            {
+                if (!targetVertices[vi]) continue;
+
+                var vertex = vertices[vi];
+                sum += new Vector2(vertex.x, vertex.z);
+                minY = Mathf.Min(minY, vertex.y);
+                maxY = Mathf.Max(maxY, vertex.y);
+                count++;
+            }
+
+            if (count == 0 || float.IsInfinity(minY) || float.IsInfinity(maxY) || float.IsNaN(minY) || float.IsNaN(maxY)) return false;
+
+            centerXZ = sum / count;
+            yRange = Mathf.Max(1e-5f, maxY - minY);
+            return true;
+        }
+
+        private static List<GeometricBoneChain> BuildGeometricBoneChains(
+            SkinnedMeshRenderer smr,
+            List<RendererChainInfo> rendererChainInfos,
+            Vector2 centerXZ,
+            float maxY,
+            float yRange,
+            GeometricSkirtWeightSettings settings)
+        {
+            var result = new List<GeometricBoneChain>();
+            if (smr == null || rendererChainInfos == null) return result;
+
+            foreach (var info in rendererChainInfos)
+            {
+                if (info == null || info.FinalBones == null || info.FinalIndices == null) continue;
+
+                var count = Mathf.Min(info.FinalBones.Count, info.FinalIndices.Count);
+                if (count == 0) continue;
+
+                if (!TryCalculateChainU(info.FinalBones, smr.transform, centerXZ, out var chainU)) continue;
+                var localPositions = new Vector3[count];
+                for (var i = 0; i < count; i++)
+                {
+                    localPositions[i] = info.FinalBones[i] != null
+                        ? smr.transform.InverseTransformPoint(info.FinalBones[i].position)
+                        : Vector3.zero;
+                }
+
+                var samples = new List<GeometricBoneSample>();
+                for (var i = 0; i < count; i++)
+                {
+                    var bone = info.FinalBones[i];
+                    if (bone == null || info.FinalIndices[i] < 0) continue;
+
+                    var local = CalculateVerticalJudgmentPosition(localPositions, i, settings.VerticalJudgmentOffset);
+                    var boneT = Mathf.Clamp01((maxY - local.y) / yRange);
+                    var positionT = Mathf.Clamp01((maxY - localPositions[i].y) / yRange);
+                    samples.Add(new GeometricBoneSample(info.FinalIndices[i], boneT, positionT, i));
+                }
+
+                samples = samples
+                    .GroupBy(sample => sample.BoneIndex)
+                    .Select(group => group.OrderBy(sample => sample.StageIndex).First())
+                    .OrderBy(sample => sample.BoneT)
+                    .ToList();
+                if (samples.Count == 0) continue;
+
+                result.Add(new GeometricBoneChain(chainU, samples));
+            }
+
+            return result.OrderBy(chain => chain.ChainU).ToList();
+        }
+
+        private static Vector3 CalculateVerticalJudgmentPosition(Vector3[] localPositions, int index, float offset)
+        {
+            if (localPositions == null || localPositions.Length == 0) return Vector3.zero;
+            index = Mathf.Clamp(index, 0, localPositions.Length - 1);
+            offset = Mathf.Clamp01(offset);
+
+            var current = localPositions[index];
+            if (localPositions.Length == 1 || offset <= 1e-6f) return current;
+
+            if (index + 1 < localPositions.Length)
+            {
+                return Vector3.Lerp(current, localPositions[index + 1], offset);
+            }
+
+            return current + (current - localPositions[index - 1]) * offset;
+        }
+
+        private static bool TryCalculateChainU(List<Transform> bones, Transform rendererTransform, Vector2 centerXZ, out float chainU)
+        {
+            chainU = 0.0f;
+            if (bones == null || rendererTransform == null) return false;
+
+            var locals = bones
+                .Where(bone => bone != null)
+                .Select(bone => rendererTransform.InverseTransformPoint(bone.position))
+                .ToList();
+            if (locals.Count == 0) return false;
+
+            var minY = locals.Min(p => p.y);
+            var maxY = locals.Max(p => p.y);
+            var lowerHalfThreshold = Mathf.Lerp(maxY, minY, 0.5f);
+            var selected = locals
+                .Where(p => p.y <= lowerHalfThreshold)
+                .ToList();
+            if (selected.Count == 0)
+            {
+                selected = locals;
+            }
+
+            var sum = Vector2.zero;
+            for (var i = 0; i < selected.Count; i++)
+            {
+                sum += new Vector2(selected[i].x, selected[i].z);
+            }
+
+            var average = sum / selected.Count;
+            chainU = CalculateCircularU(new Vector3(average.x, 0.0f, average.y), centerXZ);
+            return true;
+        }
+
+        private static Dictionary<int, float>[] GenerateGeometricSkirtWeights(
+            Vector3[] vertices,
+            bool[] targetVertices,
+            List<GeometricBoneChain> boneChains,
+            Vector2 centerXZ,
+            float maxY,
+            float yRange,
+            GeometricSkirtWeightSettings settings,
+            float hipWeightReduction,
+            out float[] skirtCoverages)
+        {
+            var result = new Dictionary<int, float>[vertices != null ? vertices.Length : 0];
+            skirtCoverages = new float[result.Length];
+            if (vertices == null || targetVertices == null || boneChains == null || boneChains.Count == 0) return result;
+
+            for (var vi = 0; vi < vertices.Length && vi < targetVertices.Length; vi++)
+            {
+                if (!targetVertices[vi]) continue;
+
+                var vertex = vertices[vi];
+                var vertexU = CalculateCircularU(vertex, centerXZ);
+                var vertexT = Mathf.Clamp01((maxY - vertex.y) / yRange);
+                var weights = CalculateLocalBilinearWeights(vertexU, vertexT, boneChains, settings);
+                PruneAndNormalizeDictionary(weights, settings.MaxInfluencesBeforePrune, 1e-8f);
+                result[vi] = weights;
+                skirtCoverages[vi] = CalculateGeometricSkirtCoverage(vertexU, vertexT, boneChains, settings, hipWeightReduction);
+            }
+
+            return result;
+        }
+
+        private static float CalculateGeometricSkirtCoverage(
+            float vertexU,
+            float vertexT,
+            List<GeometricBoneChain> chains,
+            GeometricSkirtWeightSettings settings,
+            float hipWeightReduction)
+        {
+            if (chains == null || chains.Count == 0) return 0.0f;
+
+            var firstStageT = GetInterpolatedFirstStageT(vertexU, chains, settings);
+            var firstPositionT = GetInterpolatedFirstPositionT(vertexU, chains, settings);
+            if (vertexT <= firstPositionT) return 0.0f;
+            if (vertexT >= firstStageT) return 1.0f;
+
+            var span = Mathf.Max(1e-5f, firstStageT - firstPositionT);
+            var blend = Mathf.Clamp01((vertexT - firstPositionT) / span);
+            var smooth = blend * blend * (3.0f - 2.0f * blend);
+            var exponent = Mathf.Lerp(1.8f, 0.35f, Mathf.Clamp01(hipWeightReduction));
+            return Mathf.Pow(smooth, exponent);
+        }
+
+        private static float GetInterpolatedFirstStageT(
+            float vertexU,
+            List<GeometricBoneChain> chains,
+            GeometricSkirtWeightSettings settings)
+        {
+            if (chains == null || chains.Count == 0) return 0.0f;
+            if (chains.Count == 1) return GetFirstStageT(chains[0]);
+
+            FindCircularChainPair(chains, vertexU, out var left, out var right, out var angularBlend);
+            angularBlend = ApplySmoothAngularBlend(angularBlend, settings.AngularBlendSmoothing);
+            return Mathf.Lerp(GetFirstStageT(left), GetFirstStageT(right), angularBlend);
+        }
+
+        private static float GetInterpolatedFirstPositionT(
+            float vertexU,
+            List<GeometricBoneChain> chains,
+            GeometricSkirtWeightSettings settings)
+        {
+            if (chains == null || chains.Count == 0) return 0.0f;
+            if (chains.Count == 1) return GetFirstPositionT(chains[0]);
+
+            FindCircularChainPair(chains, vertexU, out var left, out var right, out var angularBlend);
+            angularBlend = ApplySmoothAngularBlend(angularBlend, settings.AngularBlendSmoothing);
+            return Mathf.Lerp(GetFirstPositionT(left), GetFirstPositionT(right), angularBlend);
+        }
+
+        private static float GetFirstStageT(GeometricBoneChain chain)
+        {
+            if (chain == null || chain.Samples == null || chain.Samples.Count == 0) return 0.0f;
+            return chain.Samples[0].BoneT;
+        }
+
+        private static float GetFirstPositionT(GeometricBoneChain chain)
+        {
+            if (chain == null || chain.Samples == null || chain.Samples.Count == 0) return 0.0f;
+            return chain.Samples[0].PositionT;
+        }
+
+        private static float GetSkirtCoverage(float[] coverages, int index)
+        {
+            return coverages != null && index >= 0 && index < coverages.Length
+                ? Mathf.Clamp01(coverages[index])
+                : 0.0f;
+        }
+
+        private static void SmoothSkirtCoveragesByMesh(Mesh mesh, bool[] targetVertices, float[] coverages)
+        {
+            if (mesh == null || targetVertices == null || coverages == null) return;
+
+            var adjacency = BuildMeshAdjacency(mesh, targetVertices);
+            if (adjacency.Count == 0) return;
+
+            for (var iteration = 0; iteration < 2; iteration++)
+            {
+                var next = (float[])coverages.Clone();
+                for (var vi = 0; vi < coverages.Length && vi < targetVertices.Length; vi++)
+                {
+                    if (!targetVertices[vi]) continue;
+                    if (coverages[vi] <= 1e-6f) continue;
+                    if (!adjacency.TryGetValue(vi, out var neighbors)) continue;
+                    if (neighbors.Any(n => n >= 0 && n < coverages.Length && IsAffectedVertex(targetVertices, n) && coverages[n] <= 1e-6f)) continue;
+
+                    var neighborValues = neighbors
+                        .Where(n => n >= 0 && n < coverages.Length && IsAffectedVertex(targetVertices, n))
+                        .Select(n => coverages[n])
+                        .Where(value => value > 1e-6f)
+                        .ToList();
+                    if (neighborValues.Count < 2) continue;
+
+                    var average = neighborValues.Average();
+                    if (coverages[vi] >= average) continue;
+                    next[vi] = Mathf.Max(coverages[vi], average);
+                }
+
+                Array.Copy(next, coverages, coverages.Length);
+            }
+        }
+
+        private static Dictionary<int, float> CalculateLocalBilinearWeights(
+            float vertexU,
+            float vertexT,
+            List<GeometricBoneChain> chains,
+            GeometricSkirtWeightSettings settings)
+        {
+            var result = new Dictionary<int, float>();
+            if (chains == null || chains.Count == 0) return result;
+
+            if (chains.Count == 1)
+            {
+                AddVerticalBilinearWeights(result, chains[0], vertexT, 1.0f);
+                NormalizeDictionary(result, result.Values.Sum());
+                return result;
+            }
+
+            FindCircularChainPair(chains, vertexU, out var left, out var right, out var angularBlend);
+            angularBlend = ApplySmoothAngularBlend(angularBlend, settings.AngularBlendSmoothing);
+            AddVerticalBilinearWeights(result, left, vertexT, 1.0f - angularBlend);
+            AddVerticalBilinearWeights(result, right, vertexT, angularBlend);
+            NormalizeDictionary(result, result.Values.Sum());
+            return result;
+        }
+
+        private static float ApplySmoothAngularBlend(float blend, float smoothing)
+        {
+            blend = Mathf.Clamp01(blend);
+            smoothing = Mathf.Clamp01(smoothing);
+            if (smoothing <= 1e-6f) return blend;
+
+            var smooth = blend * blend * (3.0f - 2.0f * blend);
+            return Mathf.Lerp(blend, smooth, smoothing);
+        }
+
+        private static void FindCircularChainPair(
+            List<GeometricBoneChain> chains,
+            float vertexU,
+            out GeometricBoneChain left,
+            out GeometricBoneChain right,
+            out float blend)
+        {
+            left = chains[chains.Count - 1];
+            right = chains[0];
+
+            for (var i = 0; i < chains.Count; i++)
+            {
+                var current = chains[i];
+                var next = chains[(i + 1) % chains.Count];
+                var currentU = current.ChainU;
+                var nextU = next.ChainU;
+                var unwrappedNextU = nextU <= currentU ? nextU + 1.0f : nextU;
+                var unwrappedVertexU = vertexU < currentU ? vertexU + 1.0f : vertexU;
+                if (unwrappedVertexU < currentU || unwrappedVertexU > unwrappedNextU) continue;
+
+                left = current;
+                right = next;
+                var span = Mathf.Max(1e-5f, unwrappedNextU - currentU);
+                blend = Mathf.Clamp01((unwrappedVertexU - currentU) / span);
+                return;
+            }
+
+            var fallbackSpan = Mathf.Max(1e-5f, right.ChainU + 1.0f - left.ChainU);
+            var fallbackU = vertexU < left.ChainU ? vertexU + 1.0f : vertexU;
+            blend = Mathf.Clamp01((fallbackU - left.ChainU) / fallbackSpan);
+        }
+
+        private static void AddVerticalBilinearWeights(
+            Dictionary<int, float> result,
+            GeometricBoneChain chain,
+            float vertexT,
+            float chainWeight)
+        {
+            if (result == null || chain == null || chain.Samples == null || chain.Samples.Count == 0 || chainWeight <= 1e-8f) return;
+
+            if (chain.Samples.Count == 1 || vertexT <= chain.Samples[0].BoneT)
+            {
+                AddOrAccumulateDictionary(result, chain.Samples[0].BoneIndex, chainWeight);
+                return;
+            }
+
+            var last = chain.Samples[chain.Samples.Count - 1];
+            if (vertexT >= last.BoneT)
+            {
+                AddOrAccumulateDictionary(result, last.BoneIndex, chainWeight);
+                return;
+            }
+
+            for (var i = 0; i + 1 < chain.Samples.Count; i++)
+            {
+                var upper = chain.Samples[i];
+                var lower = chain.Samples[i + 1];
+                if (vertexT < upper.BoneT || vertexT > lower.BoneT) continue;
+
+                var span = Mathf.Max(1e-5f, lower.BoneT - upper.BoneT);
+                var blend = Mathf.Clamp01((vertexT - upper.BoneT) / span);
+                AddOrAccumulateDictionary(result, upper.BoneIndex, chainWeight * (1.0f - blend));
+                AddOrAccumulateDictionary(result, lower.BoneIndex, chainWeight * blend);
+                return;
+            }
+
+            var nearest = chain.Samples
+                .OrderBy(sample => Mathf.Abs(sample.BoneT - vertexT))
+                .First();
+            AddOrAccumulateDictionary(result, nearest.BoneIndex, chainWeight);
+        }
+
+        private static void SmoothGeometricWeightsByRings(
+            Dictionary<int, float>[] weights,
+            Vector3[] vertices,
+            bool[] targetVertices,
+            Vector2 centerXZ,
+            float maxY,
+            float yRange,
+            GeometricSkirtWeightSettings settings)
+        {
+            if (weights == null || vertices == null || targetVertices == null || settings.RingSmoothIterations <= 0) return;
+
+            var ringCount = Mathf.Max(1, settings.RingCount);
+            var rings = new List<GeometricRingVertex>[ringCount];
+            for (var i = 0; i < ringCount; i++) rings[i] = new List<GeometricRingVertex>();
+
+            for (var vi = 0; vi < vertices.Length && vi < targetVertices.Length; vi++)
+            {
+                if (!targetVertices[vi] || weights[vi] == null || weights[vi].Count == 0) continue;
+
+                var u = CalculateCircularU(vertices[vi], centerXZ);
+                var t = Mathf.Clamp01((maxY - vertices[vi].y) / yRange);
+                var ring = Mathf.Clamp(Mathf.FloorToInt(t * ringCount), 0, ringCount - 1);
+                rings[ring].Add(new GeometricRingVertex(vi, u));
+            }
+
+            foreach (var ring in rings)
+            {
+                ring.Sort((a, b) => a.U.CompareTo(b.U));
+            }
+
+            for (var iteration = 0; iteration < settings.RingSmoothIterations; iteration++)
+            {
+                var next = CloneGeneratedWeights(weights);
+                for (var ringIndex = 0; ringIndex < rings.Length; ringIndex++)
+                {
+                    var ring = rings[ringIndex];
+                    if (ring.Count < 2) continue;
+
+                    for (var i = 0; i < ring.Count; i++)
+                    {
+                        var current = ring[i].Index;
+                        var prev = ring[(i - 1 + ring.Count) % ring.Count].Index;
+                        var nextIndex = ring[(i + 1) % ring.Count].Index;
+                        next[current] = BlendWeightDictionaries(
+                            weights[current],
+                            settings.RingSmoothCenterWeight,
+                            weights[prev],
+                            settings.RingSmoothNeighborWeight,
+                            weights[nextIndex],
+                            settings.RingSmoothNeighborWeight);
+                        PruneAndNormalizeDictionary(next[current], settings.MaxInfluencesBeforePrune, 1e-8f);
+                    }
+                }
+
+                weights = CopyGeneratedWeights(next, weights);
+            }
+        }
+
+        private static void SmoothGeometricWeightsByMesh(
+            Mesh mesh,
+            Dictionary<int, float>[] weights,
+            bool[] targetVertices,
+            GeometricSkirtWeightSettings settings)
+        {
+            if (mesh == null || weights == null || targetVertices == null || settings.MeshSmoothIterations <= 0 || settings.MeshSmoothBlend <= 1e-6f) return;
+
+            var adjacency = BuildMeshAdjacency(mesh, targetVertices);
+            if (adjacency.Count == 0) return;
+
+            for (var iteration = 0; iteration < settings.MeshSmoothIterations; iteration++)
+            {
+                var next = CloneGeneratedWeights(weights);
+                foreach (var item in adjacency)
+                {
+                    var vi = item.Key;
+                    if (vi < 0 || vi >= weights.Length || weights[vi] == null || weights[vi].Count == 0) continue;
+
+                    var average = new Dictionary<int, float>();
+                    var neighborCount = 0;
+                    foreach (var neighbor in item.Value)
+                    {
+                        if (neighbor < 0 || neighbor >= weights.Length || weights[neighbor] == null || weights[neighbor].Count == 0) continue;
+
+                        AddScaledWeights(average, weights[neighbor], 1.0f);
+                        neighborCount++;
+                    }
+
+                    if (neighborCount == 0) continue;
+                    ScaleWeights(average, 1.0f / neighborCount);
+                    next[vi] = LerpWeightDictionaries(weights[vi], average, settings.MeshSmoothBlend);
+                    PruneAndNormalizeDictionary(next[vi], settings.MaxInfluencesBeforePrune, 1e-8f);
+                }
+
+                weights = CopyGeneratedWeights(next, weights);
+            }
+        }
+
+        private static Dictionary<int, float>[] CopyGeneratedWeights(Dictionary<int, float>[] source, Dictionary<int, float>[] destination)
+        {
+            if (source == null || destination == null) return destination;
+
+            var count = Mathf.Min(source.Length, destination.Length);
+            for (var i = 0; i < count; i++)
+            {
+                destination[i] = source[i];
+            }
+            return destination;
+        }
+
+        private static Dictionary<int, float> BlendWeightDictionaries(
+            Dictionary<int, float> center,
+            float centerWeight,
+            Dictionary<int, float> prev,
+            float prevWeight,
+            Dictionary<int, float> next,
+            float nextWeight)
+        {
+            var result = new Dictionary<int, float>();
+            AddScaledWeights(result, center, centerWeight);
+            AddScaledWeights(result, prev, prevWeight);
+            AddScaledWeights(result, next, nextWeight);
+            return result;
+        }
+
+        private static Dictionary<int, float> LerpWeightDictionaries(Dictionary<int, float> from, Dictionary<int, float> to, float blend)
+        {
+            var result = new Dictionary<int, float>();
+            AddScaledWeights(result, from, 1.0f - Mathf.Clamp01(blend));
+            AddScaledWeights(result, to, Mathf.Clamp01(blend));
+            return result;
+        }
+
+        private static void AddScaledWeights(Dictionary<int, float> destination, Dictionary<int, float> source, float scale)
+        {
+            if (destination == null || source == null || scale <= 0.0f) return;
+
+            foreach (var pair in source)
+            {
+                if (pair.Value <= 0.0f) continue;
+                destination[pair.Key] = destination.TryGetValue(pair.Key, out var existing)
+                    ? existing + pair.Value * scale
+                    : pair.Value * scale;
+            }
+        }
+
+        private static void AddOrAccumulateDictionary(Dictionary<int, float> weights, int index, float weight)
+        {
+            if (weights == null || index < 0 || weight <= 0.0f) return;
+
+            weights[index] = weights.TryGetValue(index, out var existing)
+                ? existing + weight
+                : weight;
+        }
+
+        private static void ScaleWeights(Dictionary<int, float> weights, float scale)
+        {
+            if (weights == null) return;
+
+            var keys = weights.Keys.ToList();
+            foreach (var key in keys)
+            {
+                weights[key] *= scale;
+            }
+        }
+
+        private static void PruneAndNormalizeDictionary(Dictionary<int, float> weights, int maxInfluences, float minimumWeight)
+        {
+            if (weights == null || weights.Count == 0) return;
+
+            var sorted = weights
+                .Where(p => p.Value >= minimumWeight)
+                .OrderByDescending(p => p.Value)
+                .Take(Mathf.Max(1, maxInfluences))
+                .ToList();
+            weights.Clear();
+            var sum = sorted.Sum(p => p.Value);
+            if (sum <= 1e-8f) return;
+
+            foreach (var pair in sorted)
+            {
+                weights[pair.Key] = pair.Value / sum;
+            }
+        }
+
+        private static void PruneListWeights(List<(int idx, float w)> pairs, int maxInfluences, float minimumWeight)
+        {
+            if (pairs == null) return;
+
+            var sorted = pairs
+                .Where(p => p.idx >= 0 && p.w >= minimumWeight)
+                .GroupBy(p => p.idx)
+                .Select(g => (idx: g.Key, w: g.Sum(p => p.w)))
+                .OrderByDescending(p => p.w)
+                .Take(Mathf.Max(1, maxInfluences))
+                .ToList();
+            pairs.Clear();
+            pairs.AddRange(sorted);
+            Normalize(pairs);
+            pairs.Sort((x, y) => y.w.CompareTo(x.w));
+        }
+
+        private static float CalculateCircularU(Vector3 localPosition, Vector2 centerXZ)
+        {
+            var angle = Mathf.Atan2(localPosition.z - centerXZ.y, localPosition.x - centerXZ.x);
+            var u = angle / (Mathf.PI * 2.0f);
+            if (u < 0.0f) u += 1.0f;
+            return u;
+        }
+
+        private static float CircularDistance01(float a, float b)
+        {
+            var distance = Mathf.Abs(a - b);
+            return Mathf.Min(distance, 1.0f - distance);
+        }
+
+        private static float AngularKernel(float vertexU, float chainU, float sigma)
+        {
+            sigma = Mathf.Max(1e-4f, sigma);
+            var distance = CircularDistance01(vertexU, chainU);
+            return Mathf.Exp(-(distance * distance) / (2.0f * sigma * sigma));
+        }
+
+        private static float VerticalKernel(float vertexT, float boneT, float radius)
+        {
+            radius = Mathf.Max(1e-4f, radius);
+            var x = Mathf.Abs(vertexT - boneT) / radius;
+            if (x >= 1.0f) return 0.0f;
+
+            var s = 1.0f - x;
+            return s * s * (3.0f - 2.0f * s);
+        }
+
+        private static bool[] BuildVerticesInCoatWeightedSubmeshes(
+            Mesh mesh,
+            List<(int idx, float w)>[] weights,
+            List<RendererChainInfo> rendererChainInfos)
+        {
+            var result = new bool[mesh != null ? mesh.vertexCount : 0];
+            if (mesh == null || weights == null || weights.Length == 0 || rendererChainInfos == null || rendererChainInfos.Count == 0) return result;
+
+            var coatBoneIndices = new HashSet<int>(
+                rendererChainInfos
+                    .SelectMany(info => info.ChainOriginalIndices)
+                    .Where(i => i >= 0));
+            if (coatBoneIndices.Count == 0) return result;
+
+            for (var subMesh = 0; subMesh < mesh.subMeshCount; subMesh++)
+            {
+                var indices = mesh.GetIndices(subMesh);
+                var hasCoatWeight = false;
+                for (var i = 0; i < indices.Length; i++)
+                {
+                    var vertexIndex = indices[i];
+                    if (vertexIndex < 0 || vertexIndex >= weights.Length) continue;
+                    var pairs = weights[vertexIndex];
+                    if (pairs == null || !pairs.Any(p => p.w > 1e-6f && coatBoneIndices.Contains(p.idx))) continue;
+
+                    hasCoatWeight = true;
+                    break;
+                }
+
+                if (!hasCoatWeight) continue;
+
+                for (var i = 0; i < indices.Length; i++)
+                {
+                    var vertexIndex = indices[i];
+                    if (vertexIndex < 0 || vertexIndex >= result.Length) continue;
+                    result[vertexIndex] = true;
+                }
+            }
+
+            return result;
+        }
+
         private static bool[] BuildVerticesInCoatWeightedSubmeshes(
             Mesh mesh,
             BoneWeight[] weights,
@@ -3355,6 +4809,21 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             }
 
             return 0.0f;
+        }
+
+        private static float RemoveBoneAndReturnWeight(List<(int idx, float w)> pairs, int boneIndex)
+        {
+            if (pairs == null || boneIndex < 0) return 0.0f;
+
+            var removed = 0.0f;
+            for (var i = pairs.Count - 1; i >= 0; i--)
+            {
+                if (pairs[i].idx != boneIndex) continue;
+                removed += Mathf.Max(0.0f, pairs[i].w);
+                pairs.RemoveAt(i);
+            }
+
+            return removed;
         }
 
         private static List<(int idx, float w)> ExtractPairs(BoneWeight bw)
@@ -3735,6 +5204,92 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 ChainOriginalIndices = chainOriginalIndices ?? new List<int>();
                 SharedOriginalIndices = sharedOriginalIndices ?? new List<int>();
                 FinalIndices = finalIndices;
+            }
+        }
+
+        private sealed class GeometricSkirtWeightSettings
+        {
+            public readonly int MaxInfluencesBeforePrune;
+            public readonly int MaxInfluencesAfterPrune;
+            public readonly float AngularSigma;
+            public readonly float AngularBlendSmoothing;
+            public readonly float VerticalRadius;
+            public readonly float VerticalJudgmentOffset;
+            public readonly int RingCount;
+            public readonly int RingSmoothIterations;
+            public readonly float RingSmoothCenterWeight;
+            public readonly float RingSmoothNeighborWeight;
+            public readonly int MeshSmoothIterations;
+            public readonly float MeshSmoothBlend;
+            public readonly float MinimumWeight;
+            public readonly bool EnableRingSmoothing;
+            public readonly bool EnableMeshSmoothing;
+            public readonly bool ForceGeneratedWeightsForTargetVertices;
+            public readonly bool IncludeHipSpineOnlyTargetVertices;
+            public readonly bool ExpandTargetVerticesGeometrically;
+            public readonly float TargetBoundsPadding;
+
+            public GeometricSkirtWeightSettings(YMVRoidSkirtRefine component)
+            {
+                MaxInfluencesBeforePrune = Mathf.Clamp(component != null ? component.skirtWeightMaxInfluencesBeforePrune : 4, 1, 4);
+                MaxInfluencesAfterPrune = Mathf.Clamp(component != null ? component.skirtWeightMaxInfluencesAfterPrune : 4, 1, 4);
+                AngularSigma = Mathf.Max(1e-4f, component != null ? component.skirtWeightAngularSigma : 0.18f);
+                AngularBlendSmoothing = Mathf.Clamp01(component != null ? component.skirtWeightAngularBlendSmoothing : 1.0f);
+                VerticalRadius = Mathf.Max(1e-4f, component != null ? component.skirtWeightVerticalRadius : 0.32f);
+                VerticalJudgmentOffset = Mathf.Clamp01(component != null ? component.skirtWeightVerticalJudgmentOffset : 0.5f);
+                RingCount = Mathf.Max(1, component != null ? component.skirtWeightRingCount : 32);
+                RingSmoothIterations = 0;
+                RingSmoothCenterWeight = Mathf.Max(0.0f, component != null ? component.skirtWeightRingSmoothCenterWeight : 0.5f);
+                RingSmoothNeighborWeight = Mathf.Max(0.0f, component != null ? component.skirtWeightRingSmoothNeighborWeight : 0.25f);
+                MeshSmoothIterations = 0;
+                MeshSmoothBlend = Mathf.Clamp01(component != null ? component.skirtWeightMeshSmoothBlend : 0.2f);
+                MinimumWeight = Mathf.Max(0.0f, component != null ? component.skirtWeightMinimumWeight : 0.005f);
+                EnableRingSmoothing = component == null || component.skirtWeightEnableRingSmoothing;
+                EnableMeshSmoothing = component == null || component.skirtWeightEnableMeshSmoothing;
+                ForceGeneratedWeightsForTargetVertices = component == null || component.skirtWeightForceGeneratedWeightsForTargetVertices;
+                IncludeHipSpineOnlyTargetVertices = component != null && component.skirtWeightIncludeHipSpineOnlyTargetVertices;
+                ExpandTargetVerticesGeometrically = component == null || component.skirtWeightExpandTargetVerticesGeometrically;
+                TargetBoundsPadding = Mathf.Max(0.0f, component != null ? component.skirtWeightTargetBoundsPadding : 0.15f);
+            }
+        }
+
+        private sealed class GeometricBoneChain
+        {
+            public readonly float ChainU;
+            public readonly List<GeometricBoneSample> Samples;
+
+            public GeometricBoneChain(float chainU, List<GeometricBoneSample> samples)
+            {
+                ChainU = chainU;
+                Samples = samples ?? new List<GeometricBoneSample>();
+            }
+        }
+
+        private readonly struct GeometricBoneSample
+        {
+            public readonly int BoneIndex;
+            public readonly float BoneT;
+            public readonly float PositionT;
+            public readonly int StageIndex;
+
+            public GeometricBoneSample(int boneIndex, float boneT, float positionT, int stageIndex)
+            {
+                BoneIndex = boneIndex;
+                BoneT = boneT;
+                PositionT = positionT;
+                StageIndex = stageIndex;
+            }
+        }
+
+        private readonly struct GeometricRingVertex
+        {
+            public readonly int Index;
+            public readonly float U;
+
+            public GeometricRingVertex(int index, float u)
+            {
+                Index = index;
+                U = u;
             }
         }
 

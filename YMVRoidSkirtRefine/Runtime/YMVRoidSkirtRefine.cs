@@ -277,6 +277,69 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         public bool verboseLog = false;
 
         [HideInInspector]
+        public bool useGeometricSkirtWeights = true;
+
+        [HideInInspector]
+        public int skirtWeightGenerationSettingsVersion = 2;
+
+        [HideInInspector]
+        public int skirtWeightMaxInfluencesBeforePrune = 4;
+
+        [HideInInspector]
+        public int skirtWeightMaxInfluencesAfterPrune = 4;
+
+        [HideInInspector]
+        public float skirtWeightAngularSigma = 0.18f;
+
+        [HideInInspector]
+        public float skirtWeightVerticalRadius = 0.32f;
+
+        [HideInInspector]
+        public float skirtWeightVerticalJudgmentOffset = 0.5f;
+
+        [HideInInspector]
+        public int skirtWeightRingCount = 32;
+
+        [HideInInspector]
+        public int skirtWeightRingSmoothIterations = 0;
+
+        [HideInInspector]
+        public float skirtWeightRingSmoothCenterWeight = 0.5f;
+
+        [HideInInspector]
+        public float skirtWeightRingSmoothNeighborWeight = 0.25f;
+
+        [HideInInspector]
+        public int skirtWeightMeshSmoothIterations = 0;
+
+        [HideInInspector]
+        public float skirtWeightMeshSmoothBlend = 0.2f;
+
+        [HideInInspector]
+        public float skirtWeightMinimumWeight = 0.005f;
+
+        [HideInInspector]
+        public bool skirtWeightEnableRingSmoothing = true;
+
+        [HideInInspector]
+        public bool skirtWeightEnableMeshSmoothing = true;
+
+        [HideInInspector]
+        public bool skirtWeightForceGeneratedWeightsForTargetVertices = true;
+
+        [HideInInspector]
+        public bool skirtWeightIncludeHipSpineOnlyTargetVertices = false;
+
+        [HideInInspector]
+        public bool skirtWeightExpandTargetVerticesGeometrically = true;
+
+        [HideInInspector]
+        public float skirtWeightTargetBoundsPadding = 0.15f;
+
+        [HideInInspector]
+        public float skirtWeightAngularBlendSmoothing = 1.0f;
+
+        [HideInInspector]
         public string autoEnableRefinesObjectId = string.Empty;
 
         private void Reset()

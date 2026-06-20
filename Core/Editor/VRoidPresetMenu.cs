@@ -6,6 +6,7 @@ using YoridoriModifiers.ArmPatch;
 using YoridoriModifiers.EyeFreeze;
 using YoridoriModifiers.MeshTrimmer;
 using YoridoriModifiers.MToonToLilToon;
+using YoridoriModifiers.VRoidSkirtRefine;
 
 namespace YoridoriModifiers.Core.Editor
 {
@@ -48,22 +49,25 @@ namespace YoridoriModifiers.Core.Editor
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Arm Patch/Kimono", false, -892)]
         private static void AddVRoidKimonoArmPatch() => AddArmPatchToRoot(SleevePreset.Kimono, false);
 
-        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Mesh Trimmer", false, -891)]
+        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM VRoid Skirt Refine", false, -891)]
+        private static void AddVRoidSkirtRefine() => AddSingleComponentToRoot<YMVRoidSkirtRefine>("Add YM VRoid Skirt Refine with VRoid Defaults");
+
+        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Mesh Trimmer", false, -890)]
         private static void AddVRoidMeshTrimmer() => AddMeshTrimmersToRoot("Add YM Mesh Trimmer with VRoid Defaults");
 
-        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM MToon to lilToon", false, -890)]
+        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM MToon to lilToon", false, -889)]
         private static void AddVRoidMToonToLilToon() => AddMToonToLilToonToRoot("Add YM MToon to lilToon with VRoid Defaults");
 
-        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Eye Freeze", false, -889)]
+        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Eye Freeze", false, -888)]
         private static void AddVRoidEyeFreeze() => AddSingleComponentToRoot<YMEyeFreeze>("Add YM Eye Freeze with VRoid Defaults");
 
-        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Arm Patch/(via VRM 0.0) Long Sleeves", false, -888)]
+        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Arm Patch/(via VRM 0.0) Long Sleeves", false, -887)]
         private static void AddVRoid00LongSleevesArmPatch() => AddArmPatchToRoot(SleevePreset.LongSleeves, true);
 
-        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Arm Patch/(via VRM 0.0) Short Sleeves", false, -887)]
+        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Arm Patch/(via VRM 0.0) Short Sleeves", false, -886)]
         private static void AddVRoid00ShortSleevesArmPatch() => AddArmPatchToRoot(SleevePreset.ShortSleeves, true);
 
-        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Arm Patch/(via VRM 0.0) Kimono", false, -886)]
+        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Arm Patch/(via VRM 0.0) Kimono", false, -885)]
         private static void AddVRoid00KimonoArmPatch() => AddArmPatchToRoot(SleevePreset.Kimono, true);
 
         [MenuItem(BaseMenu + "Create YM Components Object for VRoid/Long Sleeves", true)]
@@ -75,6 +79,7 @@ namespace YoridoriModifiers.Core.Editor
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Arm Patch/Long Sleeves", true)]
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Arm Patch/Short Sleeves", true)]
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Arm Patch/Kimono", true)]
+        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM VRoid Skirt Refine", true)]
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Mesh Trimmer", true)]
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM MToon to lilToon", true)]
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Eye Freeze", true)]
@@ -112,6 +117,8 @@ namespace YoridoriModifiers.Core.Editor
         {
             var armPatch = Undo.AddComponent<ArmPatchComponent>(target);
             ConfigureArmPatch(armPatch, avatarRoot, preset, fromVrm00);
+
+            TryAddSinglePerAvatarComponent<YMVRoidSkirtRefine>(target, avatarRoot, out _);
 
             AddMeshTrimmerComponents(target);
 
@@ -177,11 +184,12 @@ namespace YoridoriModifiers.Core.Editor
         {
             var target = Selection.activeGameObject;
             if (target == null) return;
+            var avatarRoot = ResolveAvatarRoot(target);
 
             Undo.SetCurrentGroupName(undoName);
             int undoGroup = Undo.GetCurrentGroup();
 
-            TryAddComponent<T>(target, out _);
+            TryAddSinglePerAvatarComponent<T>(target, avatarRoot, out _);
 
             Undo.CollapseUndoOperations(undoGroup);
             EditorUtility.SetDirty(target);
@@ -272,6 +280,14 @@ namespace YoridoriModifiers.Core.Editor
 
             component = Undo.AddComponent<T>(target);
             return component != null;
+        }
+
+        private static bool TryAddSinglePerAvatarComponent<T>(GameObject target, GameObject avatarRoot, out T component) where T : Component
+        {
+            component = null;
+            if (target == null) return false;
+
+            return TryAddComponent(target, out component);
         }
 
         private static string BuildUndoName(SleevePreset preset, bool fromVrm00)

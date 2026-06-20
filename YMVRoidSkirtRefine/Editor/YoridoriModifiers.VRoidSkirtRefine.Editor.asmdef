@@ -1,14 +1,12 @@
 {
-    "name": "YoridoriModifiers.Core.Editor",
-    "rootNamespace": "YoridoriModifiers.Core.Editor",
+    "name": "YoridoriModifiers.VRoidSkirtRefine.Editor",
+    "rootNamespace": "YoridoriModifiers.VRoidSkirtRefine",
     "references": [
-        "YoridoriModifiers.ArmPatch.Runtime",
-        "YoridoriModifiers.EyeFreeze.Runtime",
-        "YoridoriModifiers.MToonToLilToon.Runtime",
-        "YoridoriModifiers.MeshTrimmer.Runtime",
+        "nadena.dev.ndmf",
+        "YoridoriModifiers.Core.Editor",
         "YoridoriModifiers.VRoidSkirtRefine.Runtime",
         "VRC.SDK3A",
-        "VRC.SDK3.Dynamics.Constraint",
+        "VRC.SDK3.Dynamics.PhysBone",
         "VRC.Dynamics"
     ],
     "includePlatforms": [

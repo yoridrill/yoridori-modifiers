@@ -4,7 +4,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 {
     [AddComponentMenu("")]
     [DefaultExecutionOrder(-10000)]
-    public sealed class YMVRoidSkirtRefinePreviewMotionDriver : MonoBehaviour
+    public sealed class YMPreviewMotionDriver : MonoBehaviour
     {
         private GameObject avatarRoot;
         private AnimationClip[] clips;

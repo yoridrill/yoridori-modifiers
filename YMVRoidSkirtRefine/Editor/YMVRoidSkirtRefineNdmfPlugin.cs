@@ -23,6 +23,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         private const string LongCoatUnifiedRootName = "YM_VRoidSkirtRefine_LongCoatRoot";
         private const float LongCoatFrontOutwardOffset = 0.04f;
         private const float LongCoatFrontBackwardOffset = 0.015f;
+        private const float LongCoatRootLiftLastRootFactor = 0.35f;
+        private const float LongCoatUpperSkirtCoverageVirtualSpanFactor = 1.0f;
         private const float GeneratedUpperLegColliderRadiusRatio = 0.24f;
         private const float GeneratedLowerLegColliderRadiusRatio = 0.16f;
         private const float GeneratedFallbackLegColliderHeight = 0.5f;
@@ -410,10 +412,10 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 }
 
                 if (component.onePieceUseFrontRootRotationConstraints
-                    && component.onePieceMoveFrontRootsTowardUpperLeg
+                    && component.onePieceMoveFrontRootsTowardUpperLeg > 1e-6f
                     && IsFrontChain(chain))
                 {
-                    AdjustConstrainedRoots(finalBones, ResolveUpperLegForChain(animator, chain), 1);
+                    AdjustConstrainedRoots(finalBones, ResolveUpperLegForChain(animator, chain), 1, component.onePieceMoveFrontRootsTowardUpperLeg);
                 }
 
                 EnsureLinearChainHierarchy(finalBones);
@@ -465,6 +467,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 animator != null ? animator.GetBoneTransform(HumanBodyBones.Spine) : null,
                 0.0f,
                 component,
+                false,
                 context);
             DeleteSourceChains(chainsToDelete);
 
@@ -562,6 +565,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 animator != null ? animator.GetBoneTransform(HumanBodyBones.Spine) : null,
                 0.0f,
                 component,
+                false,
                 context);
         }
 
@@ -594,6 +598,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 animator != null ? animator.GetBoneTransform(HumanBodyBones.Spine) : null,
                 component.longCoatSpineWeightReduction,
                 component,
+                true,
                 context);
         }
 
@@ -609,6 +614,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             Transform spineBone,
             float spineWeightReduction,
             YMVRoidSkirtRefine component,
+            bool allowCoverageAboveFirstBone,
             BuildContext context)
         {
             if (avatarRoot == null || sourceChains == null || sourceChains.Count == 0 || targetResult == null || targetResult.IsEmpty) return;
@@ -650,7 +656,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 targetBoneChains,
                 sharedSourceBones);
 
-            ReweightSkirtVertices(avatarRoot, chainReweightInfos, hipBone, hipWeightReduction, spineBone, spineWeightReduction, component, context);
+            ReweightSkirtVertices(avatarRoot, chainReweightInfos, hipBone, hipWeightReduction, spineBone, spineWeightReduction, component, allowCoverageAboveFirstBone, context);
             foreach (var chain in chainsToDelete
                          .Where(c => c != null && c.SwingRoot != null)
                          .GroupBy(c => c.SwingRoot)
@@ -912,11 +918,13 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                         chain,
                         Mathf.Max(3, component.longCoatTargetBoneCount),
                         component.longCoatShortSkirtUsePrependedRootsOnly,
-                        component.longCoatMoveConstrainedRootsTowardUpperLeg
-                            && (useRotationConstraint || (useFrontRootRotationConstraint && IsFrontChain(chain)))
+                        component.longCoatMoveConstrainedRootsTowardUpperLeg > 1e-6f
+                            && IsFrontChain(chain)
+                            && (useRotationConstraint || useFrontRootRotationConstraint)
                             ? ResolveUpperLegForChain(animator, chain)
                             : null,
                         useFrontRootRotationConstraint && IsFrontChain(chain) ? 1 : 3,
+                        component.longCoatMoveConstrainedRootsTowardUpperLeg,
                         component.longCoatMoveFrontBonesOutward ? avatarRoot.transform : null,
                         component.longCoatMoveFrontBonesOutward
                             ? ResolveFrontOutwardTargetWorldX(chainsByLabel, animator, chain, Mathf.Max(3, component.longCoatTargetBoneCount), component.longCoatShortSkirtUsePrependedRootsOnly)
@@ -1026,6 +1034,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 animator != null ? animator.GetBoneTransform(HumanBodyBones.Spine) : null,
                 component.longCoatSpineWeightReduction,
                 component,
+                true,
                 context);
             foreach (var originalChain in originalChainsToDelete)
             {
@@ -1473,6 +1482,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             bool rootsOnly,
             Transform rotationConstraintSource,
             int rotationConstraintAdjustedCount,
+            float rotationConstraintMoveStrength,
             Transform frontOutwardReference,
             float? frontOutwardTargetWorldX,
             float? sideTargetWorldY,
@@ -1505,7 +1515,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 prepended.Add(root);
             }
 
-            AdjustConstrainedRoots(prepended, rotationConstraintSource, rotationConstraintAdjustedCount);
+            AdjustConstrainedRoots(prepended, rotationConstraintSource, rotationConstraintAdjustedCount, rotationConstraintMoveStrength);
             AlignSideLongCoatRootHeight(chain.Label, prepended, sideTargetWorldY);
             LiftLongCoatRootsAboveUpperLeg(prepended, upperLegHeightReference, lowerLegHeightReference, rootHeightOffsetMultiplier);
 
@@ -1791,13 +1801,22 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             var offset = targetY - firstRoot.position.y;
             if (Mathf.Abs(offset) <= 1e-6f) return;
 
-            foreach (var root in prependedRoots)
+            for (var i = 0; i < prependedRoots.Count; i++)
             {
+                var root = prependedRoots[i];
                 if (root == null) continue;
                 var position = root.position;
-                position.y += offset;
+                position.y += offset * CalculateLongCoatRootLiftFactor(i, prependedRoots.Count, offset);
                 root.position = position;
             }
+        }
+
+        private static float CalculateLongCoatRootLiftFactor(int index, int count, float offset)
+        {
+            if (offset <= 1e-6f || count <= 1 || index <= 0) return 1.0f;
+
+            var t = Mathf.Clamp01(index / Mathf.Max(1.0f, count - 1.0f));
+            return Mathf.Lerp(1.0f, LongCoatRootLiftLastRootFactor, t);
         }
 
         private static Vector3? EstimateLongCoatFirstFinalBonePosition(
@@ -1834,9 +1853,12 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         private static void AdjustConstrainedRoots(
             IReadOnlyList<Transform> roots,
             Transform source,
-            int adjustedCount)
+            int adjustedCount,
+            float moveStrength)
         {
             if (roots == null || roots.Count == 0 || source == null || adjustedCount <= 0) return;
+            moveStrength = Mathf.Clamp01(moveStrength);
+            if (moveStrength <= 1e-6f) return;
 
             var constrainedCount = Mathf.Min(adjustedCount, roots.Count);
             for (var i = 0; i < constrainedCount; i++)
@@ -1848,7 +1870,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     ? 0.8f
                     : Mathf.Lerp(0.8f, 0.35f, i / (float)(constrainedCount - 1));
                 var sourceAligned = new Vector3(source.position.x, root.position.y, source.position.z);
-                root.position = Vector3.Lerp(root.position, sourceAligned, ratio);
+                root.position = Vector3.Lerp(root.position, sourceAligned, ratio * moveStrength);
             }
         }
 
@@ -1990,7 +2012,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     "YM_VRoidSkirtRefine_LeftUpperLegCollider",
                     true,
                     GeneratedUpperLegColliderRadiusRatio,
-                    Quaternion.Euler(6.0f, 0.0f, 7.0f),
+                    Quaternion.Euler(6.0f, 0.0f, 4.0f),
                     "upper leg",
                     verboseLog);
                 AddLegCapsuleCollider(
@@ -2000,7 +2022,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     "YM_VRoidSkirtRefine_RightUpperLegCollider",
                     false,
                     GeneratedUpperLegColliderRadiusRatio,
-                    Quaternion.Euler(6.0f, 0.0f, -7.0f),
+                    Quaternion.Euler(6.0f, 0.0f, -4.0f),
                     "upper leg",
                     verboseLog);
             }
@@ -2113,7 +2135,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             collider.bonesAsSpheres = false;
             collider.radius = radius;
             collider.height = colliderHeight;
-            collider.position = new Vector3(0.02f * sign, -legLength * 0.5f, -0.01f);
+            collider.position = new Vector3(0.01f * sign, -legLength * 0.5f, -0.01f);
             collider.rotation = rotation;
             colliders.Add(collider);
 
@@ -2359,7 +2381,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 if (processed == null || !IsFrontChain(processed.Chain) || processed.FinalBones == null || processed.FinalBones.Count < 2) continue;
 
                 var source = ResolveUpperLegForChain(animator, processed.Chain);
-                AddOrUpdateRotationConstraint(processed.FinalBones[0], source, 0.7f, constraintMode, verboseLog);
+                AddOrUpdateRotationConstraint(processed.FinalBones[0], source, 0.8f, constraintMode, verboseLog);
 
                 var physBoneRoot = processed.FinalBones[1];
                 if (physBoneRoot == null) continue;
@@ -2475,7 +2497,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         {
             if (chain == null || string.IsNullOrEmpty(chain.Label)) return 0.6f;
             if (IsFrontChain(chain)) return 0.8f;
-            if (chain.Label.IndexOf("Side", StringComparison.OrdinalIgnoreCase) >= 0) return 0.4f;
+            if (chain.Label.IndexOf("Side", StringComparison.OrdinalIgnoreCase) >= 0) return 0.6f;
             if (chain.Label.IndexOf("Back", StringComparison.OrdinalIgnoreCase) >= 0) return 0.3f;
             return 0.8f;
         }
@@ -2636,6 +2658,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             Transform spineBone,
             float spineWeightReduction,
             YMVRoidSkirtRefine component,
+            bool allowCoverageAboveFirstBone,
             BuildContext context)
         {
             if (component != null && component.useGeometricSkirtWeights)
@@ -2648,6 +2671,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     spineBone,
                     spineWeightReduction,
                     component,
+                    allowCoverageAboveFirstBone,
                     context);
                 return;
             }
@@ -2749,6 +2773,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             Transform spineBone,
             float spineWeightReduction,
             YMVRoidSkirtRefine component,
+            bool allowCoverageAboveFirstBone,
             BuildContext context)
         {
             if (avatarRoot == null || chainInfos == null || chainInfos.Count == 0 || component == null) return;
@@ -2772,7 +2797,9 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 AddRootFallbackSourceBoneIndices(rendererBones, replacedSourceIndices);
                 var hipIndex = hipBone != null ? rendererBones.IndexOf(hipBone) : -1;
                 var spineIndex = spineBone != null ? rendererBones.IndexOf(spineBone) : -1;
-                var bodyWeightIndices = BuildGeometricBodyWeightIndexSet(rendererBones, hipIndex, spineIndex);
+                var hipWeightIndices = BuildGeometricHipWeightIndexSet(rendererBones, hipIndex);
+                var spineWeightIndices = BuildGeometricSpineWeightIndexSet(rendererBones, spineIndex);
+                var bodyWeightIndices = BuildGeometricBodyWeightIndexSet(hipWeightIndices, spineWeightIndices);
                 var earlyLegWeightIndices = BuildGeometricLegWeightIndexSet(rendererBones);
                 var protectedHoleWeightIndices = BuildGeometricHoleProtectedWeightIndexSet(rendererBones, bodyWeightIndices, earlyLegWeightIndices);
                 var originalWeights = ReadAllBoneWeightsByVertex(mesh);
@@ -2789,9 +2816,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     verticesInCoatWeightedSubmesh,
                     replacedSourceIndices,
                     hipIndex,
-                    hipWeightReduction,
                     spineIndex,
-                    spineWeightReduction,
                     protectedHoleWeightIndices,
                     settings,
                     out var sourceWeightedVertices);
@@ -2812,9 +2837,13 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     yRange,
                     settings,
                     hipWeightReduction,
-                    out var skirtCoverages);
+                    spineWeightReduction,
+                    allowCoverageAboveFirstBone,
+                    out var hipCoverages,
+                    out var spineCoverages);
                 if (!generatedWeights.Any(w => w != null && w.Count > 0)) continue;
-                SmoothSkirtCoveragesByMesh(mesh, targetVertices, skirtCoverages);
+                SmoothSkirtCoveragesByMesh(mesh, targetVertices, hipCoverages);
+                SmoothSkirtCoveragesByMesh(mesh, targetVertices, spineCoverages);
                 if (settings.EnableRingSmoothing)
                 {
                     SmoothGeometricWeightsByRings(generatedWeights, vertices, targetVertices, centerXZ, maxY, yRange, settings);
@@ -2851,13 +2880,11 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                         originalWeights[vi],
                         generated,
                         replacedSourceIndices,
-                        hipIndex,
-                        hipWeightReduction,
-                        spineIndex,
-                        spineWeightReduction,
-                        bodyWeightIndices,
+                        hipWeightIndices,
+                        spineWeightIndices,
                         earlyLegWeightIndices,
-                        GetSkirtCoverage(skirtCoverages, vi),
+                        GetSkirtCoverage(hipCoverages, vi),
+                        GetSkirtCoverage(spineCoverages, vi),
                         settings);
                     changedWeights = true;
                 }
@@ -3019,10 +3046,29 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             }
         }
 
-        private static HashSet<int> BuildGeometricBodyWeightIndexSet(List<Transform> rendererBones, int hipIndex, int spineIndex)
+        private static HashSet<int> BuildGeometricHipWeightIndexSet(List<Transform> rendererBones, int hipIndex)
         {
             var result = new HashSet<int>();
             if (hipIndex >= 0) result.Add(hipIndex);
+            if (rendererBones == null) return result;
+
+            for (var i = 0; i < rendererBones.Count; i++)
+            {
+                var bone = rendererBones[i];
+                if (bone == null || string.IsNullOrEmpty(bone.name)) continue;
+                var name = bone.name;
+                if (name.IndexOf("Hips", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    result.Add(i);
+                }
+            }
+
+            return result;
+        }
+
+        private static HashSet<int> BuildGeometricSpineWeightIndexSet(List<Transform> rendererBones, int spineIndex)
+        {
+            var result = new HashSet<int>();
             if (spineIndex >= 0) result.Add(spineIndex);
             if (rendererBones == null) return result;
 
@@ -3031,11 +3077,28 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 var bone = rendererBones[i];
                 if (bone == null || string.IsNullOrEmpty(bone.name)) continue;
                 var name = bone.name;
-                if (name.IndexOf("Hips", StringComparison.OrdinalIgnoreCase) >= 0
-                    || name.IndexOf("Spine", StringComparison.OrdinalIgnoreCase) >= 0)
+                if (name.IndexOf("Spine", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
                     result.Add(i);
                 }
+            }
+
+            return result;
+        }
+
+        private static HashSet<int> BuildGeometricBodyWeightIndexSet(
+            HashSet<int> hipWeightIndices,
+            HashSet<int> spineWeightIndices)
+        {
+            var result = new HashSet<int>();
+            if (hipWeightIndices != null)
+            {
+                foreach (var index in hipWeightIndices) result.Add(index);
+            }
+
+            if (spineWeightIndices != null)
+            {
+                foreach (var index in spineWeightIndices) result.Add(index);
             }
 
             return result;
@@ -3636,16 +3699,15 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             List<(int idx, float w)> originalPairs,
             Dictionary<int, float> generatedWeights,
             HashSet<int> replacedSourceIndices,
-            int hipIndex,
-            float hipWeightReduction,
-            int spineIndex,
-            float spineWeightReduction,
-            HashSet<int> bodyWeightIndices,
+            HashSet<int> hipWeightIndices,
+            HashSet<int> spineWeightIndices,
             HashSet<int> earlyLegWeightIndices,
-            float skirtCoverage,
+            float hipCoverage,
+            float spineCoverage,
             GeometricSkirtWeightSettings settings)
         {
-            skirtCoverage = Mathf.Clamp01(skirtCoverage);
+            hipCoverage = Mathf.Clamp01(hipCoverage);
+            spineCoverage = Mathf.Clamp01(spineCoverage);
             var pairs = originalPairs != null
                 ? new List<(int idx, float w)>(originalPairs)
                 : new List<(int idx, float w)>();
@@ -3656,11 +3718,13 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
             var targetWeight = replacedTargetWeight;
             MoveBodyWeightsToSkirtByCoverage(pairs, earlyLegWeightIndices, 1.0f, ref targetWeight);
-            MoveBodyWeightsToSkirtByCoverage(pairs, bodyWeightIndices, skirtCoverage, ref targetWeight);
+            MoveBodyWeightsToSkirtByCoverage(pairs, hipWeightIndices, hipCoverage, ref targetWeight);
+            MoveBodyWeightsToSkirtByCoverage(pairs, spineWeightIndices, spineCoverage, ref targetWeight);
 
-            if (settings.ForceGeneratedWeightsForTargetVertices && targetWeight <= 1e-6f && skirtCoverage > 1e-6f)
+            var forceCoverage = Mathf.Max(hipCoverage, spineCoverage);
+            if (settings.ForceGeneratedWeightsForTargetVertices && targetWeight <= 1e-6f && forceCoverage > 1e-6f)
             {
-                targetWeight = skirtCoverage;
+                targetWeight = forceCoverage;
             }
 
             if (settings.ForceGeneratedWeightsForTargetVertices && targetWeight >= 1.0f - 1e-6f)
@@ -3679,11 +3743,6 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             foreach (var pair in generatedToAdd)
             {
                 AddOrAccumulate(pairs, pair.Key, pair.Value * targetWeight);
-            }
-
-            if (skirtCoverage < 1.0f - 1e-6f && spineIndex != hipIndex && spineWeightReduction > 1e-6f)
-            {
-                AddSpineTransferIfGeneratedSlotsAvailable(pairs, generatedToAdd, spineIndex, spineWeightReduction, settings.MaxInfluencesAfterPrune);
             }
 
             PruneListWeights(pairs, settings.MaxInfluencesAfterPrune, settings.MinimumWeight);
@@ -3751,35 +3810,6 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             return result;
         }
 
-        private static void AddSpineTransferIfGeneratedSlotsAvailable(
-            List<(int idx, float w)> pairs,
-            Dictionary<int, float> generatedWeights,
-            int spineIndex,
-            float spineWeightReduction,
-            int maxInfluences)
-        {
-            if (pairs == null || generatedWeights == null || generatedWeights.Count == 0 || spineIndex < 0) return;
-
-            var uniqueCount = pairs
-                .Where(p => p.w > 1e-6f)
-                .Select(p => p.idx)
-                .Distinct()
-                .Count();
-            var missingGeneratedCount = generatedWeights.Keys
-                .Where(index => !pairs.Any(p => p.idx == index && p.w > 1e-6f))
-                .Distinct()
-                .Count();
-            if (uniqueCount + missingGeneratedCount > Mathf.Max(1, maxInfluences)) return;
-
-            var transfer = ExtractTransferWeight(pairs, spineIndex, spineWeightReduction);
-            if (transfer <= 1e-6f) return;
-
-            foreach (var pair in generatedWeights)
-            {
-                AddOrAccumulate(pairs, pair.Key, pair.Value * transfer);
-            }
-        }
-
         private static bool[] BuildGeometricTargetVertices(
             Mesh mesh,
             Vector3[] vertices,
@@ -3787,9 +3817,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             bool[] verticesInCoatWeightedSubmesh,
             HashSet<int> replacedSourceIndices,
             int hipIndex,
-            float hipWeightReduction,
             int spineIndex,
-            float spineWeightReduction,
             HashSet<int> protectedWeightIndices,
             GeometricSkirtWeightSettings settings,
             out bool[] sourceWeightedVertices)
@@ -3809,9 +3837,10 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     .Where(p => p.w > 1e-6f && replacedSourceIndices.Contains(p.idx))
                     .Sum(p => p.w);
                 var hasSourceWeight = sourceWeight >= GeometricTargetSourceMinimumWeight;
-                var hasHipTransfer = hipIndex >= 0 && hipWeightReduction > 1e-6f && pairs.Any(p => p.idx == hipIndex && p.w > 1e-6f);
+                var hasHipTransfer = hipIndex >= 0 && pairs.Any(p => p.idx == hipIndex && p.w > 1e-6f);
+                var hasSpineTransfer = spineIndex >= 0 && pairs.Any(p => p.idx == spineIndex && p.w > 1e-6f);
                 seed[vi] = hasSourceWeight;
-                result[vi] = hasSourceWeight || hasHipTransfer;
+                result[vi] = hasSourceWeight || hasHipTransfer || hasSpineTransfer;
             }
 
             if (settings.ExpandTargetVerticesGeometrically)
@@ -4205,10 +4234,14 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             float yRange,
             GeometricSkirtWeightSettings settings,
             float hipWeightReduction,
-            out float[] skirtCoverages)
+            float spineWeightReduction,
+            bool allowCoverageAboveFirstBone,
+            out float[] hipCoverages,
+            out float[] spineCoverages)
         {
             var result = new Dictionary<int, float>[vertices != null ? vertices.Length : 0];
-            skirtCoverages = new float[result.Length];
+            hipCoverages = new float[result.Length];
+            spineCoverages = new float[result.Length];
             if (vertices == null || targetVertices == null || boneChains == null || boneChains.Count == 0) return result;
 
             for (var vi = 0; vi < vertices.Length && vi < targetVertices.Length; vi++)
@@ -4221,7 +4254,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 var weights = CalculateLocalBilinearWeights(vertexU, vertexT, boneChains, settings);
                 PruneAndNormalizeDictionary(weights, settings.MaxInfluencesBeforePrune, 1e-8f);
                 result[vi] = weights;
-                skirtCoverages[vi] = CalculateGeometricSkirtCoverage(vertexU, vertexT, boneChains, settings, hipWeightReduction);
+                hipCoverages[vi] = CalculateGeometricSkirtCoverage(vertexU, vertexT, boneChains, settings, hipWeightReduction, allowCoverageAboveFirstBone);
+                spineCoverages[vi] = CalculateGeometricSkirtCoverage(vertexU, vertexT, boneChains, settings, spineWeightReduction, allowCoverageAboveFirstBone);
             }
 
             return result;
@@ -4232,20 +4266,23 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             float vertexT,
             List<GeometricBoneChain> chains,
             GeometricSkirtWeightSettings settings,
-            float hipWeightReduction)
+            float hipWeightReduction,
+            bool allowCoverageAboveFirstBone)
         {
             if (chains == null || chains.Count == 0) return 0.0f;
 
             var firstStageT = GetInterpolatedFirstStageT(vertexU, chains, settings);
             var firstPositionT = GetInterpolatedFirstPositionT(vertexU, chains, settings);
-            if (vertexT <= firstPositionT) return 0.0f;
+            var span = Mathf.Max(1e-5f, firstStageT - firstPositionT);
+            var coverageStartT = allowCoverageAboveFirstBone
+                ? firstPositionT - span * LongCoatUpperSkirtCoverageVirtualSpanFactor
+                : firstPositionT;
+            if (vertexT <= coverageStartT) return 0.0f;
             if (vertexT >= firstStageT) return 1.0f;
 
-            var span = Mathf.Max(1e-5f, firstStageT - firstPositionT);
-            var blend = Mathf.Clamp01((vertexT - firstPositionT) / span);
-            var smooth = blend * blend * (3.0f - 2.0f * blend);
+            var blend = Mathf.Clamp01((vertexT - coverageStartT) / Mathf.Max(1e-5f, firstStageT - coverageStartT));
             var exponent = Mathf.Lerp(1.8f, 0.35f, Mathf.Clamp01(hipWeightReduction));
-            return Mathf.Pow(smooth, exponent);
+            return Mathf.Pow(blend, exponent);
         }
 
         private static float GetInterpolatedFirstStageT(
@@ -4419,10 +4456,25 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 var lower = chain.Samples[i + 1];
                 if (vertexT < upper.BoneT || vertexT > lower.BoneT) continue;
 
-                var span = Mathf.Max(1e-5f, lower.BoneT - upper.BoneT);
-                var blend = Mathf.Clamp01((vertexT - upper.BoneT) / span);
-                AddOrAccumulateDictionary(result, upper.BoneIndex, chainWeight * (1.0f - blend));
-                AddOrAccumulateDictionary(result, lower.BoneIndex, chainWeight * blend);
+                var lowerPositionT = Mathf.Clamp(lower.PositionT, upper.BoneT, lower.BoneT);
+                if (lowerPositionT > upper.BoneT + 1e-5f && vertexT <= lowerPositionT)
+                {
+                    var blend = Mathf.Clamp01((vertexT - upper.BoneT) / (lowerPositionT - upper.BoneT));
+                    AddOrAccumulateDictionary(result, upper.BoneIndex, chainWeight * Mathf.Lerp(1.0f, 0.5f, blend));
+                    AddOrAccumulateDictionary(result, lower.BoneIndex, chainWeight * Mathf.Lerp(0.0f, 0.5f, blend));
+                    return;
+                }
+
+                if (lower.BoneT > lowerPositionT + 1e-5f)
+                {
+                    var blend = Mathf.Clamp01((vertexT - lowerPositionT) / (lower.BoneT - lowerPositionT));
+                    AddOrAccumulateDictionary(result, upper.BoneIndex, chainWeight * Mathf.Lerp(0.5f, 0.0f, blend));
+                    AddOrAccumulateDictionary(result, lower.BoneIndex, chainWeight * Mathf.Lerp(0.5f, 1.0f, blend));
+                    return;
+                }
+
+                AddOrAccumulateDictionary(result, upper.BoneIndex, chainWeight * 0.5f);
+                AddOrAccumulateDictionary(result, lower.BoneIndex, chainWeight * 0.5f);
                 return;
             }
 

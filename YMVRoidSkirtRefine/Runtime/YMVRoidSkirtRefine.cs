@@ -11,6 +11,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
     {
         ShortSkirtLight,
         ShortSkirtHeavy,
+        SlimLongSkirtLight,
+        SlimLongSkirtHeavy,
         LongSkirtLight,
         LongSkirtHeavy,
         MatchLongCoat,
@@ -197,7 +199,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         public bool onePieceUseFrontRootRotationConstraints = false;
 
         [Tooltip("Move front one-piece root bones toward UpperLeg when front root rotation constraints are used.")]
-        public bool onePieceMoveFrontRootsTowardUpperLeg = true;
+        [Range(0.0f, 1.0f)]
+        public float onePieceMoveFrontRootsTowardUpperLeg = 1.0f;
 
         [Tooltip("PhysBone settings applied to the generated one-piece unified root.")]
         public SkirtRefinePhysBoneSettings onePiecePhysBone = new SkirtRefinePhysBoneSettings();
@@ -244,7 +247,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         public bool longCoatUseFrontRootRotationConstraints = false;
 
         [Tooltip("Move constrained long coat root bones toward UpperLeg when rotation constraints are used.")]
-        public bool longCoatMoveConstrainedRootsTowardUpperLeg = true;
+        [Range(0.0f, 1.0f)]
+        public float longCoatMoveConstrainedRootsTowardUpperLeg = 1.0f;
 
         [Tooltip("Aim front per-chain PhysBone limits forward when long coat rotation constraint mode creates front per-chain PhysBones.")]
         public bool longCoatAimFrontLimitsForward = false;
@@ -354,7 +358,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             onePieceUseLowerLegColliders = false;
             onePieceUseFloorCollider = false;
             onePieceUseFrontRootRotationConstraints = true;
-            onePieceMoveFrontRootsTowardUpperLeg = false;
+            onePieceMoveFrontRootsTowardUpperLeg = 0.0f;
             ApplyShortLightPhysBoneDefaults(onePiecePhysBone);
 
             enableLongCoatRefine = false;
@@ -368,7 +372,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             longCoatMoveFrontBonesOutward = false;
             longCoatUseRotationConstraints = true;
             longCoatUseFrontRootRotationConstraints = false;
-            longCoatMoveConstrainedRootsTowardUpperLeg = true;
+            longCoatMoveConstrainedRootsTowardUpperLeg = 1.0f;
             longCoatAimFrontLimitsForward = true;
             longCoatUseUpperLegColliders = false;
             longCoatUseLowerLegColliders = true;

@@ -54,7 +54,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         private const string PrefKeyAdvancedFoldout = "YMVRoidSkirtRefineComponentEditor.AdvancedFoldout";
         private const string PrefKeyOnePieceSettingsFoldout = "YMVRoidSkirtRefineComponentEditor.OnePieceSettingsFoldout";
         private const string PrefKeyLongCoatSettingsFoldout = "YMVRoidSkirtRefineComponentEditor.LongCoatSettingsFoldout";
-        private const float SettingsLabelWidth = 180.0f;
+        private const float SettingsLabelWidth = 190.0f;
         private const int QuestPhysBoneComponentLimit = 8;
         private const int QuestPhysBoneColliderLimit = 16;
 
@@ -62,6 +62,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         {
             new GUIContent("ショートスカート軽め"),
             new GUIContent("ショートスカート重め"),
+            new GUIContent("スリムロングスカート軽め"),
+            new GUIContent("スリムロングスカート重め"),
             new GUIContent("ロングスカート軽め"),
             new GUIContent("ロングスカート重め"),
             new GUIContent("ロングコートに合わせる"),
@@ -120,6 +122,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         private bool advancedFoldout;
         private bool onePieceSettingsFoldout;
         private bool longCoatSettingsFoldout;
+        private string onePieceSettingsFoldoutKey;
+        private string longCoatSettingsFoldoutKey;
         private bool previewFailed;
 
         private void OnEnable()
@@ -165,8 +169,12 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
             language = (Language)EditorPrefs.GetInt(PrefKeyLanguage, 0);
             advancedFoldout = EditorPrefs.GetBool(PrefKeyAdvancedFoldout, false);
-            onePieceSettingsFoldout = EditorPrefs.GetBool(PrefKeyOnePieceSettingsFoldout, false);
-            longCoatSettingsFoldout = EditorPrefs.GetBool(PrefKeyLongCoatSettingsFoldout, false);
+            var foldoutKeyComponent = YMVRoidSkirtRefinePreviewUtility.FindSourceComponentForPreview() ?? (YMVRoidSkirtRefine)target;
+            var foldoutKeySuffix = GetComponentPrefsKeySuffix(foldoutKeyComponent);
+            onePieceSettingsFoldoutKey = $"{PrefKeyOnePieceSettingsFoldout}.{foldoutKeySuffix}";
+            longCoatSettingsFoldoutKey = $"{PrefKeyLongCoatSettingsFoldout}.{foldoutKeySuffix}";
+            onePieceSettingsFoldout = EditorPrefs.GetBool(onePieceSettingsFoldoutKey, false);
+            longCoatSettingsFoldout = EditorPrefs.GetBool(longCoatSettingsFoldoutKey, false);
 
             SceneIconUtility.HideComponentIcon<YMVRoidSkirtRefine>();
             AutoDetectBonesAndAutoEnableIfNeeded((YMVRoidSkirtRefine)target);
@@ -191,18 +199,21 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
                 DrawMatchTargetWarning();
                 DrawPlacementStatus(component);
-                DrawMultipleComponentsWarning(component);
+                if (!isPreviewing)
+                {
+                    DrawMultipleComponentsWarning(component);
+                }
                 EditorGUILayout.Space(4);
 
-                DrawDynamicsUsageAndVqtKeepList(component);
+                DrawDynamicsUsageAndVqtKeepList(component, isPreviewing);
                 EditorGUILayout.Space(12);
 
                 EditorGUI.BeginChangeCheck();
-                DrawOnePieceSection();
+                DrawOnePieceSection(isPreviewing);
                 EditorGUILayout.Space(6);
-                DrawLongCoatSection();
+                DrawLongCoatSection(isPreviewing);
                 EditorGUILayout.Space(4);
-                DrawAdvancedSection();
+                DrawAdvancedSection(isPreviewing);
                 changed = EditorGUI.EndChangeCheck();
             }
             finally
@@ -322,7 +333,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 MessageType.Warning);
         }
 
-        private void DrawDynamicsUsageAndVqtKeepList(YMVRoidSkirtRefine component)
+        private void DrawDynamicsUsageAndVqtKeepList(YMVRoidSkirtRefine component, bool isPreviewing)
         {
             var avatarRoot = component != null ? PreviewCoordinator.FindAvatarRoot(component.gameObject) : null;
             var estimate = EstimateDynamicsUsage(component, avatarRoot);
@@ -333,13 +344,16 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 T("スカート関連の PhysBone コライダー数", "Skirt-related PhysBone colliders") + $": {estimate.SourcePhysBoneColliders} \u2192 {estimate.GeneratedPhysBoneColliders}");
             EditorGUILayout.HelpBox(message, MessageType.Info);
 
-            EditorGUILayout.PropertyField(
-                addGeneratedDynamicsToVqtKeepListProp,
-                TT(
-                    "VQTのKeepリストに追加する",
-                    "VRCQuestToolsのAvatar Dynamics削除を使う場合に、このツールが生成したPhysBoneとPhysBoneColliderをKeepリストへ追加します。",
-                    "Add to VQT Keep List",
-                    "Adds generated PhysBones and PhysBoneColliders to VRCQuestTools Avatar Dynamics keep lists."));
+            using (new EditorGUI.DisabledScope(isPreviewing))
+            {
+                EditorGUILayout.PropertyField(
+                    addGeneratedDynamicsToVqtKeepListProp,
+                    TT(
+                        "VQTのKeepリストに追加する",
+                        "VRCQuestToolsのAvatar Dynamics削除を使う場合に、このツールが生成したPhysBoneとPhysBoneColliderをKeepリストへ追加します。",
+                        "Add to VQT Keep List",
+                        "Adds generated PhysBones and PhysBoneColliders to VRCQuestTools Avatar Dynamics keep lists."));
+            }
 
             if (!addGeneratedDynamicsToVqtKeepListProp.boolValue) return;
 
@@ -579,37 +593,41 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             return count;
         }
 
-        private void DrawOnePieceSection()
+        private void DrawOnePieceSection(bool isPreviewing)
         {
             DrawRefineSectionHeader(
                 enableOnePieceRefineProp,
-                T("One-Piece Refine", "One-Piece Refine"));
+                T("One-Piece Refine", "One-Piece Refine"),
+                isPreviewing);
 
             using (new EditorGUI.IndentLevelScope())
             using (new EditorGUI.DisabledScope(!enableOnePieceRefineProp.boolValue))
             {
-                DrawPresetPopup(
-                    onePiecePresetProp,
-                    TT(
-                        "プリセット",
-                        "ワンピースの裾まわりを整える設定です。ロングスカートでは先端側へボーンを足し、丈を伸ばしたVRoid衣装でも自然に揺れやすくします。",
-                        "Preset",
-                        "Refines one-piece skirt hems. Long skirt presets append tip-side bones so lengthened VRoid outfits can swing more naturally."),
-                    OnePiecePresetLabelsJa,
-                    () =>
-                    {
-                        var preset = (OnePiecePreset)onePiecePresetProp.enumValueIndex;
-                        ApplyOnePiecePhysBonePreset(onePiecePhysBoneProp, preset);
-                        onePieceMatchLongCoatProp.boolValue = preset == OnePiecePreset.MatchLongCoat;
-                        enableOnePieceBoneExtensionProp.boolValue = !IsShortOnePiecePreset(preset);
-                        onePieceUseUpperLegCollidersProp.boolValue = UsesOnePieceUpperLegColliders(preset);
-                        onePieceUseLowerLegCollidersProp.boolValue = UsesOnePieceLowerLegColliders(preset);
-                        onePieceUseFloorColliderProp.boolValue = UsesOnePieceFloorCollider(preset);
-                        onePieceUseFrontRootRotationConstraintsProp.boolValue = preset != OnePiecePreset.MatchLongCoat;
-                        onePieceMoveFrontRootsTowardUpperLegProp.boolValue = false;
-                        onePieceRootHeightOffsetMultiplierProp.floatValue = preset == OnePiecePreset.MatchLongCoat ? 0.0f : 0.4f;
-                        onePieceHipWeightReductionProp.floatValue = 0.5f;
-                    });
+                using (new EditorGUI.DisabledScope(isPreviewing))
+                {
+                    DrawPresetPopup(
+                        onePiecePresetProp,
+                        TT(
+                            "プリセット",
+                            "ワンピースの裾まわりを整える設定です。ロングスカートでは先端側へボーンを足し、丈を伸ばしたVRoid衣装でも自然に揺れやすくします。",
+                            "Preset",
+                            "Refines one-piece skirt hems. Long skirt presets append tip-side bones so lengthened VRoid outfits can swing more naturally."),
+                        OnePiecePresetLabelsJa,
+                        () =>
+                        {
+                            var preset = (OnePiecePreset)onePiecePresetProp.enumValueIndex;
+                            ApplyOnePiecePhysBonePreset(onePiecePhysBoneProp, preset);
+                            onePieceMatchLongCoatProp.boolValue = preset == OnePiecePreset.MatchLongCoat;
+                            enableOnePieceBoneExtensionProp.boolValue = !IsShortOnePiecePreset(preset);
+                            onePieceUseUpperLegCollidersProp.boolValue = UsesOnePieceUpperLegColliders(preset);
+                            onePieceUseLowerLegCollidersProp.boolValue = UsesOnePieceLowerLegColliders(preset);
+                            onePieceUseFloorColliderProp.boolValue = UsesOnePieceFloorCollider(preset);
+                            onePieceUseFrontRootRotationConstraintsProp.boolValue = preset != OnePiecePreset.MatchLongCoat;
+                            onePieceMoveFrontRootsTowardUpperLegProp.floatValue = 0.0f;
+                            onePieceRootHeightOffsetMultiplierProp.floatValue = preset == OnePiecePreset.MatchLongCoat ? 0.0f : 0.4f;
+                            onePieceHipWeightReductionProp.floatValue = 0.5f;
+                        });
+                }
 
                 if (enableOnePieceRefineProp.boolValue
                     && !YMVRoidSkirtRefinePreviewUtility.IsActivePlayPreview
@@ -624,74 +642,87 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
                 DrawSettingsFoldout(
                     ref onePieceSettingsFoldout,
-                    PrefKeyOnePieceSettingsFoldout,
+                    onePieceSettingsFoldoutKey,
                     () =>
                     {
-                        DrawMatchSettings(
-                            onePieceMatchLongCoatProp,
-                            TT(
-                                "ロングコートに合わせる",
-                                "ワンピースのウェイトをロングコートの揺れボーンへ移し、元のワンピース揺れボーンを削除します。",
-                                "Match Long Coat",
-                                "Binds one-piece weights to the long coat swing bones and removes original one-piece swing bones."));
+                        using (new EditorGUI.DisabledScope(isPreviewing))
+                        {
+                            DrawMatchSettings(
+                                onePieceMatchLongCoatProp,
+                                TT(
+                                    "ロングコートに合わせる",
+                                    "ワンピースのウェイトをロングコートの揺れボーンへ移し、元のワンピース揺れボーンを削除します。",
+                                    "Match Long Coat",
+                                    "Binds one-piece weights to the long coat swing bones and removes original one-piece swing bones."));
+                        }
+
                         using (new EditorGUI.DisabledScope(onePieceMatchLongCoatProp.boolValue))
                         {
-                            DrawBoneExtension(
-                                onePieceBonesProp,
-                                enableOnePieceBoneExtensionProp,
-                                onePieceBoneExtensionModeProp,
-                                onePieceTargetBoneCountProp,
-                                onePieceHipWeightReductionProp,
-                                onePieceRootHeightOffsetMultiplierProp,
-                                null,
-                                null,
-                                null,
-                                false,
-                                true);
-                            DrawOnePieceRotationConstraintSettings();
-                            DrawLegColliderSettings(onePieceUseUpperLegCollidersProp, onePieceUseLowerLegCollidersProp, onePieceUseFloorColliderProp);
+                            using (new EditorGUI.DisabledScope(isPreviewing))
+                            {
+                                DrawBoneExtension(
+                                    onePieceBonesProp,
+                                    enableOnePieceBoneExtensionProp,
+                                    onePieceBoneExtensionModeProp,
+                                    onePieceTargetBoneCountProp,
+                                    onePieceHipWeightReductionProp,
+                                    onePieceRootHeightOffsetMultiplierProp,
+                                    null,
+                                    null,
+                                    null,
+                                    false,
+                                    true,
+                                    !isPreviewing);
+                                DrawOnePieceRotationConstraintSettings();
+                                DrawLegColliderSettings(onePieceUseUpperLegCollidersProp, onePieceUseLowerLegCollidersProp, onePieceUseFloorColliderProp);
+                            }
+
                             DrawPhysBoneSettings(onePiecePhysBoneProp);
                         }
                     });
             }
         }
 
-        private void DrawLongCoatSection()
+        private void DrawLongCoatSection(bool isPreviewing)
         {
             DrawRefineSectionHeader(
                 enableLongCoatRefineProp,
-                T("Long Coat Refine", "Long Coat Refine"));
+                T("Long Coat Refine", "Long Coat Refine"),
+                isPreviewing);
 
             using (new EditorGUI.IndentLevelScope())
             using (new EditorGUI.DisabledScope(!enableLongCoatRefineProp.boolValue))
             {
-                DrawPresetPopup(
-                    longCoatPresetProp,
-                    TT(
-                        "プリセット",
-                        "ロングコートの裾まわりを整える設定です。膝下から始まるVRoidの揺れボーンに根本側のボーンを足し、脚の動きに追従しやすい揺れへ調整します。",
-                        "Preset",
-                        "Refines long coat hems. Presets prepend root-side bones to VRoid coat chains that start below the knee, improving swing that follows leg motion."),
-                    LongCoatPresetLabelsJa,
-                    () =>
-                    {
-                        var preset = (LongCoatPreset)longCoatPresetProp.enumValueIndex;
-                        ApplyLongCoatPhysBonePreset(longCoatPhysBoneProp, preset);
-                        longCoatMatchOnePieceProp.boolValue = preset == LongCoatPreset.MatchOnePiece;
-                        enableLongCoatBoneExtensionProp.boolValue = true;
-                        longCoatShortSkirtUsePrependedRootsOnlyProp.boolValue = IsShortLongCoatPreset(preset);
-                        longCoatMoveFrontBonesOutwardProp.boolValue = preset == LongCoatPreset.OpenFront;
-                        longCoatUseRotationConstraintsProp.boolValue = IsLongCoatLongSkirtPreset(preset);
-                        longCoatUseFrontRootRotationConstraintsProp.boolValue = IsShortLongCoatPreset(preset) || preset == LongCoatPreset.OpenFront;
-                        longCoatMoveConstrainedRootsTowardUpperLegProp.boolValue = true;
-                        longCoatAimFrontLimitsForwardProp.boolValue = IsShortLongCoatPreset(preset) || IsLongCoatLongSkirtPreset(preset);
-                        longCoatUseUpperLegCollidersProp.boolValue = UsesLongCoatUpperLegColliders(preset);
-                        longCoatUseLowerLegCollidersProp.boolValue = UsesLongCoatLowerLegColliders(preset);
-                        longCoatUseFloorColliderProp.boolValue = UsesLongCoatFloorCollider(preset);
-                        longCoatRootHeightOffsetMultiplierProp.floatValue = preset == LongCoatPreset.OpenFront ? 2.0f : 1.0f;
-                        longCoatHipWeightReductionProp.floatValue = preset == LongCoatPreset.OpenFront ? 0.4f : 0.4f;
-                        longCoatSpineWeightReductionProp.floatValue = preset == LongCoatPreset.OpenFront ? 0.4f : 0.0f;
-                    });
+                using (new EditorGUI.DisabledScope(isPreviewing))
+                {
+                    DrawPresetPopup(
+                        longCoatPresetProp,
+                        TT(
+                            "プリセット",
+                            "ロングコートの裾まわりを整える設定です。膝下から始まるVRoidの揺れボーンに根本側のボーンを足し、脚の動きに追従しやすい揺れへ調整します。",
+                            "Preset",
+                            "Refines long coat hems. Presets prepend root-side bones to VRoid coat chains that start below the knee, improving swing that follows leg motion."),
+                        LongCoatPresetLabelsJa,
+                        () =>
+                        {
+                            var preset = (LongCoatPreset)longCoatPresetProp.enumValueIndex;
+                            ApplyLongCoatPhysBonePreset(longCoatPhysBoneProp, preset);
+                            longCoatMatchOnePieceProp.boolValue = preset == LongCoatPreset.MatchOnePiece;
+                            enableLongCoatBoneExtensionProp.boolValue = true;
+                            longCoatShortSkirtUsePrependedRootsOnlyProp.boolValue = IsShortLongCoatPreset(preset);
+                            longCoatMoveFrontBonesOutwardProp.boolValue = preset == LongCoatPreset.OpenFront;
+                            longCoatUseRotationConstraintsProp.boolValue = IsLongCoatLongSkirtPreset(preset);
+                            longCoatUseFrontRootRotationConstraintsProp.boolValue = IsShortLongCoatPreset(preset) || preset == LongCoatPreset.OpenFront;
+                            longCoatMoveConstrainedRootsTowardUpperLegProp.floatValue = preset == LongCoatPreset.OpenFront ? 0.0f : 0.8f;
+                            longCoatAimFrontLimitsForwardProp.boolValue = IsShortLongCoatPreset(preset) || IsLongCoatLongSkirtPreset(preset);
+                            longCoatUseUpperLegCollidersProp.boolValue = UsesLongCoatUpperLegColliders(preset);
+                            longCoatUseLowerLegCollidersProp.boolValue = UsesLongCoatLowerLegColliders(preset);
+                            longCoatUseFloorColliderProp.boolValue = UsesLongCoatFloorCollider(preset);
+                            longCoatRootHeightOffsetMultiplierProp.floatValue = preset == LongCoatPreset.OpenFront ? 2.0f : 0.6f;
+                            longCoatHipWeightReductionProp.floatValue = preset == LongCoatPreset.OpenFront ? 0.4f : 0.5f;
+                            longCoatSpineWeightReductionProp.floatValue = preset == LongCoatPreset.OpenFront ? 0.4f : 0.0f;
+                        });
+                }
 
                 if (enableLongCoatRefineProp.boolValue
                     && !YMVRoidSkirtRefinePreviewUtility.IsActivePlayPreview
@@ -706,44 +737,57 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
                 DrawSettingsFoldout(
                     ref longCoatSettingsFoldout,
-                    PrefKeyLongCoatSettingsFoldout,
+                    longCoatSettingsFoldoutKey,
                     () =>
                     {
-                        DrawMatchSettings(
-                            longCoatMatchOnePieceProp,
-                            TT(
-                                "ワンピースに合わせる",
-                                "ロングコートのウェイトをワンピースの揺れボーンへ移し、元のロングコート揺れボーンを削除します。",
-                                "Match One-Piece",
-                                "Binds long coat weights to the one-piece swing bones and removes original long coat swing bones."));
+                        using (new EditorGUI.DisabledScope(isPreviewing))
+                        {
+                            DrawMatchSettings(
+                                longCoatMatchOnePieceProp,
+                                TT(
+                                    "ワンピースに合わせる",
+                                    "ロングコートのウェイトをワンピースの揺れボーンへ移し、元のロングコート揺れボーンを削除します。",
+                                    "Match One-Piece",
+                                    "Binds long coat weights to the one-piece swing bones and removes original long coat swing bones."));
+                        }
+
                         using (new EditorGUI.DisabledScope(longCoatMatchOnePieceProp.boolValue))
                         {
-                            DrawBoneExtension(
-                                longCoatBonesProp,
-                                enableLongCoatBoneExtensionProp,
-                                longCoatBoneExtensionModeProp,
-                                longCoatTargetBoneCountProp,
-                                longCoatHipWeightReductionProp,
-                                longCoatRootHeightOffsetMultiplierProp,
-                                longCoatSpineWeightReductionProp,
-                                longCoatShortSkirtUsePrependedRootsOnlyProp,
-                                longCoatMoveFrontBonesOutwardProp,
-                                false);
-                            DrawLongCoatRotationConstraintSettings();
-                            DrawLegColliderSettings(longCoatUseUpperLegCollidersProp, longCoatUseLowerLegCollidersProp, longCoatUseFloorColliderProp);
+                            using (new EditorGUI.DisabledScope(isPreviewing))
+                            {
+                                DrawBoneExtension(
+                                    longCoatBonesProp,
+                                    enableLongCoatBoneExtensionProp,
+                                    longCoatBoneExtensionModeProp,
+                                    longCoatTargetBoneCountProp,
+                                    longCoatHipWeightReductionProp,
+                                    longCoatRootHeightOffsetMultiplierProp,
+                                    longCoatSpineWeightReductionProp,
+                                    longCoatShortSkirtUsePrependedRootsOnlyProp,
+                                    longCoatMoveFrontBonesOutwardProp,
+                                    false,
+                                    false,
+                                    !isPreviewing);
+                                DrawLongCoatRotationConstraintSettings();
+                                DrawLegColliderSettings(longCoatUseUpperLegCollidersProp, longCoatUseLowerLegCollidersProp, longCoatUseFloorColliderProp);
+                            }
+
                             DrawPhysBoneSettings(longCoatPhysBoneProp);
                         }
                     });
             }
         }
 
-        private static void DrawRefineSectionHeader(SerializedProperty enabledProp, string title)
+        private static void DrawRefineSectionHeader(SerializedProperty enabledProp, string title, bool disableToggle = false)
         {
             var rect = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
             var toggleRect = new Rect(rect.x, rect.y, 18f, rect.height);
             var labelRect = new Rect(toggleRect.xMax + 2f, rect.y, rect.width - 20f, rect.height);
 
-            enabledProp.boolValue = EditorGUI.Toggle(toggleRect, enabledProp.boolValue);
+            using (new EditorGUI.DisabledScope(disableToggle))
+            {
+                enabledProp.boolValue = EditorGUI.Toggle(toggleRect, enabledProp.boolValue);
+            }
             EditorGUI.LabelField(labelRect, title, EditorStyles.boldLabel);
         }
 
@@ -779,6 +823,19 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             }
         }
 
+        private static string GetComponentPrefsKeySuffix(YMVRoidSkirtRefine component)
+        {
+            if (component == null) return "Missing";
+
+            var globalId = GlobalObjectId.GetGlobalObjectIdSlow(component).ToString();
+            if (!string.IsNullOrEmpty(globalId) && globalId != "GlobalObjectId_V1-0-00000000000000000000000000000000-0-0")
+            {
+                return globalId;
+            }
+
+            return $"Instance-{component.GetInstanceID()}";
+        }
+
         private void DrawBoneExtension(
             SerializedProperty bonesProp,
             SerializedProperty enableProp,
@@ -790,12 +847,13 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             SerializedProperty rootsOnlyProp = null,
             SerializedProperty moveFrontBonesOutwardProp = null,
             bool showFixedExtensionControls = true,
-            bool useOnePieceRootHeightOffset = false)
+            bool useOnePieceRootHeightOffset = false,
+            bool showBoneFields = true)
         {
             EditorGUILayout.LabelField(T("Bone Extension", "Bone Extension"), EditorStyles.boldLabel);
             using (new EditorGUI.IndentLevelScope())
             {
-                if (enableProp != null)
+                if (showBoneFields && enableProp != null)
                 {
                     DrawBoneField(bonesProp, "frontLeft", T("Front-Left", "Front-Left"));
                     DrawBoneField(bonesProp, "frontRight", T("Front-Right", "Front-Right"));
@@ -1182,17 +1240,25 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             {
                 ApplyShortLightPhysBonePreset(settingsProp);
             }
-            else if (preset == OnePiecePreset.LongSkirtLight)
-            {
-                ApplyShortLightPhysBonePreset(settingsProp, 0.1f, CreateConvexRadiusCurve());
-            }
             else if (preset == OnePiecePreset.ShortSkirtHeavy)
             {
                 ApplyShortHeavyPhysBonePreset(settingsProp);
             }
+            else if (preset == OnePiecePreset.SlimLongSkirtLight)
+            {
+                ApplySlimLongSkirtLightPhysBonePreset(settingsProp);
+            }
+            else if (preset == OnePiecePreset.SlimLongSkirtHeavy)
+            {
+                ApplySlimLongSkirtHeavyPhysBonePreset(settingsProp);
+            }
+            else if (preset == OnePiecePreset.LongSkirtLight)
+            {
+                ApplyLongSkirtLightPhysBonePreset(settingsProp);
+            }
             else if (preset == OnePiecePreset.LongSkirtHeavy)
             {
-                ApplyShortHeavyPhysBonePreset(settingsProp, 0.1f, CreateConvexRadiusCurve());
+                ApplyLongSkirtHeavyPhysBonePreset(settingsProp);
             }
             else
             {
@@ -1236,6 +1302,28 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         private static void ApplyShortHeavyPhysBonePreset(SerializedProperty settingsProp, float radius = 0.05f, AnimationCurve radiusCurve = null)
         {
             ApplyPhysBoneValues(settingsProp, 0.18f, 0.45f, 0.25f, 0.35f, 0.9f, 0.7f, SkirtRefinePhysBoneLimitType.Hinge, 45.0f, -45.0f, SkirtRefinePhysBonePermission.False, SkirtRefinePhysBonePermission.Other, 0.0f, 0.0f, radius, radiusCurve);
+        }
+
+        private static void ApplySlimLongSkirtLightPhysBonePreset(SerializedProperty settingsProp)
+        {
+            ApplyShortLightPhysBonePreset(settingsProp, 0.1f, CreateConvexRadiusCurve());
+        }
+
+        private static void ApplySlimLongSkirtHeavyPhysBonePreset(SerializedProperty settingsProp)
+        {
+            ApplyShortHeavyPhysBonePreset(settingsProp, 0.1f, CreateConvexRadiusCurve());
+            settingsProp.FindPropertyRelative("gravity").floatValue = 0.0f;
+            settingsProp.FindPropertyRelative("gravityFalloff").floatValue = 0.0f;
+        }
+
+        private static void ApplyLongSkirtLightPhysBonePreset(SerializedProperty settingsProp)
+        {
+            ApplyPhysBoneValues(settingsProp, 0.1f, 0.6f, 0.0f, 0.0f, 0.8f, 0.7f, SkirtRefinePhysBoneLimitType.Hinge, 60.0f, -30.0f, SkirtRefinePhysBonePermission.False, SkirtRefinePhysBonePermission.Other, 0.0f, 0.0f, 0.1f, CreateConvexRadiusCurve());
+        }
+
+        private static void ApplyLongSkirtHeavyPhysBonePreset(SerializedProperty settingsProp)
+        {
+            ApplyPhysBoneValues(settingsProp, 0.18f, 0.45f, 0.25f, 0.35f, 0.9f, 0.7f, SkirtRefinePhysBoneLimitType.Hinge, 60.0f, -30.0f, SkirtRefinePhysBonePermission.False, SkirtRefinePhysBonePermission.Other, 0.0f, 0.0f, 0.1f, CreateConvexRadiusCurve());
         }
 
         private static void ApplyOpenFrontPhysBonePreset(SerializedProperty settingsProp, float radius = 0.05f)
@@ -1357,19 +1445,25 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         {
             return preset == OnePiecePreset.ShortSkirtLight
                 || preset == OnePiecePreset.ShortSkirtHeavy
+                || preset == OnePiecePreset.SlimLongSkirtLight
+                || preset == OnePiecePreset.SlimLongSkirtHeavy
                 || preset == OnePiecePreset.LongSkirtLight
                 || preset == OnePiecePreset.LongSkirtHeavy;
         }
 
         private static bool UsesOnePieceLowerLegColliders(OnePiecePreset preset)
         {
-            return preset == OnePiecePreset.LongSkirtLight
+            return preset == OnePiecePreset.SlimLongSkirtLight
+                || preset == OnePiecePreset.SlimLongSkirtHeavy
+                || preset == OnePiecePreset.LongSkirtLight
                 || preset == OnePiecePreset.LongSkirtHeavy;
         }
 
         private static bool UsesOnePieceFloorCollider(OnePiecePreset preset)
         {
-            return preset == OnePiecePreset.LongSkirtLight
+            return preset == OnePiecePreset.SlimLongSkirtLight
+                || preset == OnePiecePreset.SlimLongSkirtHeavy
+                || preset == OnePiecePreset.LongSkirtLight
                 || preset == OnePiecePreset.LongSkirtHeavy;
         }
 
@@ -1409,10 +1503,10 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     EditorGUILayout.PropertyField(
                         onePieceMoveFrontRootsTowardUpperLegProp,
                         TT(
-                            "FrontをUpperLegへ寄せる",
-                            "Frontの1段目をUpperLeg寄りへ移動し、Rotation Constraint時の食い込みを抑えます。Hipウェイト調整との相性確認用に切り替えできます。",
+                            "FrontをUpperLegへ寄せる量",
+                            "Frontの1段目をUpperLeg寄りへ移動する強さです。0で移動なし、1で従来と同じ移動量になります。",
                             "Move Roots Toward UpperLeg",
-                            "Moves front first-stage roots toward UpperLeg to reduce clipping when using Rotation Constraint. Toggle this to test interaction with Hip weight reduction."));
+                            "Controls how strongly front first-stage roots move toward UpperLeg. 0 disables movement, 1 matches the previous amount."));
                 }
             }
         }
@@ -1455,10 +1549,10 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     EditorGUILayout.PropertyField(
                         longCoatMoveConstrainedRootsTowardUpperLegProp,
                         TT(
-                            "FrontをUpperLegへ寄せる",
-                            "Rotation ConstraintでUpperLegに連動する付け根側ボーンをUpperLeg寄りへ移動し、脚上げ時の食い込みを抑えます。Hip/Spineウェイト調整との相性確認用に切り替えできます。",
+                            "FrontをUpperLegへ寄せる量",
+                            "Frontの付け根側ボーンをUpperLeg寄りへ移動する強さです。0で移動なし、1で従来と同じ移動量になります。",
                             "Move Roots Toward UpperLeg",
-                            "Moves root-side bones driven by UpperLeg Rotation Constraint toward UpperLeg to reduce clipping during leg motion. Toggle this to test interaction with Hip/Spine weight reduction."));
+                            "Controls how strongly front root-side bones move toward UpperLeg. 0 disables movement, 1 matches the previous amount."));
                 }
 
                 var canAimFrontLimits = longCoatUseFrontRootRotationConstraintsProp.boolValue
@@ -1476,7 +1570,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             }
         }
 
-        private void DrawAdvancedSection()
+        private void DrawAdvancedSection(bool isPreviewing)
         {
             EditorGUI.BeginChangeCheck();
             advancedFoldout = EditorGUILayout.Foldout(advancedFoldout, T("Advanced", "Advanced"), true);
@@ -1488,6 +1582,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             if (!advancedFoldout) return;
 
             using (new EditorGUI.IndentLevelScope())
+            using (new EditorGUI.DisabledScope(isPreviewing))
             {
                 DrawConstraintModePopup();
                 EditorGUILayout.PropertyField(
@@ -1599,7 +1694,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             serialized.FindProperty("onePieceUseLowerLegColliders").boolValue = UsesOnePieceLowerLegColliders(preset);
             serialized.FindProperty("onePieceUseFloorCollider").boolValue = UsesOnePieceFloorCollider(preset);
             serialized.FindProperty("onePieceUseFrontRootRotationConstraints").boolValue = preset != OnePiecePreset.MatchLongCoat;
-            serialized.FindProperty("onePieceMoveFrontRootsTowardUpperLeg").boolValue = false;
+            serialized.FindProperty("onePieceMoveFrontRootsTowardUpperLeg").floatValue = 0.0f;
             serialized.FindProperty("onePieceRootHeightOffsetMultiplier").floatValue = preset == OnePiecePreset.MatchLongCoat ? 0.0f : 0.4f;
             serialized.FindProperty("onePieceHipWeightReduction").floatValue = 0.5f;
             serialized.ApplyModifiedPropertiesWithoutUndo();
@@ -1619,14 +1714,14 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             serialized.FindProperty("longCoatMoveFrontBonesOutward").boolValue = false;
             serialized.FindProperty("longCoatUseRotationConstraints").boolValue = true;
             serialized.FindProperty("longCoatUseFrontRootRotationConstraints").boolValue = false;
-            serialized.FindProperty("longCoatMoveConstrainedRootsTowardUpperLeg").boolValue = true;
+            serialized.FindProperty("longCoatMoveConstrainedRootsTowardUpperLeg").floatValue = preset == LongCoatPreset.OpenFront ? 0.0f : 0.8f;
             serialized.FindProperty("longCoatAimFrontLimitsForward").boolValue = true;
             serialized.FindProperty("longCoatUseUpperLegColliders").boolValue = UsesLongCoatUpperLegColliders(preset);
             serialized.FindProperty("longCoatUseLowerLegColliders").boolValue = UsesLongCoatLowerLegColliders(preset);
             serialized.FindProperty("longCoatUseFloorCollider").boolValue = UsesLongCoatFloorCollider(preset);
-            serialized.FindProperty("longCoatRootHeightOffsetMultiplier").floatValue = preset == LongCoatPreset.OpenFront ? 2.0f : 1.0f;
-            serialized.FindProperty("longCoatHipWeightReduction").floatValue = preset == LongCoatPreset.OpenFront ? 0.8f : 0.5f;
-            serialized.FindProperty("longCoatSpineWeightReduction").floatValue = preset == LongCoatPreset.OpenFront ? 0.8f : 0.0f;
+            serialized.FindProperty("longCoatRootHeightOffsetMultiplier").floatValue = preset == LongCoatPreset.OpenFront ? 2.0f : 0.6f;
+            serialized.FindProperty("longCoatHipWeightReduction").floatValue = preset == LongCoatPreset.OpenFront ? 0.4f : 0.5f;
+            serialized.FindProperty("longCoatSpineWeightReduction").floatValue = preset == LongCoatPreset.OpenFront ? 0.4f : 0.0f;
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 

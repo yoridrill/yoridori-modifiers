@@ -43,7 +43,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         private static GameObject _avatarRoot;
         private static GameObject _settingsObject;
         private static YMVRoidSkirtRefine _component;
-        private static YMVRoidSkirtRefinePreviewMotionDriver _motionDriver;
+        private static YMPreviewMotionDriver _motionDriver;
         private static VRCPhysBone[] _onePiecePreviewPhysBones = Array.Empty<VRCPhysBone>();
         private static VRCPhysBone[] _longCoatPreviewPhysBones = Array.Empty<VRCPhysBone>();
         private static PreviewClipEntry[] _clips;
@@ -77,6 +77,11 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         internal static bool HasPreviewFailed() => _previewFailed;
 
         internal static bool IsActivePlayPreview => EditorApplication.isPlaying && SessionState.GetBool(KeyActive, false);
+
+        internal static YMVRoidSkirtRefine FindSourceComponentForPreview()
+        {
+            return IsActivePlayPreview ? FindStoredComponent() : null;
+        }
 
         internal static bool TogglePreview(YMVRoidSkirtRefine component)
         {
@@ -195,7 +200,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 snapshot.ApplyReferencesTo(_component, _avatarRoot.transform);
                 var previewBuildResult = YMVRoidSkirtRefineNdmfPlugin.BuildForPreviewWithResult(_avatarRoot, _component);
                 CapturePreviewBuildResult(previewBuildResult);
-                var driver = _settingsObject.AddComponent<YMVRoidSkirtRefinePreviewMotionDriver>();
+                var driver = _settingsObject.AddComponent<YMPreviewMotionDriver>();
                 if (driver == null)
                 {
                     throw new InvalidOperationException("Preview motion driver could not be added.");
@@ -497,7 +502,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             public bool onePieceUseLowerLegColliders;
             public bool onePieceUseFloorCollider;
             public bool onePieceUseFrontRootRotationConstraints;
-            public bool onePieceMoveFrontRootsTowardUpperLeg;
+            public float onePieceMoveFrontRootsTowardUpperLeg;
             public PhysBoneSnapshot onePiecePhysBone;
             public bool enableLongCoatRefine;
             public LongCoatPreset longCoatPreset;
@@ -511,7 +516,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             public bool longCoatMoveFrontBonesOutward;
             public bool longCoatUseRotationConstraints;
             public bool longCoatUseFrontRootRotationConstraints;
-            public bool longCoatMoveConstrainedRootsTowardUpperLeg;
+            public float longCoatMoveConstrainedRootsTowardUpperLeg;
             public bool longCoatAimFrontLimitsForward;
             public bool longCoatMatchOnePiece;
             public bool longCoatUseUpperLegColliders;

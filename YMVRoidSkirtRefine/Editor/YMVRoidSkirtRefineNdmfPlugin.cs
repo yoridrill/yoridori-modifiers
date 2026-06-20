@@ -34,7 +34,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         private const float TopologyWeightJaggednessThreshold = 0.01f;
         private const int TopologyWeightDirectionalSearchDepth = 10;
         private const float GeometricTargetSourceMinimumWeight = 0.001f;
-        private const int QuestPhysBoneComponentLimit = 6;
+        private const int QuestPhysBoneComponentLimit = 8;
         private const int QuestPhysBoneColliderLimit = 16;
 
         public override string QualifiedName => QualifiedPluginName;
@@ -888,8 +888,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 return RefineResult.Empty;
             }
 
-            var useRotationConstraint = component.longCoatUseRotationConstraints;
-            var useFrontRootRotationConstraint = component.longCoatUseFrontRootRotationConstraints && !useRotationConstraint;
+            var useUpperStageRotationConstraints = component.longCoatUseRotationConstraints;
+            var useFrontRootRotationConstraints = component.longCoatUseFrontRootRotationConstraints && !useUpperStageRotationConstraints;
             var unifiedRoot = CreateFreshNamedRoot(hips, LongCoatUnifiedRootName);
             var chainsByLabel = sourceGroups
                 .GroupBy(g => g.Primary.Label, StringComparer.OrdinalIgnoreCase)
@@ -920,10 +920,10 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                         component.longCoatShortSkirtUsePrependedRootsOnly,
                         component.longCoatMoveConstrainedRootsTowardUpperLeg > 1e-6f
                             && IsFrontChain(chain)
-                            && (useRotationConstraint || useFrontRootRotationConstraint)
+                            && (useUpperStageRotationConstraints || useFrontRootRotationConstraints)
                             ? ResolveUpperLegForChain(animator, chain)
                             : null,
-                        useFrontRootRotationConstraint && IsFrontChain(chain) ? 1 : 3,
+                        useFrontRootRotationConstraints && IsFrontChain(chain) ? 1 : 3,
                         component.longCoatMoveConstrainedRootsTowardUpperLeg,
                         component.longCoatMoveFrontBonesOutward ? avatarRoot.transform : null,
                         component.longCoatMoveFrontBonesOutward
@@ -947,17 +947,20 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
                 EnsureLinearChainHierarchy(finalBones);
 
-                if (!useRotationConstraint)
+                if (useUpperStageRotationConstraints)
+                {
+                    if (finalBones.Count > 3)
+                    {
+                        NormalizePhysBoneLimitAxes(finalBones.Skip(3).ToList(), hips.position, chain, component.verboseLog);
+                    }
+                }
+                else
                 {
                     NormalizeLongCoatChainRotations(finalBones, hips.position, chain.Label, component.verboseLog);
-                }
-                else if (finalBones.Count > 3)
-                {
-                    NormalizePhysBoneLimitAxes(finalBones.Skip(3).ToList(), hips.position, chain, component.verboseLog);
-                }
-                else if (useFrontRootRotationConstraint && IsFrontChain(chain))
-                {
-                    NormalizePhysBoneLimitAxes(finalBones.Skip(1).ToList(), hips.position, chain, component.verboseLog);
+                    if (useFrontRootRotationConstraints && IsFrontChain(chain))
+                    {
+                        NormalizePhysBoneLimitAxes(finalBones.Skip(1).ToList(), hips.position, chain, component.verboseLog);
+                    }
                 }
 
                 AddDistanceReweightInfos(
@@ -995,7 +998,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 component.longCoatUseFloorCollider,
                 component.verboseLog);
 
-            if (!useRotationConstraint)
+            if (!useUpperStageRotationConstraints)
             {
                 var rootPhysBone = unifiedRoot.gameObject.GetComponent<VRCPhysBone>();
                 if (rootPhysBone == null)
@@ -1003,7 +1006,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     rootPhysBone = unifiedRoot.gameObject.AddComponent<VRCPhysBone>();
                 }
                 rootPhysBone.rootTransform = unifiedRoot;
-                var longCoatFrontIgnoreTransforms = useFrontRootRotationConstraint
+                var longCoatFrontIgnoreTransforms = useFrontRootRotationConstraints
                     ? GetFrontRootIgnoreTransforms(processedChains)
                     : null;
                 ApplyPhysBoneSettings(
@@ -1042,7 +1045,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             }
             DeleteSourceChains(chainsToDelete);
 
-            if (useRotationConstraint)
+            if (useUpperStageRotationConstraints)
             {
                 generatedPhysBones.AddRange(BuildLongCoatRotationConstraintMode(
                     animator,
@@ -1053,7 +1056,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     component.longCoatAimFrontLimitsForward,
                     component.verboseLog));
             }
-            else if (useFrontRootRotationConstraint)
+            else if (useFrontRootRotationConstraints)
             {
                 generatedPhysBones.AddRange(BuildFrontRootRotationConstraintMode(
                     animator,

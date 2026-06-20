@@ -357,7 +357,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
             if (!addGeneratedDynamicsToVqtKeepListProp.boolValue) return;
 
-            if (!TryGetVqtKeepListStatus(avatarRoot, estimate, out var statusMessage))
+            if (!TryGetVqtKeepListStatus(component, avatarRoot, estimate, out var statusMessage))
             {
                 EditorGUILayout.HelpBox(statusMessage, MessageType.Warning);
             }
@@ -379,13 +379,13 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
             var buildsOnePiece = component.enableOnePieceRefine && !onePieceMatchesLongCoat;
             var buildsLongCoat = component.enableLongCoatRefine && !longCoatMatchesOnePiece;
-            estimate.SourcePhysBones = CountSkirtRelatedSourcePhysBones(
+            estimate.SourcePhysBones = CollectSkirtRelatedSourcePhysBones(
                 component,
                 component.enableOnePieceRefine,
-                component.enableLongCoatRefine);
+                component.enableLongCoatRefine).Count;
             if (buildsOnePiece || buildsLongCoat)
             {
-                estimate.SourcePhysBoneColliders = CountExistingLegPhysBoneColliders(avatarRoot);
+                estimate.SourcePhysBoneColliders = CollectExistingLegPhysBoneColliders(avatarRoot).Count;
             }
 
             if (onePieceMatchesLongCoat)
@@ -405,17 +405,17 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             return estimate;
         }
 
-        private static int CountSkirtRelatedSourcePhysBones(
+        private static HashSet<VRCPhysBone> CollectSkirtRelatedSourcePhysBones(
             YMVRoidSkirtRefine component,
             bool includeOnePiece,
             bool includeLongCoat)
         {
-            if (component == null) return 0;
-
             var physBones = new HashSet<VRCPhysBone>();
+            if (component == null) return physBones;
+
             if (includeOnePiece) AddPhysBonesFromTargets(physBones, component.onePieceBones, false);
             if (includeLongCoat) AddPhysBonesFromTargets(physBones, component.longCoatBones, true);
-            return physBones.Count;
+            return physBones;
         }
 
         private static void AddPhysBonesFromTargets(
@@ -499,17 +499,17 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             return count;
         }
 
-        private static int CountExistingLegPhysBoneColliders(GameObject avatarRoot)
+        private static HashSet<VRCPhysBoneCollider> CollectExistingLegPhysBoneColliders(GameObject avatarRoot)
         {
             var animator = avatarRoot != null ? avatarRoot.GetComponentInChildren<Animator>(true) : null;
-            if (animator == null) return 0;
-
             var colliders = new HashSet<VRCPhysBoneCollider>();
+            if (animator == null) return colliders;
+
             AddExistingLegPhysBoneColliders(colliders, animator.GetBoneTransform(HumanBodyBones.LeftUpperLeg));
             AddExistingLegPhysBoneColliders(colliders, animator.GetBoneTransform(HumanBodyBones.RightUpperLeg));
             AddExistingLegPhysBoneColliders(colliders, animator.GetBoneTransform(HumanBodyBones.LeftLowerLeg));
             AddExistingLegPhysBoneColliders(colliders, animator.GetBoneTransform(HumanBodyBones.RightLowerLeg));
-            return colliders.Count;
+            return colliders;
         }
 
         private static void AddExistingLegPhysBoneColliders(HashSet<VRCPhysBoneCollider> colliders, Transform leg)
@@ -524,7 +524,11 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             }
         }
 
-        private bool TryGetVqtKeepListStatus(GameObject avatarRoot, DynamicsUsageEstimate estimate, out string message)
+        private bool TryGetVqtKeepListStatus(
+            YMVRoidSkirtRefine component,
+            GameObject avatarRoot,
+            DynamicsUsageEstimate estimate,
+            out string message)
         {
             message = null;
             if (!TryFindVqtAvatarConverterSettings(avatarRoot, out var settings))
@@ -535,10 +539,13 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 return false;
             }
 
-            var animator = avatarRoot != null ? avatarRoot.GetComponentInChildren<Animator>(true) : null;
-            var hips = animator != null ? animator.GetBoneTransform(HumanBodyBones.Hips) : null;
-            var keepPhysBones = CountObjectArrayFieldExcludingDescendants(settings, "physBonesToKeep", hips);
-            var keepColliders = CountObjectArrayFieldExcludingDescendants(settings, "physBoneCollidersToKeep", hips);
+            GetEstimatedVqtKeepListRemovals(
+                component,
+                avatarRoot,
+                out var removedPhysBones,
+                out var removedColliders);
+            var keepPhysBones = CountObjectArrayFieldExcludingComponents(settings, "physBonesToKeep", removedPhysBones);
+            var keepColliders = CountObjectArrayFieldExcludingComponents(settings, "physBoneCollidersToKeep", removedColliders);
             var totalPhysBones = keepPhysBones + estimate.GeneratedPhysBones;
             var totalColliders = keepColliders + estimate.GeneratedPhysBoneColliders;
             if (totalPhysBones > QuestPhysBoneComponentLimit || totalColliders > QuestPhysBoneColliderLimit)
@@ -550,6 +557,43 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             }
 
             return true;
+        }
+
+        private static void GetEstimatedVqtKeepListRemovals(
+            YMVRoidSkirtRefine component,
+            GameObject avatarRoot,
+            out HashSet<Component> removedPhysBones,
+            out HashSet<Component> removedColliders)
+        {
+            removedPhysBones = new HashSet<Component>();
+            removedColliders = new HashSet<Component>();
+            if (component == null) return;
+
+            var onePieceMatchesLongCoat = component.enableOnePieceRefine && component.onePieceMatchLongCoat;
+            var longCoatMatchesOnePiece = component.enableLongCoatRefine && component.longCoatMatchOnePiece;
+            if ((onePieceMatchesLongCoat && longCoatMatchesOnePiece)
+                || (onePieceMatchesLongCoat && !component.enableLongCoatRefine)
+                || (longCoatMatchesOnePiece && !component.enableOnePieceRefine))
+            {
+                return;
+            }
+
+            foreach (var physBone in CollectSkirtRelatedSourcePhysBones(
+                         component,
+                         component.enableOnePieceRefine,
+                         component.enableLongCoatRefine))
+            {
+                if (physBone != null) removedPhysBones.Add(physBone);
+            }
+
+            var buildsOnePiece = component.enableOnePieceRefine && !onePieceMatchesLongCoat;
+            var buildsLongCoat = component.enableLongCoatRefine && !longCoatMatchesOnePiece;
+            if (!buildsOnePiece && !buildsLongCoat) return;
+
+            foreach (var collider in CollectExistingLegPhysBoneColliders(avatarRoot))
+            {
+                if (collider != null) removedColliders.Add(collider);
+            }
         }
 
         private static bool TryFindVqtAvatarConverterSettings(GameObject avatarRoot, out Component settings)
@@ -576,7 +620,10 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 : 0;
         }
 
-        private static int CountObjectArrayFieldExcludingDescendants(Component component, string fieldName, Transform excludedRoot)
+        private static int CountObjectArrayFieldExcludingComponents(
+            Component component,
+            string fieldName,
+            HashSet<Component> excludedComponents)
         {
             if (component == null) return 0;
             var field = component.GetType().GetField(fieldName);
@@ -586,7 +633,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             foreach (var item in array)
             {
                 if (!(item is Component itemComponent) || itemComponent == null) continue;
-                if (excludedRoot != null && itemComponent.transform != null && itemComponent.transform.IsChildOf(excludedRoot)) continue;
+                if (excludedComponents != null && excludedComponents.Contains(itemComponent)) continue;
                 count++;
             }
 
@@ -869,9 +916,9 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                         enableProp,
                         TT(
                             "ボーン追加",
-                            "既存チェーンの先端側へボーンを追加します。OFFでもPhysBone統合は行います。",
+                            "既存チェーンに不足分のボーンを追加します。ワンピースは先端側、ロングコートは根本側へ追加します。OFFでもPhysBone統合は行います。",
                             "Add Bones",
-                            "Adds bones to the tip side of existing chains. PhysBone integration still runs when this is disabled."));
+                            "Adds missing bones to existing chains. One-piece skirts append to the tip side; long coats prepend to the root side. PhysBone integration still runs when this is disabled."));
                 }
 
                 if (showFixedExtensionControls && modeProp != null)
@@ -1026,9 +1073,9 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                         floorEnableProp,
                         TT(
                             "床を追加",
-                            "アバタールート直下に2.4m四方の床コライダーを追加し、対象の揺れボーンに設定します。",
+                            "アバタールート直下にPlane形状の床コライダーを追加し、対象の揺れボーンに設定します。",
                             "Add Floor",
-                            "Adds a 2.4m square floor collider under the avatar root and assigns it to the target swing PhysBones."));
+                            "Adds a Plane floor collider under the avatar root and assigns it to the target swing PhysBones."));
                 }
             }
         }

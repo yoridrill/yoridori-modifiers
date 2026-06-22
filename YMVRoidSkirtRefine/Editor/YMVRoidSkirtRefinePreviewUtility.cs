@@ -502,6 +502,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             public bool onePieceUseLowerLegColliders;
             public bool onePieceUseFloorCollider;
             public bool onePieceUseFrontRootRotationConstraints;
+            public float onePieceFrontRootRotationConstraintWeight;
             public float onePieceMoveFrontRootsTowardUpperLeg;
             public PhysBoneSnapshot onePiecePhysBone;
             public bool enableLongCoatRefine;
@@ -516,6 +517,10 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             public bool longCoatMoveFrontBonesOutward;
             public bool longCoatUseRotationConstraints;
             public bool longCoatUseFrontRootRotationConstraints;
+            public float longCoatFrontRootRotationConstraintWeight;
+            public float longCoatFrontUpperRotationConstraintWeight;
+            public float longCoatSideUpperRotationConstraintWeight;
+            public float longCoatBackUpperRotationConstraintWeight;
             public float longCoatMoveConstrainedRootsTowardUpperLeg;
             public bool longCoatAimFrontLimitsForward;
             public bool longCoatMatchOnePiece;
@@ -545,6 +550,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     onePieceUseLowerLegColliders = source.onePieceUseLowerLegColliders,
                     onePieceUseFloorCollider = source.onePieceUseFloorCollider,
                     onePieceUseFrontRootRotationConstraints = source.onePieceUseFrontRootRotationConstraints,
+                    onePieceFrontRootRotationConstraintWeight = source.onePieceFrontRootRotationConstraintWeight,
                     onePieceMoveFrontRootsTowardUpperLeg = source.onePieceMoveFrontRootsTowardUpperLeg,
                     onePiecePhysBone = PhysBoneSnapshot.From(source.onePiecePhysBone),
                     enableLongCoatRefine = source.enableLongCoatRefine,
@@ -559,6 +565,10 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     longCoatMoveFrontBonesOutward = source.longCoatMoveFrontBonesOutward,
                     longCoatUseRotationConstraints = source.longCoatUseRotationConstraints,
                     longCoatUseFrontRootRotationConstraints = source.longCoatUseFrontRootRotationConstraints,
+                    longCoatFrontRootRotationConstraintWeight = source.longCoatFrontRootRotationConstraintWeight,
+                    longCoatFrontUpperRotationConstraintWeight = source.longCoatFrontUpperRotationConstraintWeight,
+                    longCoatSideUpperRotationConstraintWeight = source.longCoatSideUpperRotationConstraintWeight,
+                    longCoatBackUpperRotationConstraintWeight = source.longCoatBackUpperRotationConstraintWeight,
                     longCoatMoveConstrainedRootsTowardUpperLeg = source.longCoatMoveConstrainedRootsTowardUpperLeg,
                     longCoatAimFrontLimitsForward = source.longCoatAimFrontLimitsForward,
                     longCoatMatchOnePiece = source.longCoatMatchOnePiece,
@@ -586,6 +596,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 target.onePieceUseLowerLegColliders = onePieceUseLowerLegColliders;
                 target.onePieceUseFloorCollider = onePieceUseFloorCollider;
                 target.onePieceUseFrontRootRotationConstraints = onePieceUseFrontRootRotationConstraints;
+                target.onePieceFrontRootRotationConstraintWeight = onePieceFrontRootRotationConstraintWeight;
                 target.onePieceMoveFrontRootsTowardUpperLeg = onePieceMoveFrontRootsTowardUpperLeg;
                 onePiecePhysBone?.ApplyTo(target.onePiecePhysBone);
                 target.enableLongCoatRefine = enableLongCoatRefine;
@@ -600,6 +611,10 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 target.longCoatMoveFrontBonesOutward = longCoatMoveFrontBonesOutward;
                 target.longCoatUseRotationConstraints = longCoatUseRotationConstraints;
                 target.longCoatUseFrontRootRotationConstraints = longCoatUseFrontRootRotationConstraints;
+                target.longCoatFrontRootRotationConstraintWeight = longCoatFrontRootRotationConstraintWeight;
+                target.longCoatFrontUpperRotationConstraintWeight = longCoatFrontUpperRotationConstraintWeight;
+                target.longCoatSideUpperRotationConstraintWeight = longCoatSideUpperRotationConstraintWeight;
+                target.longCoatBackUpperRotationConstraintWeight = longCoatBackUpperRotationConstraintWeight;
                 target.longCoatMoveConstrainedRootsTowardUpperLeg = longCoatMoveConstrainedRootsTowardUpperLeg;
                 target.longCoatAimFrontLimitsForward = longCoatAimFrontLimitsForward;
                 target.longCoatMatchOnePiece = longCoatMatchOnePiece;

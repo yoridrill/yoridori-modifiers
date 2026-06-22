@@ -69,6 +69,7 @@ Front-Left、Front-Right、Side-Left、Side-Right、Back-Left、Back-Right の6�
 ### Rotation Constraint
 
 `正面の付け根に使用` を有効にすると、Frontの1段目をUpperLegにRotation Constraintで連動させ、Frontの2段目以降は房ごとのPhysBoneで揺らします。Frontは統合RootのPhysBoneから除外されます。
+次の行の `Weight` でFrontに使うWeightを調整できます。
 
 ### PhysBone Collider
 
@@ -116,8 +117,10 @@ Front-Left、Front-Right、Side-Left、Side-Right、Back-Left、Back-Right の6�
 ### Rotation Constraint
 
 `正面の付け根に使用` を有効にすると、Frontの1段目をUpperLegにRotation Constraintで連動させ、Frontの2段目以降は房ごとのPhysBoneで揺らします。Frontは統合RootのPhysBoneから除外されます。
+次の行の `Weight` でFrontに使うWeightを調整できます。
 
 `上3段のボーンに使用` を有効にすると、追加された上3段のうち1段目をUpperLeg、3段目をLowerLegにRotation Constraintで連動させ、下3段を房ごとのPhysBoneで揺らします。この場合も統合Rootは作成しますが、統合RootにPhysBoneは付けません。
+次の行の `Weight` でFront/Side/Backに使うUpperLeg側Weightを左から順に調整できます。LowerLeg側Weightは固定値です。
 
 `FrontのLimitsを正面に向ける` を有効にすると、Frontに個別追加されるPhysBoneのLimitsだけを正面寄りに向けます。統合RootのPhysBoneには適用されません。
 

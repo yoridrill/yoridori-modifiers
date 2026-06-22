@@ -155,6 +155,13 @@ namespace YoridoriModifiers.VRoidSkirtRefine
     [AddComponentMenu("Yoridori Modifiers/YM VRoid Skirt Refine")]
     public sealed class YMVRoidSkirtRefine : MonoBehaviour, IEditorOnly
     {
+        public const float OnePieceSlimFrontRootRotationConstraintWeightDefault = 0.7f;
+        public const float OnePieceFrontRootRotationConstraintWeightDefault = 0.6f;
+        public const float LongCoatFrontRootRotationConstraintWeightDefault = 0.8f;
+        public const float LongCoatFrontUpperRotationConstraintWeightDefault = 0.8f;
+        public const float LongCoatSideUpperRotationConstraintWeightDefault = 0.6f;
+        public const float LongCoatBackUpperRotationConstraintWeightDefault = 0.3f;
+
         [Tooltip("Enable one-piece and skirt hem refinement.")]
         [FormerlySerializedAs("enableSkirtRefine")]
         public bool enableOnePieceRefine = false;
@@ -197,6 +204,10 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
         [Tooltip("Use rotation constraints on the front root bones for one-piece refinement.")]
         public bool onePieceUseFrontRootRotationConstraints = false;
+
+        [Tooltip("UpperLeg rotation constraint weight used on one-piece front root bones.")]
+        [Range(0.0f, 1.0f)]
+        public float onePieceFrontRootRotationConstraintWeight = OnePieceFrontRootRotationConstraintWeightDefault;
 
         [Tooltip("Move front one-piece root bones toward UpperLeg when front root rotation constraints are used.")]
         [Range(0.0f, 1.0f)]
@@ -245,6 +256,22 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
         [Tooltip("Use rotation constraints on the front root bones for long coat refinement.")]
         public bool longCoatUseFrontRootRotationConstraints = false;
+
+        [Tooltip("UpperLeg rotation constraint weight used on long coat front root bones.")]
+        [Range(0.0f, 1.0f)]
+        public float longCoatFrontRootRotationConstraintWeight = LongCoatFrontRootRotationConstraintWeightDefault;
+
+        [Tooltip("UpperLeg rotation constraint weight used on long coat upper front bones.")]
+        [Range(0.0f, 1.0f)]
+        public float longCoatFrontUpperRotationConstraintWeight = LongCoatFrontUpperRotationConstraintWeightDefault;
+
+        [Tooltip("UpperLeg rotation constraint weight used on long coat upper side bones.")]
+        [Range(0.0f, 1.0f)]
+        public float longCoatSideUpperRotationConstraintWeight = LongCoatSideUpperRotationConstraintWeightDefault;
+
+        [Tooltip("UpperLeg rotation constraint weight used on long coat upper back bones.")]
+        [Range(0.0f, 1.0f)]
+        public float longCoatBackUpperRotationConstraintWeight = LongCoatBackUpperRotationConstraintWeightDefault;
 
         [Tooltip("Move constrained long coat root bones toward UpperLeg when rotation constraints are used.")]
         [Range(0.0f, 1.0f)]
@@ -358,8 +385,11 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             onePieceUseLowerLegColliders = false;
             onePieceUseFloorCollider = false;
             onePieceUseFrontRootRotationConstraints = true;
+            onePieceFrontRootRotationConstraintWeight = OnePieceFrontRootRotationConstraintWeightDefault;
             onePieceMoveFrontRootsTowardUpperLeg = 0.0f;
             ApplyShortLightPhysBoneDefaults(onePiecePhysBone);
+            onePiecePhysBone.limitType = SkirtRefinePhysBoneLimitType.Polar;
+            onePiecePhysBone.maxYaw = 30.0f;
 
             enableLongCoatRefine = false;
             longCoatPreset = LongCoatPreset.LongSkirtHeavy;
@@ -372,6 +402,10 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             longCoatMoveFrontBonesOutward = false;
             longCoatUseRotationConstraints = true;
             longCoatUseFrontRootRotationConstraints = false;
+            longCoatFrontRootRotationConstraintWeight = LongCoatFrontRootRotationConstraintWeightDefault;
+            longCoatFrontUpperRotationConstraintWeight = LongCoatFrontUpperRotationConstraintWeightDefault;
+            longCoatSideUpperRotationConstraintWeight = LongCoatSideUpperRotationConstraintWeightDefault;
+            longCoatBackUpperRotationConstraintWeight = LongCoatBackUpperRotationConstraintWeightDefault;
             longCoatMoveConstrainedRootsTowardUpperLeg = 1.0f;
             longCoatAimFrontLimitsForward = true;
             longCoatUseUpperLegColliders = false;

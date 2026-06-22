@@ -92,6 +92,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         private SerializedProperty onePieceUseLowerLegCollidersProp;
         private SerializedProperty onePieceUseFloorColliderProp;
         private SerializedProperty onePieceUseFrontRootRotationConstraintsProp;
+        private SerializedProperty onePieceFrontRootRotationConstraintWeightProp;
         private SerializedProperty onePieceMoveFrontRootsTowardUpperLegProp;
         private SerializedProperty onePiecePhysBoneProp;
         private SerializedProperty enableLongCoatRefineProp;
@@ -106,6 +107,10 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         private SerializedProperty longCoatMoveFrontBonesOutwardProp;
         private SerializedProperty longCoatUseRotationConstraintsProp;
         private SerializedProperty longCoatUseFrontRootRotationConstraintsProp;
+        private SerializedProperty longCoatFrontRootRotationConstraintWeightProp;
+        private SerializedProperty longCoatFrontUpperRotationConstraintWeightProp;
+        private SerializedProperty longCoatSideUpperRotationConstraintWeightProp;
+        private SerializedProperty longCoatBackUpperRotationConstraintWeightProp;
         private SerializedProperty longCoatMoveConstrainedRootsTowardUpperLegProp;
         private SerializedProperty longCoatAimFrontLimitsForwardProp;
         private SerializedProperty longCoatBonesProp;
@@ -141,6 +146,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             onePieceUseLowerLegCollidersProp = serializedObject.FindProperty("onePieceUseLowerLegColliders");
             onePieceUseFloorColliderProp = serializedObject.FindProperty("onePieceUseFloorCollider");
             onePieceUseFrontRootRotationConstraintsProp = serializedObject.FindProperty("onePieceUseFrontRootRotationConstraints");
+            onePieceFrontRootRotationConstraintWeightProp = serializedObject.FindProperty("onePieceFrontRootRotationConstraintWeight");
             onePieceMoveFrontRootsTowardUpperLegProp = serializedObject.FindProperty("onePieceMoveFrontRootsTowardUpperLeg");
             onePiecePhysBoneProp = serializedObject.FindProperty("onePiecePhysBone");
             enableLongCoatRefineProp = serializedObject.FindProperty("enableLongCoatRefine");
@@ -155,6 +161,10 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             longCoatMoveFrontBonesOutwardProp = serializedObject.FindProperty("longCoatMoveFrontBonesOutward");
             longCoatUseRotationConstraintsProp = serializedObject.FindProperty("longCoatUseRotationConstraints");
             longCoatUseFrontRootRotationConstraintsProp = serializedObject.FindProperty("longCoatUseFrontRootRotationConstraints");
+            longCoatFrontRootRotationConstraintWeightProp = serializedObject.FindProperty("longCoatFrontRootRotationConstraintWeight");
+            longCoatFrontUpperRotationConstraintWeightProp = serializedObject.FindProperty("longCoatFrontUpperRotationConstraintWeight");
+            longCoatSideUpperRotationConstraintWeightProp = serializedObject.FindProperty("longCoatSideUpperRotationConstraintWeight");
+            longCoatBackUpperRotationConstraintWeightProp = serializedObject.FindProperty("longCoatBackUpperRotationConstraintWeight");
             longCoatMoveConstrainedRootsTowardUpperLegProp = serializedObject.FindProperty("longCoatMoveConstrainedRootsTowardUpperLeg");
             longCoatAimFrontLimitsForwardProp = serializedObject.FindProperty("longCoatAimFrontLimitsForward");
             longCoatBonesProp = serializedObject.FindProperty("longCoatBones");
@@ -340,8 +350,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             var message = string.Join(
                 "\n",
                 T("今の設定で増える Rotation Constraint 数", "Rotation Constraints added by current settings") + $": {estimate.GeneratedRotationConstraints}",
-                T("スカート関連の PhysBone コンポーネント数", "Skirt-related PhysBone components") + $": {estimate.SourcePhysBones} \u2192 {estimate.GeneratedPhysBones}",
-                T("スカート関連の PhysBone コライダー数", "Skirt-related PhysBone colliders") + $": {estimate.SourcePhysBoneColliders} \u2192 {estimate.GeneratedPhysBoneColliders}");
+                T("スカート関連の PhysBone コンポーネント数", "Skirt-related PhysBone components") + $": {FormatDynamicsChange(estimate.SourcePhysBones, estimate.GeneratedPhysBones)}",
+                T("スカート関連の PhysBone コライダー数", "Skirt-related PhysBone colliders") + $": {FormatDynamicsChange(estimate.SourcePhysBoneColliders, estimate.GeneratedPhysBoneColliders)}");
             EditorGUILayout.HelpBox(message, MessageType.Info);
 
             using (new EditorGUI.DisabledScope(isPreviewing))
@@ -361,6 +371,13 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             {
                 EditorGUILayout.HelpBox(statusMessage, MessageType.Warning);
             }
+        }
+
+        private string FormatDynamicsChange(int source, int generated)
+        {
+            return source == generated
+                ? T("増減なし", "No change")
+                : $"{source} \u2192 {generated}";
         }
 
         private static DynamicsUsageEstimate EstimateDynamicsUsage(YMVRoidSkirtRefine component, GameObject avatarRoot)
@@ -534,8 +551,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             if (!TryFindVqtAvatarConverterSettings(avatarRoot, out var settings))
             {
                 message = T(
-                    "VQTが見つかりません。 このオプションは動作しません。",
-                    "VQT was not found. This option will not run.");
+                    "VRCQuestToolsが見つかりません。 このオプションは動作しません。",
+                    "VRCQuestTools was not found. This option will not run.");
                 return false;
             }
 
@@ -670,6 +687,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                             onePieceUseLowerLegCollidersProp.boolValue = UsesOnePieceLowerLegColliders(preset);
                             onePieceUseFloorColliderProp.boolValue = UsesOnePieceFloorCollider(preset);
                             onePieceUseFrontRootRotationConstraintsProp.boolValue = preset != OnePiecePreset.MatchLongCoat;
+                            ApplyRotationConstraintWeightDefaults(preset);
                             onePieceMoveFrontRootsTowardUpperLegProp.floatValue = 0.0f;
                             onePieceRootHeightOffsetMultiplierProp.floatValue = preset == OnePiecePreset.MatchLongCoat ? 0.0f : 0.4f;
                             onePieceHipWeightReductionProp.floatValue = 0.5f;
@@ -760,6 +778,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                             longCoatMoveFrontBonesOutwardProp.boolValue = preset == LongCoatPreset.OpenFront;
                             longCoatUseRotationConstraintsProp.boolValue = IsLongCoatLongSkirtPreset(preset);
                             longCoatUseFrontRootRotationConstraintsProp.boolValue = IsShortLongCoatPreset(preset) || preset == LongCoatPreset.OpenFront;
+                            ApplyRotationConstraintWeightDefaults(onePiecePresetProp);
                             longCoatMoveConstrainedRootsTowardUpperLegProp.floatValue = preset == LongCoatPreset.OpenFront ? 0.0f : 0.8f;
                             longCoatAimFrontLimitsForwardProp.boolValue = IsShortLongCoatPreset(preset) || IsLongCoatLongSkirtPreset(preset);
                             longCoatUseUpperLegCollidersProp.boolValue = UsesLongCoatUpperLegColliders(preset);
@@ -1285,11 +1304,11 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         {
             if (preset == OnePiecePreset.ShortSkirtLight)
             {
-                ApplyShortLightPhysBonePreset(settingsProp);
+                ApplyShortLightPhysBonePreset(settingsProp, limitType: SkirtRefinePhysBoneLimitType.Polar, maxYaw: 30.0f);
             }
             else if (preset == OnePiecePreset.ShortSkirtHeavy)
             {
-                ApplyShortHeavyPhysBonePreset(settingsProp);
+                ApplyShortHeavyPhysBonePreset(settingsProp, limitType: SkirtRefinePhysBoneLimitType.Polar, maxYaw: 30.0f);
             }
             else if (preset == OnePiecePreset.SlimLongSkirtLight)
             {
@@ -1341,14 +1360,24 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             }
         }
 
-        private static void ApplyShortLightPhysBonePreset(SerializedProperty settingsProp, float radius = 0.05f, AnimationCurve radiusCurve = null)
+        private static void ApplyShortLightPhysBonePreset(
+            SerializedProperty settingsProp,
+            float radius = 0.05f,
+            AnimationCurve radiusCurve = null,
+            SkirtRefinePhysBoneLimitType limitType = SkirtRefinePhysBoneLimitType.Hinge,
+            float maxYaw = 0.0f)
         {
-            ApplyPhysBoneValues(settingsProp, 0.1f, 0.6f, 0.0f, 0.0f, 0.8f, 0.7f, SkirtRefinePhysBoneLimitType.Hinge, 45.0f, -45.0f, SkirtRefinePhysBonePermission.False, SkirtRefinePhysBonePermission.Other, 0.0f, 0.0f, radius, radiusCurve);
+            ApplyPhysBoneValues(settingsProp, 0.1f, 0.6f, 0.0f, 0.0f, 0.8f, 0.7f, limitType, 45.0f, -45.0f, SkirtRefinePhysBonePermission.False, SkirtRefinePhysBonePermission.Other, 0.0f, maxYaw, radius, radiusCurve);
         }
 
-        private static void ApplyShortHeavyPhysBonePreset(SerializedProperty settingsProp, float radius = 0.05f, AnimationCurve radiusCurve = null)
+        private static void ApplyShortHeavyPhysBonePreset(
+            SerializedProperty settingsProp,
+            float radius = 0.05f,
+            AnimationCurve radiusCurve = null,
+            SkirtRefinePhysBoneLimitType limitType = SkirtRefinePhysBoneLimitType.Hinge,
+            float maxYaw = 0.0f)
         {
-            ApplyPhysBoneValues(settingsProp, 0.18f, 0.45f, 0.25f, 0.35f, 0.9f, 0.7f, SkirtRefinePhysBoneLimitType.Hinge, 45.0f, -45.0f, SkirtRefinePhysBonePermission.False, SkirtRefinePhysBonePermission.Other, 0.0f, 0.0f, radius, radiusCurve);
+            ApplyPhysBoneValues(settingsProp, 0.18f, 0.45f, 0.25f, 0.35f, 0.9f, 0.7f, limitType, 45.0f, -45.0f, SkirtRefinePhysBonePermission.False, SkirtRefinePhysBonePermission.Other, 0.0f, maxYaw, radius, radiusCurve);
         }
 
         private static void ApplySlimLongSkirtLightPhysBonePreset(SerializedProperty settingsProp)
@@ -1365,12 +1394,12 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
         private static void ApplyLongSkirtLightPhysBonePreset(SerializedProperty settingsProp)
         {
-            ApplyPhysBoneValues(settingsProp, 0.1f, 0.6f, 0.0f, 0.0f, 0.8f, 0.7f, SkirtRefinePhysBoneLimitType.Hinge, 60.0f, -30.0f, SkirtRefinePhysBonePermission.False, SkirtRefinePhysBonePermission.Other, 0.0f, 0.0f, 0.1f, CreateConvexRadiusCurve());
+            ApplyPhysBoneValues(settingsProp, 0.15f, 0.6f, 0.0f, 0.0f, 0.8f, 0.7f, SkirtRefinePhysBoneLimitType.Polar, 50.0f, -30.0f, SkirtRefinePhysBonePermission.False, SkirtRefinePhysBonePermission.Other, 0.0f, 10.0f);
         }
 
         private static void ApplyLongSkirtHeavyPhysBonePreset(SerializedProperty settingsProp)
         {
-            ApplyPhysBoneValues(settingsProp, 0.18f, 0.45f, 0.25f, 0.35f, 0.9f, 0.7f, SkirtRefinePhysBoneLimitType.Hinge, 60.0f, -30.0f, SkirtRefinePhysBonePermission.False, SkirtRefinePhysBonePermission.Other, 0.0f, 0.0f, 0.1f, CreateConvexRadiusCurve());
+            ApplyPhysBoneValues(settingsProp, 0.2f, 0.2f, 0.25f, 0.8f, 0.9f, 0.7f, SkirtRefinePhysBoneLimitType.Polar, 50.0f, -30.0f, SkirtRefinePhysBonePermission.False, SkirtRefinePhysBonePermission.Other, 0.0f, 10.0f);
         }
 
         private static void ApplyOpenFrontPhysBonePreset(SerializedProperty settingsProp, float radius = 0.05f)
@@ -1476,6 +1505,12 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 || preset == OnePiecePreset.ShortSkirtHeavy;
         }
 
+        private static bool IsSlimOnePiecePreset(OnePiecePreset preset)
+        {
+            return preset == OnePiecePreset.SlimLongSkirtLight
+                || preset == OnePiecePreset.SlimLongSkirtHeavy;
+        }
+
         private static bool IsLongCoatLongSkirtPreset(LongCoatPreset preset)
         {
             return preset == LongCoatPreset.LongSkirtLight
@@ -1533,18 +1568,43 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             return preset == LongCoatPreset.OpenFront;
         }
 
+        private void ApplyRotationConstraintWeightDefaults(SerializedProperty onePiecePresetProperty)
+        {
+            var onePiecePreset = onePiecePresetProperty != null
+                ? (OnePiecePreset)onePiecePresetProperty.enumValueIndex
+                : OnePiecePreset.ShortSkirtLight;
+            ApplyRotationConstraintWeightDefaults(onePiecePreset);
+        }
+
+        private void ApplyRotationConstraintWeightDefaults(OnePiecePreset onePiecePreset)
+        {
+            onePieceFrontRootRotationConstraintWeightProp.floatValue = GetOnePieceFrontRootRotationConstraintWeightDefault(onePiecePreset);
+            longCoatFrontRootRotationConstraintWeightProp.floatValue = YMVRoidSkirtRefine.LongCoatFrontRootRotationConstraintWeightDefault;
+            longCoatFrontUpperRotationConstraintWeightProp.floatValue = YMVRoidSkirtRefine.LongCoatFrontUpperRotationConstraintWeightDefault;
+            longCoatSideUpperRotationConstraintWeightProp.floatValue = YMVRoidSkirtRefine.LongCoatSideUpperRotationConstraintWeightDefault;
+            longCoatBackUpperRotationConstraintWeightProp.floatValue = YMVRoidSkirtRefine.LongCoatBackUpperRotationConstraintWeightDefault;
+        }
+
+        private static float GetOnePieceFrontRootRotationConstraintWeightDefault(OnePiecePreset preset)
+        {
+            return IsSlimOnePiecePreset(preset)
+                ? YMVRoidSkirtRefine.OnePieceSlimFrontRootRotationConstraintWeightDefault
+                : YMVRoidSkirtRefine.OnePieceFrontRootRotationConstraintWeightDefault;
+        }
+
         private void DrawOnePieceRotationConstraintSettings()
         {
             EditorGUILayout.LabelField(T("Rotation Constraint", "Rotation Constraint"), EditorStyles.boldLabel);
             using (new EditorGUI.IndentLevelScope())
             {
-                EditorGUILayout.PropertyField(
+                DrawToggleWithInlineWeights(
                     onePieceUseFrontRootRotationConstraintsProp,
                     TT(
                         "正面の付け根に使用",
                         "ONの場合、Frontの1段目をUpperLegにRotation Constraintで連動させ、Frontの2段目以降は房ごとのPhysBoneで揺らします。統合RootのPhysBoneからFrontは除外されます。",
                         "Use on Front Roots",
-                        "When enabled, front first-stage bones follow UpperLeg with Rotation Constraint, while front bones from the second stage use per-chain PhysBones. Front chains are ignored by the unified root PhysBone."));
+                        "When enabled, front first-stage bones follow UpperLeg with Rotation Constraint, while front bones from the second stage use per-chain PhysBones. Front chains are ignored by the unified root PhysBone."),
+                    new[] { ("F", onePieceFrontRootRotationConstraintWeightProp) });
                 using (new EditorGUI.DisabledScope(!onePieceUseFrontRootRotationConstraintsProp.boolValue))
                 {
                     EditorGUILayout.PropertyField(
@@ -1564,26 +1624,33 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             using (new EditorGUI.IndentLevelScope())
             {
                 EditorGUI.BeginChangeCheck();
-                EditorGUILayout.PropertyField(
+                DrawToggleWithInlineWeights(
                     longCoatUseFrontRootRotationConstraintsProp,
                     TT(
                         "正面の付け根に使用",
                         "ONの場合、Frontの1段目をUpperLegにRotation Constraintで連動させ、Frontの2段目以降は房ごとのPhysBoneで揺らします。統合RootのPhysBoneからFrontは除外されます。",
                         "Use on Front Roots",
-                        "When enabled, front first-stage bones follow UpperLeg with Rotation Constraint, while front bones from the second stage use per-chain PhysBones. Front chains are ignored by the unified root PhysBone."));
+                        "When enabled, front first-stage bones follow UpperLeg with Rotation Constraint, while front bones from the second stage use per-chain PhysBones. Front chains are ignored by the unified root PhysBone."),
+                    new[] { ("F", longCoatFrontRootRotationConstraintWeightProp) });
                 if (EditorGUI.EndChangeCheck() && longCoatUseFrontRootRotationConstraintsProp.boolValue)
                 {
                     longCoatUseRotationConstraintsProp.boolValue = false;
                 }
 
                 EditorGUI.BeginChangeCheck();
-                EditorGUILayout.PropertyField(
+                DrawToggleWithInlineWeights(
                     longCoatUseRotationConstraintsProp,
                     TT(
                         "上3段のボーンに使用",
                         "ONの場合、追加された上3段のうち1段目をUpperLeg、3段目をLowerLegにRotation Constraintで連動させ、下3段を房ごとのPhysBoneで揺らします。",
                         "Use on Upper 3 Bones",
-                        "When enabled, the first generated upper-stage bone follows UpperLeg and the third follows LowerLeg via Rotation Constraint; the lower three bones use per-chain PhysBones."));
+                        "When enabled, the first generated upper-stage bone follows UpperLeg and the third follows LowerLeg via Rotation Constraint; the lower three bones use per-chain PhysBones."),
+                    new[]
+                    {
+                        ("F", longCoatFrontUpperRotationConstraintWeightProp),
+                        ("S", longCoatSideUpperRotationConstraintWeightProp),
+                        ("B", longCoatBackUpperRotationConstraintWeightProp)
+                    });
                 if (EditorGUI.EndChangeCheck() && longCoatUseRotationConstraintsProp.boolValue)
                 {
                     longCoatUseFrontRootRotationConstraintsProp.boolValue = false;
@@ -1615,6 +1682,42 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                             "Aims only the per-front-chain PhysBone limits forward. This does not apply to unified-root PhysBones."));
                 }
             }
+        }
+
+        private static void DrawToggleWithInlineWeights(
+            SerializedProperty toggleProp,
+            GUIContent label,
+            IReadOnlyList<(string Label, SerializedProperty Property)> weights)
+        {
+            const float fieldGap = 4.0f;
+            const float weightLabelWidth = 12.0f;
+            const float weightLabelGap = 2.0f;
+
+            var rect = EditorGUILayout.GetControlRect();
+            EditorGUI.PropertyField(rect, toggleProp, label);
+
+            if (weights == null) return;
+
+            var previousIndentLevel = EditorGUI.indentLevel;
+            EditorGUI.indentLevel++;
+            rect = EditorGUILayout.GetControlRect();
+            var valueRect = EditorGUI.PrefixLabel(rect, new GUIContent("Weight"));
+            var itemWidth = Mathf.Max(1.0f, (valueRect.width - fieldGap * (weights.Count - 1)) / weights.Count);
+            var fieldWidth = Mathf.Max(1.0f, itemWidth - weightLabelWidth - weightLabelGap);
+            EditorGUI.indentLevel = 0;
+            using (new EditorGUI.DisabledScope(!toggleProp.boolValue))
+            {
+                for (var i = 0; i < weights.Count; i++)
+                {
+                    var weight = weights[i];
+                    var itemRect = new Rect(valueRect.x + i * (itemWidth + fieldGap), valueRect.y, itemWidth, valueRect.height);
+                    var labelRect = new Rect(itemRect.x, itemRect.y, weightLabelWidth, itemRect.height);
+                    var fieldRect = new Rect(itemRect.x + weightLabelWidth + weightLabelGap, itemRect.y, fieldWidth, itemRect.height);
+                    GUI.Label(labelRect, weight.Label, EditorStyles.label);
+                    weight.Property.floatValue = Mathf.Clamp01(EditorGUI.FloatField(fieldRect, GUIContent.none, weight.Property.floatValue));
+                }
+            }
+            EditorGUI.indentLevel = previousIndentLevel;
         }
 
         private void DrawAdvancedSection(bool isPreviewing)
@@ -1741,6 +1844,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             serialized.FindProperty("onePieceUseLowerLegColliders").boolValue = UsesOnePieceLowerLegColliders(preset);
             serialized.FindProperty("onePieceUseFloorCollider").boolValue = UsesOnePieceFloorCollider(preset);
             serialized.FindProperty("onePieceUseFrontRootRotationConstraints").boolValue = preset != OnePiecePreset.MatchLongCoat;
+            ApplySerializedRotationConstraintWeightDefaults(serialized, preset);
             serialized.FindProperty("onePieceMoveFrontRootsTowardUpperLeg").floatValue = 0.0f;
             serialized.FindProperty("onePieceRootHeightOffsetMultiplier").floatValue = preset == OnePiecePreset.MatchLongCoat ? 0.0f : 0.4f;
             serialized.FindProperty("onePieceHipWeightReduction").floatValue = 0.5f;
@@ -1761,6 +1865,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             serialized.FindProperty("longCoatMoveFrontBonesOutward").boolValue = false;
             serialized.FindProperty("longCoatUseRotationConstraints").boolValue = true;
             serialized.FindProperty("longCoatUseFrontRootRotationConstraints").boolValue = false;
+            ApplySerializedRotationConstraintWeightDefaults(serialized, component.onePiecePreset);
             serialized.FindProperty("longCoatMoveConstrainedRootsTowardUpperLeg").floatValue = preset == LongCoatPreset.OpenFront ? 0.0f : 0.8f;
             serialized.FindProperty("longCoatAimFrontLimitsForward").boolValue = true;
             serialized.FindProperty("longCoatUseUpperLegColliders").boolValue = UsesLongCoatUpperLegColliders(preset);
@@ -1770,6 +1875,15 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             serialized.FindProperty("longCoatHipWeightReduction").floatValue = preset == LongCoatPreset.OpenFront ? 0.4f : 0.5f;
             serialized.FindProperty("longCoatSpineWeightReduction").floatValue = preset == LongCoatPreset.OpenFront ? 0.4f : 0.0f;
             serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void ApplySerializedRotationConstraintWeightDefaults(SerializedObject serialized, OnePiecePreset onePiecePreset)
+        {
+            serialized.FindProperty("onePieceFrontRootRotationConstraintWeight").floatValue = GetOnePieceFrontRootRotationConstraintWeightDefault(onePiecePreset);
+            serialized.FindProperty("longCoatFrontRootRotationConstraintWeight").floatValue = YMVRoidSkirtRefine.LongCoatFrontRootRotationConstraintWeightDefault;
+            serialized.FindProperty("longCoatFrontUpperRotationConstraintWeight").floatValue = YMVRoidSkirtRefine.LongCoatFrontUpperRotationConstraintWeightDefault;
+            serialized.FindProperty("longCoatSideUpperRotationConstraintWeight").floatValue = YMVRoidSkirtRefine.LongCoatSideUpperRotationConstraintWeightDefault;
+            serialized.FindProperty("longCoatBackUpperRotationConstraintWeight").floatValue = YMVRoidSkirtRefine.LongCoatBackUpperRotationConstraintWeightDefault;
         }
 
         private static bool HasAllBones(SkirtRefineBoneTargets bones)

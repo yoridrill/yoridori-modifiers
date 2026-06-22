@@ -498,6 +498,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     processedChains,
                     component.onePiecePhysBone,
                     onePieceColliders,
+                    component.onePieceFrontRootRotationConstraintWeight,
                     ToConstraintImplementationMode(component.constraintMode),
                     false,
                     component.verboseLog));
@@ -1053,6 +1054,9 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     component.longCoatPhysBone,
                     longCoatColliders,
                     ToConstraintImplementationMode(component.constraintMode),
+                    component.longCoatFrontUpperRotationConstraintWeight,
+                    component.longCoatSideUpperRotationConstraintWeight,
+                    component.longCoatBackUpperRotationConstraintWeight,
                     component.longCoatAimFrontLimitsForward,
                     component.verboseLog));
             }
@@ -1063,6 +1067,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     processedChains,
                     component.longCoatPhysBone,
                     longCoatColliders,
+                    component.longCoatFrontRootRotationConstraintWeight,
                     ToConstraintImplementationMode(component.constraintMode),
                     component.longCoatAimFrontLimitsForward,
                     component.verboseLog));
@@ -1302,7 +1307,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     if (direction.sqrMagnitude <= 1e-8f) return null;
 
                     var third = processed.FinalBones.Count > 2 ? processed.FinalBones[2] : null;
-                    return new OnePieceRootHeightEntry(root, second, third, direction.normalized);
+                    return new OnePieceRootHeightEntry(root, second, third, processed.FinalBones, direction.normalized);
                 })
                 .Where(entry => entry != null)
                 .ToList();
@@ -1318,6 +1323,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 entry.Root.position = entry.RootPosition + delta;
                 if (entry.Second != null) entry.Second.position = entry.SecondPosition + delta * (2.0f / 3.0f);
                 if (entry.Third != null) entry.Third.position = entry.ThirdPosition + delta * (1.0f / 3.0f);
+                entry.RestoreLowerBonePositions();
             }
 
             if (verboseLog)
@@ -1460,8 +1466,14 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             public readonly Vector3 RootPosition;
             public readonly Vector3 SecondPosition;
             public readonly Vector3 ThirdPosition;
+            private readonly List<(Transform Bone, Vector3 Position)> lowerBonePositions;
 
-            public OnePieceRootHeightEntry(Transform root, Transform second, Transform third, Vector3 direction)
+            public OnePieceRootHeightEntry(
+                Transform root,
+                Transform second,
+                Transform third,
+                IReadOnlyList<Transform> finalBones,
+                Vector3 direction)
             {
                 Root = root;
                 Second = second;
@@ -1470,6 +1482,22 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 RootPosition = root != null ? root.position : Vector3.zero;
                 SecondPosition = second != null ? second.position : Vector3.zero;
                 ThirdPosition = third != null ? third.position : Vector3.zero;
+                lowerBonePositions = finalBones != null
+                    ? finalBones
+                        .Skip(3)
+                        .Where(bone => bone != null)
+                        .Select(bone => (bone, bone.position))
+                        .ToList()
+                    : new List<(Transform Bone, Vector3 Position)>();
+            }
+
+            public void RestoreLowerBonePositions()
+            {
+                foreach (var (bone, position) in lowerBonePositions)
+                {
+                    if (bone == null) continue;
+                    bone.position = position;
+                }
             }
         }
 
@@ -2372,6 +2400,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             List<LongCoatProcessedChain> processedChains,
             SkirtRefinePhysBoneSettings physBoneSettings,
             List<VRCPhysBoneColliderBase> colliders,
+            float constraintWeight,
             ConstraintImplementationMode constraintMode,
             bool aimFrontLimitsForward,
             bool verboseLog)
@@ -2384,7 +2413,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 if (processed == null || !IsFrontChain(processed.Chain) || processed.FinalBones == null || processed.FinalBones.Count < 2) continue;
 
                 var source = ResolveUpperLegForChain(animator, processed.Chain);
-                AddOrUpdateRotationConstraint(processed.FinalBones[0], source, 0.8f, constraintMode, verboseLog);
+                AddOrUpdateRotationConstraint(processed.FinalBones[0], source, constraintWeight, constraintMode, verboseLog);
 
                 var physBoneRoot = processed.FinalBones[1];
                 if (physBoneRoot == null) continue;
@@ -2415,6 +2444,9 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             SkirtRefinePhysBoneSettings physBoneSettings,
             List<VRCPhysBoneColliderBase> colliders,
             ConstraintImplementationMode constraintMode,
+            float frontConstraintWeight,
+            float sideConstraintWeight,
+            float backConstraintWeight,
             bool aimFrontLimitsForward,
             bool verboseLog)
         {
@@ -2426,7 +2458,11 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 if (processed == null || processed.FinalBones == null || processed.FinalBones.Count == 0) continue;
 
                 var source = ResolveUpperLegForChain(animator, processed.Chain);
-                var constraintWeight = GetLongCoatRotationConstraintWeight(processed.Chain);
+                var constraintWeight = GetLongCoatRotationConstraintWeight(
+                    processed.Chain,
+                    frontConstraintWeight,
+                    sideConstraintWeight,
+                    backConstraintWeight);
                 if (processed.FinalBones.Count > 0)
                 {
                     AddOrUpdateRotationConstraint(processed.FinalBones[0], source, constraintWeight, constraintMode, verboseLog);
@@ -2496,13 +2532,17 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 : animator.GetBoneTransform(HumanBodyBones.LeftLowerLeg);
         }
 
-        private static float GetLongCoatRotationConstraintWeight(OnePieceChain chain)
+        private static float GetLongCoatRotationConstraintWeight(
+            OnePieceChain chain,
+            float frontConstraintWeight,
+            float sideConstraintWeight,
+            float backConstraintWeight)
         {
-            if (chain == null || string.IsNullOrEmpty(chain.Label)) return 0.6f;
-            if (IsFrontChain(chain)) return 0.8f;
-            if (chain.Label.IndexOf("Side", StringComparison.OrdinalIgnoreCase) >= 0) return 0.6f;
-            if (chain.Label.IndexOf("Back", StringComparison.OrdinalIgnoreCase) >= 0) return 0.3f;
-            return 0.8f;
+            if (chain == null || string.IsNullOrEmpty(chain.Label)) return sideConstraintWeight;
+            if (IsFrontChain(chain)) return frontConstraintWeight;
+            if (chain.Label.IndexOf("Side", StringComparison.OrdinalIgnoreCase) >= 0) return sideConstraintWeight;
+            if (chain.Label.IndexOf("Back", StringComparison.OrdinalIgnoreCase) >= 0) return backConstraintWeight;
+            return frontConstraintWeight;
         }
 
         private static bool IsFrontChain(OnePieceChain chain)

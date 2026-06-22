@@ -1,0 +1,21 @@
+{
+    "name": "YoridoriModifiers.FacialMapper.Editor",
+    "rootNamespace": "YoridoriModifiers.FacialMapper",
+    "references": [
+        "nadena.dev.ndmf",
+        "YoridoriModifiers.Core.Editor",
+        "YoridoriModifiers.FacialMapper.Runtime",
+        "VRC.SDK3A"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

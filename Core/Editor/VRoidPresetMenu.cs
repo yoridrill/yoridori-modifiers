@@ -4,6 +4,7 @@ using UnityEditor;
 using UnityEngine;
 using YoridoriModifiers.ArmPatch;
 using YoridoriModifiers.EyeFreeze;
+using YoridoriModifiers.FacialMapper;
 using YoridoriModifiers.MeshTrimmer;
 using YoridoriModifiers.MToonToLilToon;
 using YoridoriModifiers.VRoidSkirtRefine;
@@ -61,6 +62,9 @@ namespace YoridoriModifiers.Core.Editor
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Eye Freeze", false, -888)]
         private static void AddVRoidEyeFreeze() => AddSingleComponentToRoot<YMEyeFreeze>("Add YM Eye Freeze with VRoid Defaults");
 
+        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Facial Mapper", false, -887)]
+        private static void AddVRoidFacialMapper() => AddFacialMapperToRoot("Add YM Facial Mapper with VRoid Defaults");
+
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Arm Patch/(via VRM 0.0) Long Sleeves", false, -887)]
         private static void AddVRoid00LongSleevesArmPatch() => AddArmPatchToRoot(SleevePreset.LongSleeves, true);
 
@@ -83,6 +87,7 @@ namespace YoridoriModifiers.Core.Editor
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Mesh Trimmer", true)]
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM MToon to lilToon", true)]
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Eye Freeze", true)]
+        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Facial Mapper", true)]
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Arm Patch/(via VRM 0.0) Long Sleeves", true)]
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Arm Patch/(via VRM 0.0) Short Sleeves", true)]
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Arm Patch/(via VRM 0.0) Kimono", true)]
@@ -195,6 +200,24 @@ namespace YoridoriModifiers.Core.Editor
             EditorUtility.SetDirty(target);
         }
 
+        private static void AddFacialMapperToRoot(string undoName)
+        {
+            var target = Selection.activeGameObject;
+            if (target == null) return;
+            var avatarRoot = ResolveAvatarRoot(target);
+
+            Undo.SetCurrentGroupName(undoName);
+            int undoGroup = Undo.GetCurrentGroup();
+
+            if (TryAddSinglePerAvatarComponent<YMFacialMapper>(target, avatarRoot, out var component))
+            {
+                ConfigureFacialMapper(component);
+            }
+
+            Undo.CollapseUndoOperations(undoGroup);
+            EditorUtility.SetDirty(target);
+        }
+
         private static void AddMeshTrimmerComponents(GameObject target)
         {
             var mobileTrimmer = Undo.AddComponent<MeshTrimmerComponent>(target);
@@ -213,6 +236,14 @@ namespace YoridoriModifiers.Core.Editor
             component.faceShadowFaceMaterial = faceMaterial;
             component.fakeShadowFaceMaterial = faceMaterial;
             component.faceShadowSdfTexture = LoadDefaultFaceShadowMaskTexture();
+            EditorUtility.SetDirty(component);
+        }
+
+        private static void ConfigureFacialMapper(YMFacialMapper component)
+        {
+            if (component == null) return;
+            Undo.RecordObject(component, "Configure YM Facial Mapper");
+            YMFacialMapperDefaults.ApplyEyeMouthSplitForVRoid(component);
             EditorUtility.SetDirty(component);
         }
 

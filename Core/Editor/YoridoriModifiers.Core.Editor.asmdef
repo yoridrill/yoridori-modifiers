@@ -4,6 +4,7 @@
     "references": [
         "YoridoriModifiers.ArmPatch.Runtime",
         "YoridoriModifiers.EyeFreeze.Runtime",
+        "YoridoriModifiers.FacialMapper.Runtime",
         "YoridoriModifiers.MToonToLilToon.Runtime",
         "YoridoriModifiers.MeshTrimmer.Runtime",
         "YoridoriModifiers.VRoidSkirtRefine.Runtime",

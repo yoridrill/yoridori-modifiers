@@ -1,0 +1,176 @@
+{
+  "version": 1,
+  "presets": [
+    {
+      "name": "Empty",
+      "memo": "空のプリセットです。\nEyelid/Visemeタグを設定することで\nまばたきや口パクの排他処理が可能です。\n\nThis is an empty preset. \nBy setting the Eyelid/Viseme tags, \nyou can enable exclusive processing \nfor blinking and lip-syncing.",
+      "neutral": {
+        "eyelidLeft": false,
+        "eyelidRight": false,
+        "viseme": false,
+        "shapeKeys": []
+      },
+      "handSigns": [
+        { "sign": "Fist", "left": { "eyelidLeft": false, "eyelidRight": false, "viseme": false, "shapeKeys": [] }, "right": { "eyelidLeft": false, "eyelidRight": false, "viseme": false, "shapeKeys": [] } },
+        { "sign": "HandOpen", "left": { "eyelidLeft": false, "eyelidRight": false, "viseme": false, "shapeKeys": [] }, "right": { "eyelidLeft": false, "eyelidRight": false, "viseme": false, "shapeKeys": [] } },
+        { "sign": "FingerPoint", "left": { "eyelidLeft": false, "eyelidRight": false, "viseme": false, "shapeKeys": [] }, "right": { "eyelidLeft": false, "eyelidRight": false, "viseme": false, "shapeKeys": [] } },
+        { "sign": "Victory", "left": { "eyelidLeft": false, "eyelidRight": false, "viseme": false, "shapeKeys": [] }, "right": { "eyelidLeft": false, "eyelidRight": false, "viseme": false, "shapeKeys": [] } },
+        { "sign": "RockNRoll", "left": { "eyelidLeft": false, "eyelidRight": false, "viseme": false, "shapeKeys": [] }, "right": { "eyelidLeft": false, "eyelidRight": false, "viseme": false, "shapeKeys": [] } },
+        { "sign": "HandGun", "left": { "eyelidLeft": false, "eyelidRight": false, "viseme": false, "shapeKeys": [] }, "right": { "eyelidLeft": false, "eyelidRight": false, "viseme": false, "shapeKeys": [] } },
+        { "sign": "ThumbsUp", "left": { "eyelidLeft": false, "eyelidRight": false, "viseme": false, "shapeKeys": [] }, "right": { "eyelidLeft": false, "eyelidRight": false, "viseme": false, "shapeKeys": [] } }
+      ]
+    },
+    {
+      "name": "Eye-Mouth Split for VRoid",
+      "memo": "◆ 左手に眉と目、右手に口  Left: Eyebrows+Eyes / Right: Mouth\n　Fist: Angry\n　Victory: Joy\n　RockNRoll: Sorrow\n　HandGun: Surprised\n　ThumbsUp: Fun\n\n◆ 左手に左目、右手に右目  Left: Left eye / Right: Right eye\n　HandOpen: Joy\n　FingerPoint: Close",
+      "neutral": {
+        "eyelidLeft": false,
+        "eyelidRight": false,
+        "viseme": false,
+        "shapeKeys": [
+          "Fcl_ALL_Neutral"
+        ]
+      },
+      "handSigns": [
+        {
+          "sign": "Fist",
+          "left": {
+            "eyelidLeft": true,
+            "eyelidRight": true,
+            "viseme": false,
+            "shapeKeys": [
+              "Fcl_BRW_Angry",
+              "Fcl_EYE_Angry"
+            ]
+          },
+          "right": {
+            "eyelidLeft": false,
+            "eyelidRight": false,
+            "viseme": false,
+            "shapeKeys": [
+              "Fcl_MTH_Angry"
+            ]
+          }
+        },
+        {
+          "sign": "HandOpen",
+          "left": {
+            "eyelidLeft": true,
+            "eyelidRight": false,
+            "viseme": false,
+            "shapeKeys": [
+              "Fcl_EYE_Joy_L"
+            ]
+          },
+          "right": {
+            "eyelidLeft": false,
+            "eyelidRight": true,
+            "viseme": false,
+            "shapeKeys": [
+              "Fcl_EYE_Joy_R"
+            ]
+          }
+        },
+        {
+          "sign": "FingerPoint",
+          "left": {
+            "eyelidLeft": true,
+            "eyelidRight": false,
+            "viseme": false,
+            "shapeKeys": [
+              "Fcl_EYE_Close_L"
+            ]
+          },
+          "right": {
+            "eyelidLeft": false,
+            "eyelidRight": true,
+            "viseme": false,
+            "shapeKeys": [
+              "Fcl_EYE_Close_R"
+            ]
+          }
+        },
+        {
+          "sign": "Victory",
+          "left": {
+            "eyelidLeft": true,
+            "eyelidRight": true,
+            "viseme": false,
+            "shapeKeys": [
+              "Fcl_BRW_Joy",
+              "Fcl_EYE_Joy"
+            ]
+          },
+          "right": {
+            "eyelidLeft": false,
+            "eyelidRight": false,
+            "viseme": true,
+            "shapeKeys": [
+              "Fcl_MTH_Joy"
+            ]
+          }
+        },
+        {
+          "sign": "RockNRoll",
+          "left": {
+            "eyelidLeft": true,
+            "eyelidRight": true,
+            "viseme": false,
+            "shapeKeys": [
+              "Fcl_BRW_Sorrow",
+              "Fcl_EYE_Sorrow"
+            ]
+          },
+          "right": {
+            "eyelidLeft": false,
+            "eyelidRight": false,
+            "viseme": false,
+            "shapeKeys": [
+              "Fcl_MTH_Sorrow"
+            ]
+          }
+        },
+        {
+          "sign": "HandGun",
+          "left": {
+            "eyelidLeft": true,
+            "eyelidRight": true,
+            "viseme": false,
+            "shapeKeys": [
+              "Fcl_BRW_Surprised",
+              "Fcl_EYE_Surprised"
+            ]
+          },
+          "right": {
+            "eyelidLeft": false,
+            "eyelidRight": false,
+            "viseme": true,
+            "shapeKeys": [
+              "Fcl_MTH_Surprised"
+            ]
+          }
+        },
+        {
+          "sign": "ThumbsUp",
+          "left": {
+            "eyelidLeft": true,
+            "eyelidRight": true,
+            "viseme": false,
+            "shapeKeys": [
+              "Fcl_BRW_Fun",
+              "Fcl_EYE_Fun"
+            ]
+          },
+          "right": {
+            "eyelidLeft": false,
+            "eyelidRight": false,
+            "viseme": false,
+            "shapeKeys": [
+              "Fcl_MTH_Fun"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

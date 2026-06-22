@@ -133,7 +133,7 @@ namespace YoridoriModifiers.FacialMapper
                         break;
                     case YMFacialMapper.HandSign.HandGun:
                         ConfigureSlot(setting.left, true, true, false, "Fcl_BRW_Surprised", "Fcl_EYE_Surprised");
-                        ConfigureSlot(setting.right, false, false, false, "Fcl_MTH_Surprised");
+                        ConfigureSlot(setting.right, false, false, true, "Fcl_MTH_Surprised");
                         break;
                     case YMFacialMapper.HandSign.ThumbsUp:
                         ConfigureSlot(setting.left, true, true, false, "Fcl_BRW_Fun", "Fcl_EYE_Fun");

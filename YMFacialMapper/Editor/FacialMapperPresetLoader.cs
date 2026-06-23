@@ -76,7 +76,10 @@ namespace YoridoriModifiers.FacialMapper
             }
             catch (Exception ex)
             {
-                LogUtility.Warning(ToolName, "Preset", $"Failed to parse {source} preset JSON: {ex.Message} ({path})");
+                if (verbose)
+                {
+                    LogUtility.Warning(ToolName, "Preset", $"Failed to parse {source} preset JSON: {ex.Message} ({path})");
+                }
                 return;
             }
 

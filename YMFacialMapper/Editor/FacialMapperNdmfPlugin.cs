@@ -83,7 +83,12 @@ namespace YoridoriModifiers.FacialMapper
             var renderers = BuildRendererMap(avatarRoot, descriptor, shapeNames, component.verboseLog);
             if (shapeNames.Length > 0 && renderers.Count == 0)
             {
-                LogUtility.Warning(ToolName, "Build", "No SkinnedMeshRenderer with configured shape keys was found. Expression states may be empty.", component);
+                LogUtility.Verbose(
+                    ToolName,
+                    component.verboseLog,
+                    "Build",
+                    "No SkinnedMeshRenderer with configured shape keys was found. Expression states may be empty.",
+                    component);
             }
 
             StripOriginalGestureLayerFaceCurves(context, descriptor, component);
@@ -475,7 +480,7 @@ namespace YoridoriModifiers.FacialMapper
                 }
                 else
                 {
-                    LogUtility.Warning(ToolName, "ShapeKey", $"Shape key not found: {shapeName}");
+                    LogUtility.Verbose(ToolName, verbose, "ShapeKey", $"Shape key not found: {shapeName}");
                 }
             }
 

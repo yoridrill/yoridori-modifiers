@@ -116,7 +116,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             SessionState.SetString(KeyComponentPath, PreviewCoordinator.BuildRelativePath(avatarRoot.transform, component.transform));
             SessionState.SetString(KeyPreviewJson, JsonUtility.ToJson(PreviewSnapshot.From(component, avatarRoot.transform)));
             SessionState.EraseString(KeySavedJson);
-            SuspendNdmfApplyOnPlayForPreview();
+            SuspendNdmfApplyOnPlayForPreview(component);
 
             _avatarRoot = avatarRoot;
             _component = component;
@@ -361,7 +361,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             SessionState.EraseBool(KeyNdmfApplyOnPlayPrevious);
         }
 
-        private static void SuspendNdmfApplyOnPlayForPreview()
+        private static void SuspendNdmfApplyOnPlayForPreview(YMVRoidSkirtRefine component)
         {
             if (!SessionState.GetBool(KeyNdmfApplyOnPlayStored, false))
             {
@@ -372,7 +372,11 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             if (Config.ApplyOnPlay)
             {
                 Config.ApplyOnPlay = false;
-                LogUtility.Info(ToolName, "Preview", "Temporarily disabled NDMF Apply On Play for skirt preview.");
+                LogUtility.Verbose(
+                    ToolName,
+                    component != null && component.verboseLog,
+                    "Preview",
+                    "Temporarily disabled NDMF Apply On Play for skirt preview.");
             }
         }
 
@@ -384,8 +388,19 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             if (Config.ApplyOnPlay != previous)
             {
                 Config.ApplyOnPlay = previous;
-                LogUtility.Info(ToolName, "Preview", $"Restored NDMF Apply On Play: {previous}");
+                LogUtility.Verbose(
+                    ToolName,
+                    IsPreviewVerbose(),
+                    "Preview",
+                    $"Restored NDMF Apply On Play: {previous}");
             }
+        }
+
+        private static bool IsPreviewVerbose()
+        {
+            if (_component != null) return _component.verboseLog;
+            var component = FindStoredComponent();
+            return component != null && component.verboseLog;
         }
 
         private static GameObject FindStoredAvatarRoot()

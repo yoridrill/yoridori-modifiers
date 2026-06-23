@@ -192,7 +192,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
             if (!TryFindVqtAvatarConverterSettings(avatarRoot, out var settings))
             {
-                Debug.LogWarning($"[{ToolName}] VQT was not found. Generated dynamics were not added to the VQT keep list.");
+                VerboseWarning(component, "VQT was not found. Generated dynamics were not added to the VQT keep list.");
                 return;
             }
 
@@ -234,7 +234,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             var totalColliderCount = CountObjectArrayField(settings, "physBoneCollidersToKeep") + additionalColliderCount;
             if (totalPhysBoneCount > QuestPhysBoneComponentLimit || totalColliderCount > QuestPhysBoneColliderLimit)
             {
-                Debug.LogWarning($"[{ToolName}] VQT keep list limits would be exceeded. Generated dynamics were not added to the VQT keep list.");
+                VerboseWarning(component, "VQT keep list limits would be exceeded. Generated dynamics were not added to the VQT keep list.");
                 return;
             }
 
@@ -262,6 +262,12 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             }
 
             return false;
+        }
+
+        private static void VerboseWarning(YMVRoidSkirtRefine component, string message)
+        {
+            if (component == null || !component.verboseLog) return;
+            Debug.LogWarning($"[{ToolName}] {message}", component);
         }
 
         private static int CountObjectArrayField(Component component, string fieldName)
@@ -2471,7 +2477,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 if (processed.FinalBones.Count > 2)
                 {
                     var lowerLegSource = ResolveLowerLegForChain(animator, processed.Chain);
-                    var lowerLegConstraintWeight = IsFrontChain(processed.Chain) ? 0.4f : 0.5f;
+                    var lowerLegConstraintWeight = GetLongCoatLowerLegRotationConstraintWeight(processed.Chain);
                     AddOrUpdateRotationConstraint(processed.FinalBones[2], lowerLegSource, lowerLegConstraintWeight, constraintMode, verboseLog);
                 }
 
@@ -2543,6 +2549,15 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             if (chain.Label.IndexOf("Side", StringComparison.OrdinalIgnoreCase) >= 0) return sideConstraintWeight;
             if (chain.Label.IndexOf("Back", StringComparison.OrdinalIgnoreCase) >= 0) return backConstraintWeight;
             return frontConstraintWeight;
+        }
+
+        private static float GetLongCoatLowerLegRotationConstraintWeight(OnePieceChain chain)
+        {
+            if (chain == null || string.IsNullOrEmpty(chain.Label)) return 0.7f;
+            if (IsFrontChain(chain)) return 0.4f;
+            if (chain.Label.IndexOf("Side", StringComparison.OrdinalIgnoreCase) >= 0) return 0.7f;
+            if (chain.Label.IndexOf("Back", StringComparison.OrdinalIgnoreCase) >= 0) return 0.9f;
+            return 0.4f;
         }
 
         private static bool IsFrontChain(OnePieceChain chain)

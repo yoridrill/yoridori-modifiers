@@ -346,13 +346,18 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         private void DrawDynamicsUsageAndVqtKeepList(YMVRoidSkirtRefine component, bool isPreviewing)
         {
             var avatarRoot = component != null ? PreviewCoordinator.FindAvatarRoot(component.gameObject) : null;
-            var estimate = EstimateDynamicsUsage(component, avatarRoot);
-            var message = string.Join(
-                "\n",
-                T("今の設定で増える Rotation Constraint 数", "Rotation Constraints added by current settings") + $": {estimate.GeneratedRotationConstraints}",
-                T("スカート関連の PhysBone コンポーネント数", "Skirt-related PhysBone components") + $": {FormatDynamicsChange(estimate.SourcePhysBones, estimate.GeneratedPhysBones)}",
-                T("スカート関連の PhysBone コライダー数", "Skirt-related PhysBone colliders") + $": {FormatDynamicsChange(estimate.SourcePhysBoneColliders, estimate.GeneratedPhysBoneColliders)}");
-            EditorGUILayout.HelpBox(message, MessageType.Info);
+            DynamicsUsageEstimate estimate = null;
+            if (!isPreviewing)
+            {
+                estimate = EstimateDynamicsUsage(component, avatarRoot);
+                var anyRefineEnabled = component != null && (component.enableOnePieceRefine || component.enableLongCoatRefine);
+                var message = string.Join(
+                    "\n",
+                    T("今の設定で増える Rotation Constraint 数", "Rotation Constraints added by current settings") + $": {estimate.GeneratedRotationConstraints}",
+                    T("スカート関連の PhysBone コンポーネント数", "Skirt-related PhysBone components") + $": {FormatDynamicsChange(estimate.SourcePhysBones, estimate.GeneratedPhysBones, anyRefineEnabled)}",
+                    T("スカート関連の PhysBone コライダー数", "Skirt-related PhysBone colliders") + $": {FormatDynamicsChange(estimate.SourcePhysBoneColliders, estimate.GeneratedPhysBoneColliders, anyRefineEnabled)}");
+                EditorGUILayout.HelpBox(message, MessageType.Info);
+            }
 
             using (new EditorGUI.DisabledScope(isPreviewing))
             {
@@ -365,7 +370,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                         "Adds generated PhysBones and PhysBoneColliders to VRCQuestTools Avatar Dynamics keep lists."));
             }
 
-            if (!addGeneratedDynamicsToVqtKeepListProp.boolValue) return;
+            if (isPreviewing || !addGeneratedDynamicsToVqtKeepListProp.boolValue) return;
 
             if (!TryGetVqtKeepListStatus(component, avatarRoot, estimate, out var statusMessage))
             {
@@ -373,9 +378,9 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             }
         }
 
-        private string FormatDynamicsChange(int source, int generated)
+        private string FormatDynamicsChange(int source, int generated, bool anyRefineEnabled)
         {
-            return source == generated
+            return !anyRefineEnabled && source == generated
                 ? T("増減なし", "No change")
                 : $"{source} \u2192 {generated}";
         }
@@ -1404,7 +1409,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
         private static void ApplyOpenFrontPhysBonePreset(SerializedProperty settingsProp, float radius = 0.05f)
         {
-            ApplyPhysBoneValues(settingsProp, 0.18f, 0.45f, 0.25f, 0.35f, 0.9f, 0.7f, SkirtRefinePhysBoneLimitType.Polar, 45.0f, -45.0f, SkirtRefinePhysBonePermission.False, SkirtRefinePhysBonePermission.Other, 0.0f, 30.0f, radius, CreateConvexRadiusCurve(), AnimationCurve.Linear(0.0f, 0.0f, 1.0f, 1.0f));
+            ApplyPhysBoneValues(settingsProp, 0.18f, 0.45f, 0.25f, 0.35f, 0.9f, 0.7f, SkirtRefinePhysBoneLimitType.Polar, 50.0f, -45.0f, SkirtRefinePhysBonePermission.False, SkirtRefinePhysBonePermission.Other, 0.0f, 30.0f, radius, CreateConvexRadiusCurve(), AnimationCurve.Linear(0.0f, 0.0f, 1.0f, 1.0f));
         }
 
         private static void ApplyLongCoatLongSkirtLightPhysBonePreset(SerializedProperty settingsProp)

@@ -238,7 +238,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
         [Tooltip("Raise generated long coat root bones toward UpperLeg. -1 keeps the extended height, 0 aligns to UpperLeg height, and positive values add generated UpperLeg collider radius.")]
         [Range(-1.0f, 2.0f)]
-        public float longCoatRootHeightOffsetMultiplier = 1.0f;
+        public float longCoatRootHeightOffsetMultiplier = 0.6f;
 
         [Tooltip("Reduce Hip weight on vertices affected by long coat reweighting.")]
         [Range(0.0f, 1.0f)]
@@ -275,7 +275,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
         [Tooltip("Move constrained long coat root bones toward UpperLeg when rotation constraints are used.")]
         [Range(0.0f, 1.0f)]
-        public float longCoatMoveConstrainedRootsTowardUpperLeg = 1.0f;
+        public float longCoatMoveConstrainedRootsTowardUpperLeg = 0.8f;
 
         [Tooltip("Aim front per-chain PhysBone limits forward when long coat rotation constraint mode creates front per-chain PhysBones.")]
         public bool longCoatAimFrontLimitsForward = false;
@@ -396,7 +396,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             longCoatMatchOnePiece = false;
             enableLongCoatBoneExtension = true;
             longCoatShortSkirtUsePrependedRootsOnly = false;
-            longCoatRootHeightOffsetMultiplier = 1.0f;
+            longCoatRootHeightOffsetMultiplier = 0.6f;
             longCoatHipWeightReduction = 0.5f;
             longCoatSpineWeightReduction = 0.0f;
             longCoatMoveFrontBonesOutward = false;
@@ -406,7 +406,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             longCoatFrontUpperRotationConstraintWeight = LongCoatFrontUpperRotationConstraintWeightDefault;
             longCoatSideUpperRotationConstraintWeight = LongCoatSideUpperRotationConstraintWeightDefault;
             longCoatBackUpperRotationConstraintWeight = LongCoatBackUpperRotationConstraintWeightDefault;
-            longCoatMoveConstrainedRootsTowardUpperLeg = 1.0f;
+            longCoatMoveConstrainedRootsTowardUpperLeg = 0.8f;
             longCoatAimFrontLimitsForward = true;
             longCoatUseUpperLegColliders = false;
             longCoatUseLowerLegColliders = true;
@@ -482,12 +482,5 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             settings.immobile = 0.9f;
         }
 
-        private static AnimationCurve CreateConvexRadiusCurve()
-        {
-            return new AnimationCurve(
-                new Keyframe(0.0f, 0.0f, 0.0f, 0.0f),
-                new Keyframe(0.5f, 0.25f, 1.0f, 1.0f),
-                new Keyframe(1.0f, 1.0f, 2.0f, 2.0f));
-        }
     }
 }

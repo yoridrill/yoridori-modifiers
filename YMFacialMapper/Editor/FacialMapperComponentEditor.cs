@@ -161,7 +161,10 @@ namespace YoridoriModifiers.FacialMapper
             using (new EditorGUI.IndentLevelScope())
             {
                 EditorGUILayout.LabelField(T("Neutral", "Neutral"), EditorStyles.boldLabel);
-                DrawSlot("Shape Key", _neutralProp, true);
+                using (new EditorGUI.IndentLevelScope())
+                {
+                    DrawSlot("Shape Key", _neutralProp, true);
+                }
 
                 for (var i = 0; i < _handSignsProp.arraySize; i++)
                 {

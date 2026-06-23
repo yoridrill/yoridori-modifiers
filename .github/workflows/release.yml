@@ -57,10 +57,14 @@ jobs:
             YMArmPatch.meta
             YMEyeFreeze
             YMEyeFreeze.meta
+            YMFacialMapper
+            YMFacialMapper.meta
             YMMToonToLilToon
             YMMToonToLilToon.meta
             YMMeshTrimmer
             YMMeshTrimmer.meta
+            YMVRoidSkirtRefine
+            YMVRoidSkirtRefine.meta
           )
 
           for entry in "${entries[@]}"; do
@@ -91,8 +95,10 @@ jobs:
           grep -Fxq "Core/" dist/zip-list.txt
           grep -Fxq "YMArmPatch/" dist/zip-list.txt
           grep -Fxq "YMEyeFreeze/" dist/zip-list.txt
+          grep -Fxq "YMFacialMapper/" dist/zip-list.txt
           grep -Fxq "YMMToonToLilToon/" dist/zip-list.txt
           grep -Fxq "YMMeshTrimmer/" dist/zip-list.txt
+          grep -Fxq "YMVRoidSkirtRefine/" dist/zip-list.txt
           ! grep -q ".DS_Store" dist/zip-list.txt
 
       - name: Create GitHub Release

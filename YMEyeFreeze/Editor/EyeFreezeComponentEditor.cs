@@ -1,3 +1,4 @@
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 using VRC.SDK3.Avatars.Components;
@@ -114,6 +115,48 @@ namespace YoridoriModifiers.EyeFreeze
                 return;
             }
 
+            DrawExpressionParameterCapacityWarning(parentDescriptor, component);
+        }
+
+        private void DrawExpressionParameterCapacityWarning(VRCAvatarDescriptor descriptor, YMEyeFreeze component)
+        {
+            if (descriptor == null || component == null) return;
+
+            var parameterName = string.IsNullOrWhiteSpace(component.parameterName)
+                ? "YM/EyeFreeze"
+                : component.parameterName.Trim();
+            if (string.IsNullOrWhiteSpace(parameterName)) return;
+
+            var parameters = descriptor.expressionParameters;
+            var list = parameters != null && parameters.parameters != null
+                ? parameters.parameters
+                : System.Array.Empty<VRC.SDK3.Avatars.ScriptableObjects.VRCExpressionParameters.Parameter>();
+
+            var existing = list.FirstOrDefault(parameter => parameter != null && parameter.name == parameterName);
+            if (existing != null)
+            {
+                EditorGUILayout.HelpBox(
+                    T(
+                        $"Expression Parameters に `{parameterName}` が既に存在します。別の設定と名前が衝突している可能性があるため、YM Eye Freeze のパラメータ名を変更してください。",
+                        $"`{parameterName}` already exists in Expression Parameters. It may conflict with another setup, so change the YM Eye Freeze parameter name."),
+                    MessageType.Warning);
+                return;
+            }
+
+            var usedCost = list.Sum(parameter => parameter == null
+                ? 0
+                : VRC.SDK3.Avatars.ScriptableObjects.VRCExpressionParameters.TypeCost(parameter.valueType));
+            var requiredCost = VRC.SDK3.Avatars.ScriptableObjects.VRCExpressionParameters.TypeCost(
+                VRC.SDK3.Avatars.ScriptableObjects.VRCExpressionParameters.ValueType.Bool);
+            var maxCost = VRC.SDK3.Avatars.ScriptableObjects.VRCExpressionParameters.MAX_PARAMETER_COST;
+
+            if (usedCost + requiredCost <= maxCost) return;
+
+            EditorGUILayout.HelpBox(
+                T(
+                    $"Expression Parameters の容量が不足しています。`{parameterName}` を追加できないため、ビルド時に YM Eye Freeze のExメニュー項目は追加されません。現在 {usedCost}/{maxCost}、必要 {requiredCost} です。",
+                    $"Expression Parameters are full. `{parameterName}` cannot be added, so the YM Eye Freeze Ex Menu control will not be added at build time. Current {usedCost}/{maxCost}, required {requiredCost}."),
+                MessageType.Warning);
         }
 
         private static YMEyeFreeze SelectPreferredComponentForBuild(YMEyeFreeze[] components, GameObject avatarRoot)

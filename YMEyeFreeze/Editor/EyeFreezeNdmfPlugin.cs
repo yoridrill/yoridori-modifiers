@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using nadena.dev.ndmf;
 using UnityEditor;
@@ -22,6 +23,11 @@ namespace YoridoriModifiers.EyeFreeze
         private const string IconPath = "Packages/jp.yoridrill.yoridori-modifiers/icon.png";
         private const string LeftEyeTargetName = "YM_LeftEye_FreezeRotationTarget";
         private const string RightEyeTargetName = "YM_RightEye_FreezeRotationTarget";
+        private static readonly string[] JerryEyeTrackingActiveParameterCandidates =
+        {
+            "EyeTrackingActive",
+            "FT/EyeTrackingActive"
+        };
 
         public override string QualifiedName => QualifiedPluginName;
         public override string DisplayName => ToolName;
@@ -112,8 +118,14 @@ namespace YoridoriModifiers.EyeFreeze
             var controller = BuildFxController(context, descriptor, parameterName, offClip, onClip);
             if (controller == null) return;
 
-            MergeExpressionParameter(context, descriptor, parameterName, component.saved, component.synced);
-            MergeExpressionMenu(context, descriptor, menuName, parameterName);
+            if (MergeExpressionParameter(context, descriptor, parameterName, component.saved, component.synced))
+            {
+                MergeExpressionMenu(context, descriptor, menuName, parameterName);
+            }
+            else
+            {
+                RemoveExpressionMenuControl(context, descriptor, parameterName);
+            }
         }
 
         private static Transform CreateFreezeTarget(Transform head, Transform eye, string targetName)
@@ -201,8 +213,10 @@ namespace YoridoriModifiers.EyeFreeze
             controller.name = "YM Eye Freeze FX";
             context.AssetSaver.SaveAsset(controller);
 
+            EnsureBlendTreeParameters(controller);
             AddBoolParameterIfMissing(controller, parameterName);
-            AddEyeFreezeLayer(controller, parameterName, offClip, onClip);
+            var eyeTrackingActiveParameter = FindExistingParameterName(controller, JerryEyeTrackingActiveParameterCandidates);
+            AddEyeFreezeLayer(controller, parameterName, offClip, onClip, eyeTrackingActiveParameter);
 
             descriptor.customizeAnimationLayers = true;
             var layers = descriptor.baseAnimationLayers;
@@ -261,11 +275,87 @@ namespace YoridoriModifiers.EyeFreeze
             });
         }
 
+        private static string FindExistingParameterName(AnimatorController controller, string[] candidates)
+        {
+            if (controller == null || candidates == null) return null;
+
+            foreach (var candidate in candidates)
+            {
+                if (string.IsNullOrWhiteSpace(candidate)) continue;
+                var parameterName = candidate.Trim();
+                if (controller.parameters.Any(parameter => parameter.name == parameterName))
+                {
+                    return parameterName;
+                }
+            }
+
+            return null;
+        }
+
+        private static void EnsureBlendTreeParameters(AnimatorController controller)
+        {
+            if (controller == null) return;
+
+            var existing = new HashSet<string>(controller.parameters.Select(parameter => parameter.name), StringComparer.Ordinal);
+            var referenced = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var layer in controller.layers)
+            {
+                CollectBlendTreeParameters(layer?.stateMachine, referenced);
+            }
+
+            foreach (var parameterName in referenced.OrderBy(name => name, StringComparer.Ordinal))
+            {
+                if (string.IsNullOrWhiteSpace(parameterName) || existing.Contains(parameterName)) continue;
+                controller.AddParameter(new AnimatorControllerParameter
+                {
+                    name = parameterName,
+                    type = AnimatorControllerParameterType.Float,
+                    defaultFloat = 0f
+                });
+                existing.Add(parameterName);
+            }
+        }
+
+        private static void CollectBlendTreeParameters(AnimatorStateMachine stateMachine, HashSet<string> parameters)
+        {
+            if (stateMachine == null || parameters == null) return;
+
+            foreach (var childState in stateMachine.states)
+            {
+                CollectBlendTreeParameters(childState.state?.motion, parameters);
+            }
+
+            foreach (var childMachine in stateMachine.stateMachines)
+            {
+                CollectBlendTreeParameters(childMachine.stateMachine, parameters);
+            }
+        }
+
+        private static void CollectBlendTreeParameters(Motion motion, HashSet<string> parameters)
+        {
+            if (motion is not BlendTree blendTree || parameters == null) return;
+
+            AddParameterName(parameters, blendTree.blendParameter);
+            AddParameterName(parameters, blendTree.blendParameterY);
+            foreach (var child in blendTree.children)
+            {
+                AddParameterName(parameters, child.directBlendParameter);
+                CollectBlendTreeParameters(child.motion, parameters);
+            }
+        }
+
+        private static void AddParameterName(HashSet<string> parameters, string parameterName)
+        {
+            if (parameters == null || string.IsNullOrWhiteSpace(parameterName)) return;
+            parameters.Add(parameterName.Trim());
+        }
+
         private static void AddEyeFreezeLayer(
             AnimatorController controller,
             string parameterName,
             AnimationClip offClip,
-            AnimationClip onClip)
+            AnimationClip onClip,
+            string eyeTrackingActiveParameter)
         {
             var existingLayers = controller.layers
                 .Where(layer => layer != null && layer.name != ToolName)
@@ -293,13 +383,53 @@ namespace YoridoriModifiers.EyeFreeze
             var toOn = offState.AddTransition(onState);
             ConfigureTransition(toOn);
             toOn.AddCondition(AnimatorConditionMode.If, 0f, parameterName);
+            if (!string.IsNullOrWhiteSpace(eyeTrackingActiveParameter))
+            {
+                AddFalsyCondition(toOn, controller, eyeTrackingActiveParameter);
+            }
 
             var toOff = onState.AddTransition(offState);
             ConfigureTransition(toOff);
             toOff.AddCondition(AnimatorConditionMode.IfNot, 0f, parameterName);
+            if (!string.IsNullOrWhiteSpace(eyeTrackingActiveParameter))
+            {
+                var toOffForEyeTracking = onState.AddTransition(offState);
+                ConfigureTransition(toOffForEyeTracking);
+                AddTruthyCondition(toOffForEyeTracking, controller, eyeTrackingActiveParameter);
+            }
 
             layers[layers.Length - 1] = layer;
             controller.layers = layers;
+        }
+
+        private static void AddTruthyCondition(AnimatorStateTransition transition, AnimatorController controller, string parameterName)
+        {
+            var type = GetParameterType(controller, parameterName);
+            if (type == AnimatorControllerParameterType.Float || type == AnimatorControllerParameterType.Int)
+            {
+                transition.AddCondition(AnimatorConditionMode.Greater, 0.5f, parameterName);
+                return;
+            }
+
+            transition.AddCondition(AnimatorConditionMode.If, 0f, parameterName);
+        }
+
+        private static void AddFalsyCondition(AnimatorStateTransition transition, AnimatorController controller, string parameterName)
+        {
+            var type = GetParameterType(controller, parameterName);
+            if (type == AnimatorControllerParameterType.Float || type == AnimatorControllerParameterType.Int)
+            {
+                transition.AddCondition(AnimatorConditionMode.Less, 0.5f, parameterName);
+                return;
+            }
+
+            transition.AddCondition(AnimatorConditionMode.IfNot, 0f, parameterName);
+        }
+
+        private static AnimatorControllerParameterType? GetParameterType(AnimatorController controller, string parameterName)
+        {
+            if (controller == null || string.IsNullOrWhiteSpace(parameterName)) return null;
+            return controller.parameters.FirstOrDefault(parameter => parameter.name == parameterName)?.type;
         }
 
         private static void ConfigureTransition(AnimatorStateTransition transition)
@@ -310,7 +440,7 @@ namespace YoridoriModifiers.EyeFreeze
             transition.exitTime = 0f;
         }
 
-        private static void MergeExpressionParameter(
+        private static bool MergeExpressionParameter(
             BuildContext context,
             VRCAvatarDescriptor descriptor,
             string parameterName,
@@ -348,12 +478,14 @@ namespace YoridoriModifiers.EyeFreeze
             else
             {
                 Debug.LogWarning("[YM Eye Freeze] Expression Parameters are full. Parameter was not added.");
+                return false;
             }
 
             parameters.parameters = list.ToArray();
             context.AssetSaver.SaveAsset(parameters);
             descriptor.customExpressions = true;
             descriptor.expressionParameters = parameters;
+            return true;
         }
 
         private static void MergeExpressionMenu(
@@ -391,6 +523,30 @@ namespace YoridoriModifiers.EyeFreeze
                     value = 1f
                 });
             }
+
+            context.AssetSaver.SaveAsset(menu);
+            descriptor.customExpressions = true;
+            descriptor.expressionsMenu = menu;
+        }
+
+        private static void RemoveExpressionMenuControl(
+            BuildContext context,
+            VRCAvatarDescriptor descriptor,
+            string parameterName)
+        {
+            if (descriptor == null || descriptor.expressionsMenu == null || string.IsNullOrWhiteSpace(parameterName)) return;
+
+            var menu = Object.Instantiate(descriptor.expressionsMenu);
+            RegisterReplacedObject(descriptor.expressionsMenu, menu);
+
+            menu.name = "YM Eye Freeze Menu";
+            menu.controls ??= new System.Collections.Generic.List<VRCExpressionsMenu.Control>();
+            var beforeCount = menu.controls.Count;
+            menu.controls = menu.controls
+                .Where(control => control == null || control.parameter == null || control.parameter.name != parameterName)
+                .ToList();
+
+            if (menu.controls.Count == beforeCount) return;
 
             context.AssetSaver.SaveAsset(menu);
             descriptor.customExpressions = true;

@@ -8,8 +8,8 @@ MToon 1.0 / 互換 MToon マテリアルを lilToon へ変換するための Uni
 
 - Build 時に NDMF フェーズで自動変換
 - Editor 上での非破壊 Preview
-- 髪周りのルック調整（マテリアル結合 / atlas）
-- 毛先調整スライダーの確定反映
+- lilToon 固有機能の一括設定
+- 顔影調整
 - Advanced での詳細ログと Preview 復旧機能
 
 ## 前提
@@ -21,30 +21,11 @@ MToon 1.0 / 互換 MToon マテリアルを lilToon へ変換するための Uni
 ## 使い方
 
 1. 対象アバター配下に `Yoridori Modifiers/YM MToon to lilToon` を追加
-2. `髪周りのルック調整` を ON にすると候補が自動スキャンされる
-3. 必要に応じて `結合対象` のチェックを調整
-4. `Preview` で変換後を確認（元オブジェクトは非破壊）
-5. Build 時は NDMF plugin が自動適用
+2. 必要に応じて lilToon 固有機能の一括設定や顔影調整を有効化
+3. `Preview` で変換後を確認（元オブジェクトは非破壊）
+4. Build 時は NDMF plugin が自動適用
 
-## 髪周りのルック調整
-
-- `HAIR_`（大小無視）を含む名前のマテリアルを優先し、該当がなければ `HAIR`（大小無視）を含む名前を候補化。Cull Mode 多数派かつ描画系統多数派と一致するもののみを初期選択
-- 描画系統の多数派判定は `Transparent` と `Opaque+Cutout` の2系統で行い、`Opaque` は `Cutout` 側として扱う
-- 手動でチェックした項目は render type 混在でもそのまま merge 対象
-- merge 後マテリアルの render type は、`Transparent` が `Opaque+Cutout` より多い場合のみ `Transparent`、それ以外は `Cutout`
-- オプション: 眉ステンシル / FakeShadow（Inspector で ON/OFF、向き・オフセットを調整可能）
-- オプション: 輪郭線補正（ハードエッジ向け、頂点カラーへ法線平均情報を焼き込み）
-- 眉ステンシル対象マテリアルは名前ベースで自動選択され、Inspector で手動変更可能
-- FakeShadow は「Enable FakeShadow」が ON かつ「チェックされた結合対象」がある場合に、結合後の髪マテリアルへ適用
-- FakeShadow 用の顔マテリアルは名前ベースで自動選択され、Inspector で手動変更可能
-- チェックが1つだけの場合は atlas 化せず、元のUV/テクスチャ設定を維持
-- atlas 対象: main / shade / emission / normal / outline
-- UV は atlas rect に再配置し、サブメッシュ統合を実施
-- 輪郭線補正の毛先スライダーはドラッグ中に即時反映せず、操作確定時に反映（Preview 中の再構成負荷を抑制）
-
-atlas サイズ方針:
-
-99%縮小をかけて、padding 込みで無駄なく並ぶようにします。
+髪マテリアル結合、眉ステンシル、FakeShadow、輪郭線補正は `YM Hair Look Kit` を使用してください。
 
 ## Render Queue
 
@@ -64,7 +45,7 @@ atlas サイズ方針:
 ## Inspector UI
 
 - 上部: `Preview` ボタン（有効中は緑） / Preview 進捗表示 / 言語切り替え（日本語・英語）
-- `顔マテリアル` の選択（顔影・FakeShadow の基準マテリアル）
+- `顔マテリアル` の選択（顔影調整の基準マテリアル）
 - `lilToon固有機能の一括設定`
   - 影を受け取る
   - 影の境界
@@ -72,12 +53,7 @@ atlas サイズ方針:
   - 距離フェード
   - 輪郭線の Z Bias
 - `特定部位への調整`
-  - 髪周りのルック調整
-    - 結合対象（Foldout）
-    - 眉ステンシル
-    - FakeShadow（向き / オフセット）
-    - 輪郭線補正（毛先の太さ / 毛先の範囲）
-  - 顔の影を整える
+  - `顔の影を整える`
     - マスクタイプ
     - マスク
     - LOD
@@ -87,14 +63,8 @@ atlas サイズ方針:
 
 ## 注意
 
-- `髪周りのルック調整` を使うと髪マテリアルが結合されるため、影色やアウトライン色が変わることがあります
 - lilToon は UV スクロールのマスクに対応していないため、メインカラー 2nd での疑似再現となります
 
 ## ライセンス
 
 このプロジェクトは MIT License で提供されています。詳細は [../LICENSE](../LICENSE) を参照してください。
-
-## サードパーティ告知
-
-輪郭線補正の実装は、MIT ライセンスの `lilOutlineUtil` を参考にしています。
-詳細は [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) を参照してください。

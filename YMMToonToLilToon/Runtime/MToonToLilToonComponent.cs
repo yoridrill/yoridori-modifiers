@@ -16,18 +16,6 @@ namespace YoridoriModifiers.MToonToLilToon
         }
 
         public Shader lilToonShader;
-        public bool enableHairMerge;
-        public bool enableHairOutlineCorrection;
-        [Range(0f, 1f)] public float hairTipOutlineWidth = 0.2f;
-        [Range(0f, 1f)] public float hairTipRange = 0.3f;
-        public List<HairMaterialSelection> hairSelections = new();
-        public Material representativeHairMaterialOverride;
-        public bool enableEyebrowStencil;
-        public Material eyebrowStencilMaterial;
-        public Material fakeShadowFaceMaterial;
-        public bool enableFakeShadow;
-        public Vector3 fakeShadowDirection = new Vector3(1f, 4f, 2f);
-        public float fakeShadowOffset = 0.005f;
         public bool enableFaceShadowTuning;
         public Material faceShadowFaceMaterial;
         public Texture2D faceShadowSdfTexture;
@@ -39,7 +27,6 @@ namespace YoridoriModifiers.MToonToLilToon
         public LilToonGlobalOverrides globalOverrides = new();
         public bool verboseLog;
         [HideInInspector] public bool showAdvanced;
-        [HideInInspector] public bool showHairMaterials;
         public bool isPreviewing;
 
         [HideInInspector] public int scannedMaterialCount;

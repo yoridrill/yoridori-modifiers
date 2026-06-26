@@ -15,7 +15,10 @@ Unity 2022.3 / VCC / ALCOM で作成した VRChat Avatars Project での利用�
   - テクスチャの透明余白の塗り足しにも対応します。
 - `YM MToon to lilToon`
   - MToon 1.0 / 互換 MToon マテリアルを lilToon へ変換します。
-  - 髪マテリアルの結合、眉ステンシル、FakeShadow、顔影調整などを必要に応じて有効化できます。
+  - lilToon 固有機能の一括設定や顔影調整を必要に応じて有効化できます。
+- `YM Hair Look Kit`
+  - 髪マテリアルの結合、眉ステンシル、FakeShadow、輪郭線補正を非破壊で適用します。
+  - `YM MToon to lilToon` と同じアバターにある場合は、変換後の lilToon マテリアルに対して処理できます。
 - `YM Eye Freeze`
   - Exメニューに Eye Look と Blink を一時停止し、目ボーンを初期状態で固定するモードを追加します。
   - カメラ目線化やターゲット追従は行いません。
@@ -44,6 +47,7 @@ https://yoridrill.github.io/vpm-repos/redirect.html
 - `Yoridori Modifiers/YM Arm Patch`
 - `Yoridori Modifiers/YM Mesh Trimmer`
 - `Yoridori Modifiers/YM MToon to lilToon`
+- `Yoridori Modifiers/YM Hair Look Kit`
 - `Yoridori Modifiers/YM Eye Freeze`
 - `Yoridori Modifiers/YM Facial Mapper`
 - `Yoridori Modifiers/YM VRoid Skirt Refine`
@@ -80,11 +84,12 @@ Yoridori Modifiers のどの `Reset Preview` からでも、各ツールの Prev
 - [YM Arm Patch](./YMArmPatch/README.md)
 - [YM Mesh Trimmer](./YMMeshTrimmer/README.md)
 - [YM MToon to lilToon](./YMMToonToLilToon/README.md)
+- [YM Hair Look Kit](./YMHairLookKit/README.md)
 - [YM Eye Freeze](./YMEyeFreeze/README.md)
 - [YM Facial Mapper](./YMFacialMapper/README.md)
 - [YM VRoid Skirt Refine](./YMVRoidSkirtRefine/README.md)
 
-ビルド時は、`YM Arm Patch`、`YM VRoid Skirt Refine`、`YM Mesh Trimmer`、`YM MToon to lilToon`、`YM Eye Freeze`、`YM Facial Mapper` の順で処理します。  
+ビルド時は、`YM Arm Patch`、`YM VRoid Skirt Refine`、`YM Mesh Trimmer`、`YM MToon to lilToon`、`YM Hair Look Kit`、`YM Eye Freeze`、`YM Facial Mapper` の順で処理します。
 
 ## ライセンス
 

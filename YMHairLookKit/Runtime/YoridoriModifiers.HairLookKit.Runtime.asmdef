@@ -1,0 +1,17 @@
+{
+    "name": "YoridoriModifiers.HairLookKit.Runtime",
+    "rootNamespace": "YoridoriModifiers.HairLookKit",
+    "references": [
+        "YoridoriModifiers.MToonToLilToon.Runtime",
+        "VRC.SDKBase"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

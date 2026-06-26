@@ -5,6 +5,7 @@ using UnityEngine;
 using YoridoriModifiers.ArmPatch;
 using YoridoriModifiers.EyeFreeze;
 using YoridoriModifiers.FacialMapper;
+using YoridoriModifiers.HairLookKit;
 using YoridoriModifiers.MeshTrimmer;
 using YoridoriModifiers.MToonToLilToon;
 using YoridoriModifiers.VRoidSkirtRefine;
@@ -59,10 +60,10 @@ namespace YoridoriModifiers.Core.Editor
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM MToon to lilToon", false, -889)]
         private static void AddVRoidMToonToLilToon() => AddMToonToLilToonToRoot("Add YM MToon to lilToon with VRoid Defaults");
 
-        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Eye Freeze", false, -888)]
+        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Eye Freeze", false, -887)]
         private static void AddVRoidEyeFreeze() => AddSingleComponentToRoot<YMEyeFreeze>("Add YM Eye Freeze with VRoid Defaults");
 
-        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Facial Mapper", false, -887)]
+        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Facial Mapper", false, -886)]
         private static void AddVRoidFacialMapper() => AddFacialMapperToRoot("Add YM Facial Mapper with VRoid Defaults");
 
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Arm Patch/(via VRM 0.0) Long Sleeves", false, -887)]
@@ -129,6 +130,7 @@ namespace YoridoriModifiers.Core.Editor
 
             var mtoon = Undo.AddComponent<MToonToLilToonComponent>(target);
             ConfigureMToonToLilToon(mtoon, avatarRoot);
+            Undo.AddComponent<YMHairLookKitComponent>(target);
             Undo.AddComponent<YMEyeFreeze>(target);
 
             EditorUtility.SetDirty(target);
@@ -234,7 +236,6 @@ namespace YoridoriModifiers.Core.Editor
             component.enableFaceShadowTuning = true;
             var faceMaterial = DetectDefaultFaceMaterial(avatarRoot);
             component.faceShadowFaceMaterial = faceMaterial;
-            component.fakeShadowFaceMaterial = faceMaterial;
             component.faceShadowSdfTexture = LoadDefaultFaceShadowMaskTexture();
             EditorUtility.SetDirty(component);
         }

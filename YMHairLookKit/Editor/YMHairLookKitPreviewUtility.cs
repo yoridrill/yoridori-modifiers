@@ -5,14 +5,14 @@ using UnityEditorInternal;
 using UnityEngine;
 using YoridoriModifiers.Core.Editor;
 
-namespace YoridoriModifiers.MToonToLilToon
+namespace YoridoriModifiers.HairLookKit
 {
     [InitializeOnLoad]
-    internal static class MToonToLilToonPreviewUtility
+    internal static class YMHairLookKitPreviewUtility
     {
-        private const string PreviewRootName = "__YoridoriMToonToLilToonPreviewRoot";
-        private const string PreviewAvatarName = "__YoridoriMToonToLilToonPreviewAvatar";
-        private const string ToolName = "YM MToon to lilToon";
+        private const string PreviewRootName = "__YoridoriHairLookKitPreviewRoot";
+        private const string PreviewAvatarName = "__YoridoriHairLookKitPreviewAvatar";
+        private const string ToolName = "YM Hair Look Kit";
 
         private static GameObject _sourceAvatarRoot;
         private static GameObject _previewRoot;
@@ -30,18 +30,17 @@ namespace YoridoriModifiers.MToonToLilToon
             public bool wasEnabled;
         }
 
-        static MToonToLilToonPreviewUtility()
+        static YMHairLookKitPreviewUtility()
         {
-            SceneIconUtility.HideComponentIcon<MToonToLilToonComponent>();
-            PreviewRecoveryUtility.RegisterResetHandler("ym-mtoon-to-liltoon", ResetOwnPreviewArtifacts);
-
+            SceneIconUtility.HideComponentIcon<YMHairLookKitComponent>();
+            PreviewRecoveryUtility.RegisterResetHandler("ym-hair-look-kit", ResetOwnPreviewArtifacts);
             AssemblyReloadEvents.beforeAssemblyReload += StopPreview;
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
             EditorApplication.quitting += StopPreview;
             CleanupOrphanPreviewObjects();
         }
 
-        internal static void TogglePreview(MToonToLilToonComponent component)
+        internal static void TogglePreview(YMHairLookKitComponent component)
         {
             if (_isProcessingPreview) return;
             var avatarRoot = PreviewCoordinator.FindAvatarRoot(component.gameObject);
@@ -56,113 +55,23 @@ namespace YoridoriModifiers.MToonToLilToon
             QueueStartPreview(avatarRoot);
         }
 
-        internal static void RestartPreviewIfActive(MToonToLilToonComponent component)
+        internal static void RestartPreviewIfActive(YMHairLookKitComponent component)
         {
             if (_isProcessingPreview) return;
             var avatarRoot = PreviewCoordinator.FindAvatarRoot(component.gameObject);
             if (avatarRoot == null || !IsPreviewing(avatarRoot)) return;
-
             QueueStartPreview(avatarRoot);
         }
 
-        internal static void ApplyGlobalOverridesIfActive(MToonToLilToonComponent sourceComponent)
+        internal static bool IsPreviewing(YMHairLookKitComponent component)
         {
-            if (_isProcessingPreview) return;
-            if (sourceComponent == null) return;
-            var avatarRoot = PreviewCoordinator.FindAvatarRoot(sourceComponent.gameObject);
-            if (avatarRoot == null || !IsPreviewing(avatarRoot) || _previewAvatar == null) return;
-
-            var sourcePath = BuildRelativePath(avatarRoot.transform, sourceComponent.transform);
-            var previewTransform = string.IsNullOrEmpty(sourcePath)
-                ? _previewAvatar.transform
-                : _previewAvatar.transform.Find(sourcePath);
-            if (previewTransform == null) return;
-
-            var previewComponent = previewTransform.GetComponent<MToonToLilToonComponent>();
-            if (previewComponent == null) return;
-
-            MToonToLilToonProcessor.ApplyGlobalOverridesToConvertedMaterials(
-                previewComponent,
-                sourceComponent.globalOverrides,
-                sourceComponent.disableShadowReceiveForFace,
-                sourceComponent.disableBacklightStrengthForFace);
-            SceneView.RepaintAll();
+            var avatarRoot = PreviewCoordinator.FindAvatarRoot(component.gameObject);
+            return avatarRoot != null && IsPreviewing(avatarRoot);
         }
 
         internal static string GetPreviewProgressMessage() => _previewProgress;
         internal static bool IsProcessingPreview() => _isProcessingPreview;
         internal static bool HasPreviewFailed() => _previewFailed;
-
-
-        internal static bool HasStalePreviewState(MToonToLilToonComponent component)
-        {
-            if (component == null) return false;
-            if (IsPreviewing(component)) return false;
-            var avatarRoot = PreviewCoordinator.FindAvatarRoot(component.gameObject);
-            if (avatarRoot == null) return false;
-            return avatarRoot.GetComponentsInChildren<MToonToLilToonComponent>(true).Any(c => c != null && c.isPreviewing);
-        }
-
-        internal static void ResetSavedPreviewState(MToonToLilToonComponent component)
-        {
-            if (component == null) return;
-            PreviewRecoveryUtility.ResetAllPreviewArtifacts();
-        }
-
-        private static void ResetOwnPreviewArtifacts(GameObject avatarRoot)
-        {
-            if (avatarRoot == null)
-            {
-                StopPreview();
-                CleanupOrphanPreviewObjects();
-
-                var roots = new HashSet<GameObject>();
-                foreach (var component in Object.FindObjectsByType<MToonToLilToonComponent>(FindObjectsInactive.Include, FindObjectsSortMode.None))
-                {
-                    var root = component != null ? PreviewCoordinator.FindAvatarRoot(component.gameObject) : null;
-                    if (root == null || !roots.Add(root)) continue;
-                    EnableRenderers(root);
-                    SyncSourcePreviewFlag(root, false);
-                }
-
-                SceneView.RepaintAll();
-                return;
-            }
-
-            if (IsPreviewing(avatarRoot))
-            {
-                StopPreview();
-            }
-
-            CleanupOrphanPreviewObjects();
-            foreach (var renderer in avatarRoot.GetComponentsInChildren<Renderer>(true))
-            {
-                if (renderer == null) continue;
-                renderer.enabled = true;
-                EditorUtility.SetDirty(renderer);
-            }
-
-            SyncSourcePreviewFlag(avatarRoot, false);
-            SceneView.RepaintAll();
-        }
-
-        private static void EnableRenderers(GameObject avatarRoot)
-        {
-            if (avatarRoot == null) return;
-
-            foreach (var renderer in avatarRoot.GetComponentsInChildren<Renderer>(true))
-            {
-                if (renderer == null) continue;
-                renderer.enabled = true;
-                EditorUtility.SetDirty(renderer);
-            }
-        }
-
-        internal static bool IsPreviewing(MToonToLilToonComponent component)
-        {
-            var avatarRoot = PreviewCoordinator.FindAvatarRoot(component.gameObject);
-            return avatarRoot != null && IsPreviewing(avatarRoot);
-        }
 
         private static bool IsPreviewing(GameObject avatarRoot)
         {
@@ -172,17 +81,18 @@ namespace YoridoriModifiers.MToonToLilToon
         private static void QueueStartPreview(GameObject avatarRoot)
         {
             StopPreview();
-            if (!PreviewCoordinator.TryBegin("ym-mtoon-to-liltoon", ToolName, avatarRoot, false, out var failure))
+            if (!PreviewCoordinator.TryBegin("ym-hair-look-kit", ToolName, avatarRoot, false, out var failure))
             {
                 LogUtility.PreviewSkipped(ToolName, failure);
                 _previewFailed = true;
                 SetProgress(failure);
                 return;
             }
+
             _pendingAvatarRoot = avatarRoot;
             _isProcessingPreview = true;
             _previewFailed = false;
-            SetProgress("Processing...");
+            SetProgress("Preparing preview...");
             EditorApplication.delayCall += StartPendingPreview;
         }
 
@@ -200,7 +110,6 @@ namespace YoridoriModifiers.MToonToLilToon
             try
             {
                 _sourceAvatarRoot = avatarRoot;
-
                 _previewRoot = new GameObject(PreviewRootName)
                 {
                     hideFlags = HideFlags.HideInHierarchy | HideFlags.DontSaveInEditor,
@@ -209,13 +118,16 @@ namespace YoridoriModifiers.MToonToLilToon
                 _previewAvatar.name = PreviewAvatarName;
                 _previewAvatar.hideFlags = HideFlags.HideInHierarchy | HideFlags.DontSaveInEditor;
 
-                var previewComponents = _previewAvatar.GetComponentsInChildren<MToonToLilToonComponent>(true);
+                var previewComponents = _previewAvatar.GetComponentsInChildren<YMHairLookKitComponent>(true);
                 var selectedComponent = SelectPreferredComponent(previewComponents, _previewAvatar);
-                foreach (var component in previewComponents)
+                if (selectedComponent != null)
                 {
-                    if (component != selectedComponent) continue;
-                    MToonToLilToonProcessor.ApplyOnBuild(component, SetProgress, MToonToLilToonProcessor.ConversionRoute.Preview);
-                    component.isPreviewing = true;
+                    YMHairLookKitProcessor.ApplyOnBuild(
+                        selectedComponent,
+                        onProgress: SetProgress,
+                        route: YMHairLookKitProcessor.ProcessRoute.Preview,
+                        runMToonPreviewStage: true);
+                    selectedComponent.isPreviewing = true;
                 }
 
                 HideSourceRenderers(avatarRoot);
@@ -225,11 +137,12 @@ namespace YoridoriModifiers.MToonToLilToon
             catch
             {
                 _previewFailed = true;
-                PreviewCoordinator.End("ym-mtoon-to-liltoon");
+                PreviewCoordinator.End("ym-hair-look-kit");
                 throw;
             }
             finally
             {
+                SetProgress("Finalizing preview...");
                 QueueFinishProcessing();
                 SceneView.RepaintAll();
             }
@@ -256,8 +169,32 @@ namespace YoridoriModifiers.MToonToLilToon
             _isProcessingPreview = false;
             _previewFailed = false;
             SetProgress(string.Empty);
-            PreviewCoordinator.End("ym-mtoon-to-liltoon");
+            PreviewCoordinator.End("ym-hair-look-kit");
             CleanupOrphanPreviewObjects();
+            SceneView.RepaintAll();
+        }
+
+        private static void ResetOwnPreviewArtifacts(GameObject avatarRoot)
+        {
+            if (avatarRoot == null)
+            {
+                StopPreview();
+                CleanupOrphanPreviewObjects();
+                foreach (var component in Object.FindObjectsByType<YMHairLookKitComponent>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                {
+                    var root = component != null ? PreviewCoordinator.FindAvatarRoot(component.gameObject) : null;
+                    if (root == null) continue;
+                    EnableRenderers(root);
+                    SyncSourcePreviewFlag(root, false);
+                }
+                SceneView.RepaintAll();
+                return;
+            }
+
+            if (IsPreviewing(avatarRoot)) StopPreview();
+            CleanupOrphanPreviewObjects();
+            EnableRenderers(avatarRoot);
+            SyncSourcePreviewFlag(avatarRoot, false);
             SceneView.RepaintAll();
         }
 
@@ -267,11 +204,7 @@ namespace YoridoriModifiers.MToonToLilToon
             foreach (var renderer in avatarRoot.GetComponentsInChildren<Renderer>(true))
             {
                 if (renderer == null) continue;
-                HiddenRenderers.Add(new RendererState
-                {
-                    renderer = renderer,
-                    wasEnabled = renderer.enabled,
-                });
+                HiddenRenderers.Add(new RendererState { renderer = renderer, wasEnabled = renderer.enabled });
                 renderer.enabled = false;
             }
         }
@@ -282,13 +215,22 @@ namespace YoridoriModifiers.MToonToLilToon
             {
                 state.renderer.enabled = state.wasEnabled;
             }
-
             HiddenRenderers.Clear();
+        }
+
+        private static void EnableRenderers(GameObject avatarRoot)
+        {
+            foreach (var renderer in avatarRoot.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null) continue;
+                renderer.enabled = true;
+                EditorUtility.SetDirty(renderer);
+            }
         }
 
         private static void SyncSourcePreviewFlag(GameObject avatarRoot, bool previewing)
         {
-            foreach (var component in avatarRoot.GetComponentsInChildren<MToonToLilToonComponent>(true))
+            foreach (var component in avatarRoot.GetComponentsInChildren<YMHairLookKitComponent>(true))
             {
                 component.isPreviewing = previewing;
                 EditorUtility.SetDirty(component);
@@ -305,32 +247,13 @@ namespace YoridoriModifiers.MToonToLilToon
             }
         }
 
-        private static MToonToLilToonComponent SelectPreferredComponent(
-            MToonToLilToonComponent[] components,
-            GameObject avatarRoot)
+        private static YMHairLookKitComponent SelectPreferredComponent(YMHairLookKitComponent[] components, GameObject avatarRoot)
         {
             if (components == null || components.Length == 0) return null;
-
-            MToonToLilToonComponent best = null;
-            var bestScore = int.MinValue;
-            var rootTransform = avatarRoot != null ? avatarRoot.transform : null;
-            for (var i = 0; i < components.Length; i++)
-            {
-                var component = components[i];
-                if (component == null) continue;
-                var depth = PreviewCoordinator.GetDepthFromRoot(component.transform, rootTransform);
-                var score = -depth * 10000 - i;
-                if (score <= bestScore) continue;
-                best = component;
-                bestScore = score;
-            }
-
-            return best;
-        }
-
-        private static string BuildRelativePath(Transform root, Transform target)
-        {
-            return PreviewCoordinator.BuildRelativePath(root, target);
+            return components
+                .Where(c => c != null)
+                .OrderBy(c => PreviewCoordinator.GetDepthFromRoot(c.transform, avatarRoot != null ? avatarRoot.transform : null))
+                .FirstOrDefault();
         }
 
         private static void OnPlayModeStateChanged(PlayModeStateChange change)

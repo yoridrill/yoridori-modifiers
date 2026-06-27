@@ -206,9 +206,8 @@ namespace YoridoriModifiers.EyeFreeze
 
             var sourceController = ResolveFxSourceController(descriptor.baseAnimationLayers[layerIndex]);
             var controller = sourceController != null
-                ? Object.Instantiate(sourceController)
+                ? NdmfObjectRegistry.Clone(sourceController)
                 : new AnimatorController();
-            RegisterReplacedObject(sourceController, controller);
 
             controller.name = "YM Eye Freeze FX";
             context.AssetSaver.SaveAsset(controller);
@@ -448,9 +447,8 @@ namespace YoridoriModifiers.EyeFreeze
             bool synced)
         {
             var parameters = descriptor.expressionParameters != null
-                ? Object.Instantiate(descriptor.expressionParameters)
+                ? NdmfObjectRegistry.Clone(descriptor.expressionParameters)
                 : ScriptableObject.CreateInstance<VRCExpressionParameters>();
-            RegisterReplacedObject(descriptor.expressionParameters, parameters);
 
             parameters.name = "YM Eye Freeze Parameters";
             var list = parameters.parameters != null
@@ -495,9 +493,8 @@ namespace YoridoriModifiers.EyeFreeze
             string parameterName)
         {
             var menu = descriptor.expressionsMenu != null
-                ? Object.Instantiate(descriptor.expressionsMenu)
+                ? NdmfObjectRegistry.Clone(descriptor.expressionsMenu)
                 : ScriptableObject.CreateInstance<VRCExpressionsMenu>();
-            RegisterReplacedObject(descriptor.expressionsMenu, menu);
 
             menu.name = "YM Eye Freeze Menu";
             menu.controls ??= new System.Collections.Generic.List<VRCExpressionsMenu.Control>();
@@ -536,8 +533,7 @@ namespace YoridoriModifiers.EyeFreeze
         {
             if (descriptor == null || descriptor.expressionsMenu == null || string.IsNullOrWhiteSpace(parameterName)) return;
 
-            var menu = Object.Instantiate(descriptor.expressionsMenu);
-            RegisterReplacedObject(descriptor.expressionsMenu, menu);
+            var menu = NdmfObjectRegistry.Clone(descriptor.expressionsMenu);
 
             menu.name = "YM Eye Freeze Menu";
             menu.controls ??= new System.Collections.Generic.List<VRCExpressionsMenu.Control>();
@@ -563,17 +559,5 @@ namespace YoridoriModifiers.EyeFreeze
             }
         }
 
-        private static void RegisterReplacedObject(Object original, Object replacement)
-        {
-            if (original == null || replacement == null) return;
-            try
-            {
-                ObjectRegistry.RegisterReplacedObject(original, replacement);
-            }
-            catch (ArgumentException)
-            {
-                // The replacement may already be known to NDMF if another service touched it first.
-            }
-        }
     }
 }

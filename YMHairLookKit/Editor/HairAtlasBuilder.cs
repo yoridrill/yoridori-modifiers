@@ -71,7 +71,7 @@ namespace YoridoriModifiers.HairLookKit
                 TryGetMainTextureWithTransform(material, out var texture, out var textureScale, out var offset);
                 var color = ResolveMaterialBaseColor(material);
                 var readable = TextureReadUtility.ToReadableTextureWithTransform(texture, textureScale, offset);
-                textures.Add(readable != null ? MultiplyTextureColor(readable, color) : NewSolidTexture(color));
+                textures.Add(readable != null ? MultiplyTextureColorInPlace(readable, color) : NewSolidTexture(color));
             }
 
             if (textures.All(t => t == null)) throw new InvalidOperationException("Hair merge failed: no main textures resolved for selected materials.");
@@ -745,19 +745,18 @@ namespace YoridoriModifiers.HairLookKit
                 : Color.white;
         }
 
-        private static Texture2D MultiplyTextureColor(Texture2D texture, Color color)
+        private static Texture2D MultiplyTextureColorInPlace(Texture2D texture, Color color)
         {
             if (texture == null) return null;
-            var copy = Object.Instantiate(texture);
-            for (var y = 0; y < copy.height; y++)
+            for (var y = 0; y < texture.height; y++)
             {
-                for (var x = 0; x < copy.width; x++)
+                for (var x = 0; x < texture.width; x++)
                 {
-                    copy.SetPixel(x, y, copy.GetPixel(x, y) * color);
+                    texture.SetPixel(x, y, texture.GetPixel(x, y) * color);
                 }
             }
-            copy.Apply(true, false);
-            return copy;
+            texture.Apply(true, false);
+            return texture;
         }
 
         private static Texture2D NewSolidTexture(Color color, bool linear = false)

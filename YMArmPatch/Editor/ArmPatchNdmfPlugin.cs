@@ -1069,8 +1069,7 @@ namespace YoridoriModifiers.ArmPatch
                 }
 
                 var sourceMesh = smr.sharedMesh;
-                var mesh = UnityEngine.Object.Instantiate(sourceMesh);
-                RegisterReplacedObject(sourceMesh, mesh);
+                var mesh = NdmfObjectRegistry.Clone(sourceMesh);
                 context?.AssetSaver.SaveAsset(mesh);
                 mesh.name = sourceMesh.name + "_Twist";
                 var bones = smr.bones.ToList();
@@ -1385,19 +1384,6 @@ namespace YoridoriModifiers.ArmPatch
                 {
                     UnityEngine.Object.DestroyImmediate(components[i]);
                 }
-            }
-        }
-
-        private static void RegisterReplacedObject(UnityEngine.Object original, UnityEngine.Object replacement)
-        {
-            if (original == null || replacement == null) return;
-            try
-            {
-                ObjectRegistry.RegisterReplacedObject(original, replacement);
-            }
-            catch (ArgumentException)
-            {
-                // The replacement may already have been referenced by NDMF.
             }
         }
 

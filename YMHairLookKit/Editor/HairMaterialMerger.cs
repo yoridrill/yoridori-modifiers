@@ -4,6 +4,7 @@ using System.Linq;
 using nadena.dev.ndmf;
 using UnityEngine;
 using UnityEngine.Rendering;
+using YoridoriModifiers.Core.Editor;
 using YoridoriModifiers.MToonToLilToon;
 using Object = UnityEngine.Object;
 
@@ -81,17 +82,12 @@ namespace YoridoriModifiers.HairLookKit
                 : globalMaterials[representativeIndex];
             if (rep == null) return null;
 
-            var mergedMaterial = new Material(rep) { name = $"{rep.name}_Merged" };
+            var mergedMaterial = NdmfObjectRegistry.CreateReplacement(
+                rep,
+                () => new Material(rep) { name = $"{rep.name}_Merged" });
             EnsureReferenceTrackableObjectFlags(mergedMaterial);
             ForceMergedRenderType(mergedMaterial, rep, mergedOutputRenderType);
             buildContext?.AssetSaver.SaveAsset(mergedMaterial);
-            foreach (var source in targets
-                         .SelectMany(target => target.mergeIndices.Select(index => target.originalMaterials[index]))
-                         .Where(material => material != null)
-                         .Distinct())
-            {
-                RegisterReplacedObject(source, mergedMaterial);
-            }
 
             var globalRects = HairAtlasBuilder.BuildMainAtlas(globalMaterials, globalIndices, mergedMaterial, atlasMaxSize, onProgress, buildContext);
             if (globalMaterials.Count > 1)
@@ -215,8 +211,7 @@ namespace YoridoriModifiers.HairLookKit
                 return;
             }
 
-            var meshCopy = Object.Instantiate(mesh);
-            RegisterReplacedObject(mesh, meshCopy);
+            var meshCopy = NdmfObjectRegistry.Clone(mesh);
             EnsureReferenceTrackableObjectFlags(meshCopy);
             buildContext?.AssetSaver.SaveAsset(meshCopy);
             var vertices = meshCopy.vertices.ToList();
@@ -338,19 +333,6 @@ namespace YoridoriModifiers.HairLookKit
             if (generatedObject == null) return;
             var dontSaveFlags = HideFlags.DontSave | HideFlags.DontSaveInBuild | HideFlags.DontSaveInEditor | HideFlags.HideAndDontSave;
             generatedObject.hideFlags &= ~dontSaveFlags;
-        }
-
-        private static void RegisterReplacedObject(Object original, Object replacement)
-        {
-            if (original == null || replacement == null) return;
-            try
-            {
-                ObjectRegistry.RegisterReplacedObject(original, replacement);
-            }
-            catch (ArgumentException)
-            {
-                // NDMF requires registration before the replacement receives a reference.
-            }
         }
 
         private static void SetFloatIfAnyExists(Material material, IReadOnlyList<string> propertyNames, float value)

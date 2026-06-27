@@ -2,6 +2,7 @@
     "name": "YoridoriModifiers.Core.Editor",
     "rootNamespace": "YoridoriModifiers.Core.Editor",
     "references": [
+        "nadena.dev.ndmf",
         "YoridoriModifiers.ArmPatch.Runtime",
         "YoridoriModifiers.EyeFreeze.Runtime",
         "YoridoriModifiers.FacialMapper.Runtime",

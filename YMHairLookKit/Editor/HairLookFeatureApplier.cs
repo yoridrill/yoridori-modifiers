@@ -5,6 +5,7 @@ using nadena.dev.ndmf;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
+using YoridoriModifiers.Core.Editor;
 using Object = UnityEngine.Object;
 
 namespace YoridoriModifiers.HairLookKit
@@ -30,9 +31,10 @@ namespace YoridoriModifiers.HairLookKit
             if (material == null) return null;
             if (_mutableMaterials.TryGetValue(material, out var mutable)) return mutable;
 
-            var clone = new Material(material) { name = $"{material.name}_HairLookKit" };
+            var clone = NdmfObjectRegistry.CreateReplacement(
+                material,
+                () => new Material(material) { name = $"{material.name}_HairLookKit" });
             EnsureReferenceTrackableObjectFlags(clone);
-            RegisterReplacedObject(material, clone);
             ReplaceRendererReferences(material, clone);
             _buildContext?.AssetSaver.SaveAsset(clone);
             _mutableMaterials[material] = clone;
@@ -64,18 +66,6 @@ namespace YoridoriModifiers.HairLookKit
             generatedObject.hideFlags &= ~dontSaveFlags;
         }
 
-        private static void RegisterReplacedObject(Object original, Object replacement)
-        {
-            if (original == null || replacement == null) return;
-            try
-            {
-                ObjectRegistry.RegisterReplacedObject(original, replacement);
-            }
-            catch (ArgumentException)
-            {
-                // NDMF requires registration before the replacement receives a reference.
-            }
-        }
     }
 
     internal static class HairLookFeatureApplier
@@ -249,8 +239,7 @@ namespace YoridoriModifiers.HairLookKit
 
                 var mesh = HairMaterialMerger.ResolveMesh(renderer);
                 if (mesh == null) continue;
-                var meshCopy = Object.Instantiate(mesh);
-                RegisterReplacedObject(mesh, meshCopy);
+                var meshCopy = NdmfObjectRegistry.Clone(mesh);
                 EnsureReferenceTrackableObjectFlags(meshCopy);
                 buildContext?.AssetSaver.SaveAsset(meshCopy);
                 var outlineAlphaByVertex = Enumerable.Repeat(1f, meshCopy.vertexCount).ToList();
@@ -421,19 +410,6 @@ namespace YoridoriModifiers.HairLookKit
             if (generatedObject == null) return;
             var dontSaveFlags = HideFlags.DontSave | HideFlags.DontSaveInBuild | HideFlags.DontSaveInEditor | HideFlags.HideAndDontSave;
             generatedObject.hideFlags &= ~dontSaveFlags;
-        }
-
-        private static void RegisterReplacedObject(Object original, Object replacement)
-        {
-            if (original == null || replacement == null) return;
-            try
-            {
-                ObjectRegistry.RegisterReplacedObject(original, replacement);
-            }
-            catch (ArgumentException)
-            {
-                // NDMF requires registration before the replacement receives a reference.
-            }
         }
 
         private static bool TryGetColorFromAny(Material material, IReadOnlyList<string> propertyNames, out Color color)

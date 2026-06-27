@@ -2807,8 +2807,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 if (!changedWeights) continue;
                 SmoothGeneratedWeightsByTopology(mesh, weights, verticesInCoatWeightedSubmesh, generatedFinalIndices);
 
-                var newMesh = Object.Instantiate(mesh);
-                RegisterReplacedObject(mesh, newMesh);
+                var newMesh = NdmfObjectRegistry.Clone(mesh);
                 context?.AssetSaver.SaveAsset(newMesh);
                 newMesh.name = mesh.name + "_YMVRoidSkirtRefine";
                 newMesh.bindposes = bindposes.ToArray();
@@ -2949,8 +2948,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
                 if (!changedWeights) continue;
 
-                var newMesh = Object.Instantiate(mesh);
-                RegisterReplacedObject(mesh, newMesh);
+                var newMesh = NdmfObjectRegistry.Clone(mesh);
                 context?.AssetSaver.SaveAsset(newMesh);
                 newMesh.name = mesh.name + "_YMVRoidSkirtRefine";
                 newMesh.bindposes = bindposes.ToArray();
@@ -5114,19 +5112,6 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 var component = components[i];
                 if (component == null) continue;
                 Object.DestroyImmediate(component);
-            }
-        }
-
-        private static void RegisterReplacedObject(Object original, Object replacement)
-        {
-            if (original == null || replacement == null) return;
-            try
-            {
-                ObjectRegistry.RegisterReplacedObject(original, replacement);
-            }
-            catch (ArgumentException)
-            {
-                // The replacement may already have been referenced by NDMF.
             }
         }
 

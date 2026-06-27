@@ -310,23 +310,10 @@ public static class MeshTrimProcessor
         CopyBlendShapes(src, dst, vertexSources, renderer.name, preserveBlendShapes, trimmer != null && trimmer.debugEdgeCrossingRoutes);
 
         dst.RecalculateBounds();
-        RegisterReplacedObject(src, dst);
+        NdmfObjectRegistry.RegisterReplacement(src, dst);
         context?.AssetSaver.SaveAsset(dst);
         renderer.sharedMesh = dst;
         RestoreBlendShapeWeights(renderer, dst, savedBlendShapeNames, savedBlendShapeWeights);
-    }
-
-    private static void RegisterReplacedObject(UnityEngine.Object original, UnityEngine.Object replacement)
-    {
-        if (original == null || replacement == null) return;
-        try
-        {
-            ObjectRegistry.RegisterReplacedObject(original, replacement);
-        }
-        catch (ArgumentException)
-        {
-            // The replacement may already have been referenced by NDMF.
-        }
     }
 
     private static void ApplyDerivedMeshSettings(MeshTrimmerComponent trimmer)

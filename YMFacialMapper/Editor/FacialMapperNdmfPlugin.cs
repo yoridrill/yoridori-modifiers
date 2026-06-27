@@ -114,9 +114,8 @@ namespace YoridoriModifiers.FacialMapper
 
             var sourceController = GetFxAnimatorController(descriptor);
             var controller = sourceController != null
-                ? Object.Instantiate(sourceController)
+                ? NdmfObjectRegistry.Clone(sourceController)
                 : new AnimatorController();
-            RegisterReplacedObject(sourceController, controller);
 
             controller.name = "YM Facial Mapper FX";
             context.AssetSaver.SaveAsset(controller);
@@ -729,8 +728,7 @@ namespace YoridoriModifiers.FacialMapper
             if (layers == null || layerIndex >= layers.Length || layers[layerIndex].isDefault) return;
             if (layers[layerIndex].animatorController is not AnimatorController sourceController) return;
 
-            var controller = Object.Instantiate(sourceController);
-            RegisterReplacedObject(sourceController, controller);
+            var controller = NdmfObjectRegistry.Clone(sourceController);
             controller.name = $"{sourceController.name} YM Facial Mapper Gesture Face Stripped";
             context.AssetSaver.SaveAsset(controller);
 
@@ -1167,8 +1165,7 @@ namespace YoridoriModifiers.FacialMapper
 
             if (!changed) return (sourceTree, stripped);
 
-            var tree = Object.Instantiate(sourceTree);
-            RegisterReplacedObject(sourceTree, tree);
+            var tree = NdmfObjectRegistry.Clone(sourceTree);
             tree.name = $"{sourceTree.name} YM Facial Mapper Face Stripped";
             tree.children = rewrittenChildren;
             context.AssetSaver.SaveAsset(tree);
@@ -1194,8 +1191,7 @@ namespace YoridoriModifiers.FacialMapper
             strippedCurves = bindings.Length + objectBindings.Length;
             if (strippedCurves == 0) return sourceClip;
 
-            var clip = Object.Instantiate(sourceClip);
-            RegisterReplacedObject(sourceClip, clip);
+            var clip = NdmfObjectRegistry.Clone(sourceClip);
             clip.name = $"{sourceClip.name} YM Facial Mapper Face Stripped";
 
             foreach (var binding in bindings)
@@ -1284,19 +1280,6 @@ namespace YoridoriModifiers.FacialMapper
         private static void EnsureHandSignSettings(YMFacialMapper component)
         {
             YMFacialMapperDefaults.EnsureHandSigns(component);
-        }
-
-        private static void RegisterReplacedObject(Object original, Object replacement)
-        {
-            if (original == null || replacement == null) return;
-            try
-            {
-                ObjectRegistry.RegisterReplacedObject(original, replacement);
-            }
-            catch (ArgumentException)
-            {
-                // The replacement may already be known to NDMF if another service touched it first.
-            }
         }
 
         private readonly struct ConditionSpec

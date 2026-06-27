@@ -4,7 +4,6 @@ using nadena.dev.ndmf;
 using UnityEditor;
 using UnityEngine;
 using YoridoriModifiers.Core.Editor;
-using Object = UnityEngine.Object;
 
 namespace YoridoriModifiers.MToonToLilToon
 {
@@ -232,7 +231,7 @@ namespace YoridoriModifiers.MToonToLilToon
 
                 if (MToonToLilToonMapper.TryConvert(source, lilToonShader, globalOverrides, useToonStandardFallback, out var converted, report))
                 {
-                    RegisterReplacedObject(source, converted);
+                    NdmfObjectRegistry.RegisterReplacement(source, converted);
                     ApplyMToon10ShadingShiftStrengthMask(source, converted, report);
                     result.Add(converted);
                     resultSourceIndices.Add(i);
@@ -492,19 +491,6 @@ namespace YoridoriModifiers.MToonToLilToon
         {
             var isNormal = string.Equals(propertyName, "_BumpMap", System.StringComparison.OrdinalIgnoreCase);
             return GeneratedTextureUtility.CompressGeneratedTexture(atlas, propertyName, isNormal, buildTarget);
-        }
-
-        private static void RegisterReplacedObject(Object original, Object replacement)
-        {
-            if (original == null || replacement == null) return;
-            try
-            {
-                ObjectRegistry.RegisterReplacedObject(original, replacement);
-            }
-            catch (System.ArgumentException)
-            {
-                // NDMF requires registration before the replacement receives a reference.
-            }
         }
 
         private static void ValidateRendererMaterialTextureReferencesBeforeAao(MToonToLilToonComponent component, ConversionReport report)

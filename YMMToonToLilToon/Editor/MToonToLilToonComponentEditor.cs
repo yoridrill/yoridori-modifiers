@@ -103,6 +103,7 @@ namespace YoridoriModifiers.MToonToLilToon
             builder.Append('|').Append((int)component.faceShadowMaskType);
             builder.Append('|').Append(component.shadowStrengthMaskLod);
             builder.Append('|').Append(component.disableShadowReceiveForFace);
+            builder.Append('|').Append(component.disableRimShadeForFace);
             builder.Append('|').Append(component.disableBacklightStrengthForFace);
             builder.Append('|').Append(component.useToonStandardFallback);
             builder.Append('|').Append(component.verboseLog);
@@ -119,14 +120,22 @@ namespace YoridoriModifiers.MToonToLilToon
                 return;
             }
 
-            builder.Append(overrides.enableShadowReceive);
+            builder.Append(overrides.flipBackfaceNormal);
+            builder.Append('|').Append(overrides.enableShadowReceive);
             builder.Append('|').Append(overrides.shadowReceive);
             builder.Append('|').Append(overrides.enableShadowBorder);
             AppendColor(builder, overrides.shadowBorderColor);
             builder.Append('|').Append(overrides.shadowBorderStrength);
             builder.Append('|').Append(overrides.enableBacklight);
+            builder.Append('|').Append((int)overrides.backlightColorMode);
             AppendColor(builder, overrides.backlightColor);
             builder.Append('|').Append(overrides.backlightMainStrength);
+            builder.Append('|').Append(overrides.backlightBorder);
+            builder.Append('|').Append(overrides.backlightBlur);
+            builder.Append('|').Append(overrides.enableRimShade);
+            AppendColor(builder, overrides.rimShadeColor);
+            builder.Append('|').Append(overrides.rimShadeBorder);
+            builder.Append('|').Append(overrides.rimShadeBlur);
             builder.Append('|').Append(overrides.enableDistanceFade);
             AppendColor(builder, overrides.distanceFadeColor);
             builder.Append('|').Append(overrides.distanceFadeStrength);
@@ -183,6 +192,9 @@ namespace YoridoriModifiers.MToonToLilToon
             EditorGUILayout.Space(SectionTopSpacing);
             DrawUnderlinedSectionTitle(T("lilToon固有機能の一括設定", "Bulk Settings for lilToon-specific Features"));
             EditorGUILayout.Space(2f);
+            DrawSingleOverrideToggle(
+                overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.flipBackfaceNormal)),
+                T("裏面の法線を反転", "Flip Backface Normal"));
             DrawOverrideGroup(
                 overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.enableShadowReceive)),
                 T("影を受け取る", "Receive Shadow"),
@@ -197,19 +209,46 @@ namespace YoridoriModifiers.MToonToLilToon
                 overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.shadowBorderColor)),
                 T("幅", "Width"),
                 overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.shadowBorderStrength)));
-            DrawOverrideGroupWithThirdRow(
+            DrawOverrideGroupRows(
+                overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.enableRimShade)),
+                new GUIContent(T("リムシェード", "Rim Shade")),
+                new[]
+                {
+                    T("色", "Color"),
+                    T("範囲", "Range"),
+                    T("ぼかし", "Blur"),
+                    T("顔だけ除外する", "Exclude Face Only")
+                },
+                new[]
+                {
+                    overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.rimShadeColor)),
+                    overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.rimShadeBorder)),
+                    overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.rimShadeBlur)),
+                    serializedObject.FindProperty(nameof(MToonToLilToonComponent.disableRimShadeForFace))
+                });
+            DrawBacklightOverrideGroup(
                 overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.enableBacklight)),
                 TT(
                     "逆光ライト",
-                    "撮影用にBloomで強く光らせたい場合は、HDRカラーのIntensityを3前後まで上げてください。",
+                    "ぼかしを広げるとSSS風の表現が可能です。 Bloomでエッジを強く光らせたい場合は、指定色でIntensityを3前後まで上げてください。",
                     "Backlight",
-                    "For strong bloom in renders, raise HDR color intensity to around 3."),
-                T("色", "Color"),
+                    "Increasing blur enables an SSS-like appearance. To make edges glow strongly with Bloom, use a custom color and raise Intensity to around 3."),
+                overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.backlightColorMode)),
                 overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.backlightColor)),
-                T("メインカラーの強度", "Main Color Strength"),
-                overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.backlightMainStrength)),
-                T("顔だけ除外する", "Exclude Face Only"),
-                serializedObject.FindProperty(nameof(MToonToLilToonComponent.disableBacklightStrengthForFace)));
+                new[]
+                {
+                    T("メインカラーの強度", "Main Color Strength"),
+                    T("範囲", "Range"),
+                    T("ぼかし", "Blur"),
+                    T("顔だけ除外する", "Exclude Face Only")
+                },
+                new[]
+                {
+                    overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.backlightMainStrength)),
+                    overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.backlightBorder)),
+                    overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.backlightBlur)),
+                    serializedObject.FindProperty(nameof(MToonToLilToonComponent.disableBacklightStrengthForFace))
+                });
             DrawOverrideGroup(
                 overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.enableDistanceFade)),
                 TT(
@@ -229,6 +268,13 @@ namespace YoridoriModifiers.MToonToLilToon
                     "Outline Z Bias",
                     "Moves outline forward/backward. Helps suppress fold artifacts and show outlines on silhouette only."));
             return EditorGUI.EndChangeCheck();
+        }
+
+        private static void DrawSingleOverrideToggle(SerializedProperty valueProp, string label)
+        {
+            var rowRect = EditorGUILayout.GetControlRect();
+            valueProp.boolValue = EditorGUI.ToggleLeft(rowRect, label, valueProp.boolValue);
+            EditorGUILayout.Space(OverrideGroupSpacing);
         }
 
         private void DrawSpecificPartAdjustmentsHeading()
@@ -320,6 +366,79 @@ namespace YoridoriModifiers.MToonToLilToon
             using (new EditorGUI.DisabledScope(!enabledProp.boolValue))
             {
                 DrawTwoColumnPropertyRow(thirdItemLabelRect, thirdValueRect, thirdLabel, thirdValueProp);
+            }
+
+            EditorGUILayout.Space(OverrideGroupSpacing);
+        }
+
+        private void DrawBacklightOverrideGroup(
+            SerializedProperty enabledProp,
+            GUIContent groupLabel,
+            SerializedProperty colorModeProp,
+            SerializedProperty customColorProp,
+            string[] labels,
+            SerializedProperty[] valueProps)
+        {
+            var colorRowRect = EditorGUILayout.GetControlRect();
+            GetOverrideColumnRects(colorRowRect, out var categoryRect, out var itemLabelRect, out var valueRect);
+            DrawCategoryColumn(categoryRect, enabledProp, groupLabel, showToggle: true);
+            using (new EditorGUI.DisabledScope(!enabledProp.boolValue))
+            {
+                EditorGUI.LabelField(itemLabelRect, T("色", "Color"));
+                var mode = (BacklightColorMode)colorModeProp.intValue;
+                var options = new[]
+                {
+                    T("影色+Intensity 1", "Shade Color + Intensity 1"),
+                    T("指定色", "Custom Color")
+                };
+
+                if (mode == BacklightColorMode.Custom)
+                {
+                    var halfWidth = (valueRect.width - 4f) * 0.5f;
+                    var modeRect = new Rect(valueRect.x, valueRect.y, halfWidth, valueRect.height);
+                    var colorRect = new Rect(valueRect.x + halfWidth + 4f, valueRect.y, halfWidth, valueRect.height);
+                    mode = (BacklightColorMode)EditorGUI.Popup(modeRect, (int)mode, options);
+                    EditorGUI.PropertyField(colorRect, customColorProp, GUIContent.none);
+                }
+                else
+                {
+                    mode = (BacklightColorMode)EditorGUI.Popup(valueRect, (int)mode, options);
+                }
+
+                colorModeProp.intValue = (int)mode;
+            }
+
+            for (var i = 0; i < labels.Length; i++)
+            {
+                var rowRect = EditorGUILayout.GetControlRect();
+                GetOverrideColumnRects(rowRect, out categoryRect, out itemLabelRect, out valueRect);
+                DrawCategoryColumn(categoryRect, enabledProp, GUIContent.none, showToggle: false);
+                using (new EditorGUI.DisabledScope(!enabledProp.boolValue))
+                {
+                    DrawTwoColumnPropertyRow(itemLabelRect, valueRect, labels[i], valueProps[i]);
+                }
+            }
+
+            EditorGUILayout.Space(OverrideGroupSpacing);
+        }
+
+        private void DrawOverrideGroupRows(
+            SerializedProperty enabledProp,
+            GUIContent groupLabel,
+            string[] labels,
+            SerializedProperty[] valueProps)
+        {
+            if (labels == null || valueProps == null || labels.Length == 0 || labels.Length != valueProps.Length) return;
+
+            for (var i = 0; i < labels.Length; i++)
+            {
+                var rowRect = EditorGUILayout.GetControlRect();
+                GetOverrideColumnRects(rowRect, out var categoryRect, out var itemLabelRect, out var valueRect);
+                DrawCategoryColumn(categoryRect, enabledProp, i == 0 ? groupLabel : GUIContent.none, showToggle: i == 0);
+                using (new EditorGUI.DisabledScope(!enabledProp.boolValue))
+                {
+                    DrawTwoColumnPropertyRow(itemLabelRect, valueRect, labels[i], valueProps[i]);
+                }
             }
 
             EditorGUILayout.Space(OverrideGroupSpacing);

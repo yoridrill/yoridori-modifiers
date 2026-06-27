@@ -22,6 +22,7 @@ namespace YoridoriModifiers.MToonToLilToon
         public FaceShadowMaskType faceShadowMaskType = FaceShadowMaskType.Flat;
         public float shadowStrengthMaskLod;
         public bool disableShadowReceiveForFace;
+        public bool disableRimShadeForFace;
         public bool disableBacklightStrengthForFace;
         public bool useToonStandardFallback;
         public LilToonGlobalOverrides globalOverrides = new();

@@ -14,18 +14,32 @@ namespace YoridoriModifiers.MToonToLilToon
         Transparent,
     }
 
+    public enum BacklightColorMode
+    {
+        ShadowColorIntensityOne,
+        Custom,
+    }
+
     [Serializable]
     public sealed class LilToonGlobalOverrides
     {
+        public bool flipBackfaceNormal = true;
         public bool enableShadowReceive = true;
         [Range(0f, 1f)] public float shadowReceive = 0.5f;
         public bool enableShadowBorder = true;
         public Color shadowBorderColor = new(1f, 25f / 255f, 0f, 1f);
         [Range(0f, 1f)] public float shadowBorderStrength = 0.08f;
         public bool enableBacklight = true;
+        public BacklightColorMode backlightColorMode = BacklightColorMode.ShadowColorIntensityOne;
         [ColorUsage(false, true)] public Color backlightColor = Color.white;
         [FormerlySerializedAs("backlightStrength")]
-        [Range(0f, 1f)] public float backlightMainStrength = 0.5f;
+        [Range(0f, 1f)] public float backlightMainStrength = 1f;
+        [Range(0f, 1f)] public float backlightBorder = 0.35f;
+        [Range(0f, 1f)] public float backlightBlur = 0.05f;
+        public bool enableRimShade;
+        public Color rimShadeColor = new(0.5f, 0.5f, 0.5f, 1f);
+        [Range(0f, 1f)] public float rimShadeBorder = 0.5f;
+        [Range(0f, 1f)] public float rimShadeBlur = 1f;
         public bool enableDistanceFade = true;
         public Color distanceFadeColor = new(10f / 255f, 7f / 255f, 7f / 255f, 1f);
         [Range(0f, 1f)] public float distanceFadeStrength = 1f;
@@ -430,6 +444,8 @@ namespace YoridoriModifiers.MToonToLilToon
         public static void ApplyGlobalOverridesToMaterial(Material material, LilToonGlobalOverrides overrides)
         {
             if (overrides == null) return;
+            SetIfExists(material, "_FlipNormal", overrides.flipBackfaceNormal ? 1f : 0f);
+
             if (overrides.enableShadowReceive)
             {
                 SetIfExists(material, "_ShadowReceive", overrides.shadowReceive);
@@ -465,8 +481,19 @@ namespace YoridoriModifiers.MToonToLilToon
             SetIfExists(material, "_UseBacklight", useBacklight ? 1f : 0f);
             if (useBacklight)
             {
-                SetIfExists(material, "_BacklightColor", overrides.backlightColor);
+                SetIfExists(material, "_BacklightColor", ResolveBacklightColor(material, overrides));
                 SetIfExists(material, "_BacklightMainStrength", overrides.backlightMainStrength);
+                SetIfExists(material, "_BacklightBorder", overrides.backlightBorder);
+                SetIfExists(material, "_BacklightBlur", overrides.backlightBlur);
+            }
+
+            var useRimShade = overrides.enableRimShade;
+            SetIfExists(material, "_UseRimShade", useRimShade ? 1f : 0f);
+            if (useRimShade)
+            {
+                SetIfExists(material, "_RimShadeColor", overrides.rimShadeColor);
+                SetIfExists(material, "_RimShadeBorder", overrides.rimShadeBorder);
+                SetIfExists(material, "_RimShadeBlur", overrides.rimShadeBlur);
             }
 
             var hasOutline = (material.HasProperty("_UseOutline") && material.GetFloat("_UseOutline") > 0.5f)
@@ -476,6 +503,25 @@ namespace YoridoriModifiers.MToonToLilToon
             {
                 SetIfExists(material, "_OutlineZBias", overrides.outlineZBias);
             }
+        }
+
+        private static Color ResolveBacklightColor(Material material, LilToonGlobalOverrides overrides)
+        {
+            if (overrides.backlightColorMode == BacklightColorMode.Custom)
+            {
+                return overrides.backlightColor;
+            }
+
+            if (!TryFindExistingProperty(material, new[] { "_ShadowColor", "_Shadow1stColor" }, out var shadowColorProperty))
+            {
+                return overrides.backlightColor;
+            }
+
+            // lilToon's backlight is Gamma HDR. Convert the copied sRGB shade color,
+            // then apply one HDR exposure stop (Intensity +1).
+            var backlightColor = material.GetColor(shadowColorProperty).linear * 2f;
+            backlightColor.a = 1f;
+            return backlightColor;
         }
 
         private static void ApplyShadowState(Material source, Material destination)

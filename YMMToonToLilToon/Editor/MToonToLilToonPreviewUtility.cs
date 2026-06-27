@@ -85,6 +85,7 @@ namespace YoridoriModifiers.MToonToLilToon
                 previewComponent,
                 sourceComponent.globalOverrides,
                 sourceComponent.disableShadowReceiveForFace,
+                sourceComponent.disableRimShadeForFace,
                 sourceComponent.disableBacklightStrengthForFace);
             SceneView.RepaintAll();
         }

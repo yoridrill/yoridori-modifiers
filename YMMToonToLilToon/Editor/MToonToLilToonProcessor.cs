@@ -30,6 +30,7 @@ namespace YoridoriModifiers.MToonToLilToon
             MToonToLilToonComponent component,
             LilToonGlobalOverrides overrides,
             bool disableShadowReceiveForFace = false,
+            bool disableRimShadeForFace = false,
             bool disableBacklightStrengthForFace = false)
         {
             if (component == null || overrides == null) return;
@@ -49,9 +50,13 @@ namespace YoridoriModifiers.MToonToLilToon
 
             ApplyBacklightExclusionToMouthMaterials(materials);
 
-            if (!disableShadowReceiveForFace && !disableBacklightStrengthForFace) return;
+            if (!disableShadowReceiveForFace && !disableRimShadeForFace && !disableBacklightStrengthForFace) return;
 
-            ApplyFaceGlobalExclusionSettings(component.faceShadowFaceMaterial, disableShadowReceiveForFace, disableBacklightStrengthForFace);
+            ApplyFaceGlobalExclusionSettings(
+                component.faceShadowFaceMaterial,
+                disableShadowReceiveForFace,
+                disableRimShadeForFace,
+                disableBacklightStrengthForFace);
         }
 
         internal static void ApplyOnBuild(
@@ -121,11 +126,12 @@ namespace YoridoriModifiers.MToonToLilToon
                     component.shadowStrengthMaskLod);
             }
 
-            if (component.disableShadowReceiveForFace || component.disableBacklightStrengthForFace)
+            if (component.disableShadowReceiveForFace || component.disableRimShadeForFace || component.disableBacklightStrengthForFace)
             {
                 ApplyFaceGlobalExclusionSettings(
                     resolvedFaceShadowMaterial,
                     component.disableShadowReceiveForFace,
+                    component.disableRimShadeForFace,
                     component.disableBacklightStrengthForFace);
             }
 
@@ -363,12 +369,18 @@ namespace YoridoriModifiers.MToonToLilToon
         private static void ApplyFaceGlobalExclusionSettings(
             Material faceMaterial,
             bool disableShadowReceiveForFace,
+            bool disableRimShadeForFace,
             bool disableBacklightStrengthForFace)
         {
             if (faceMaterial == null) return;
             if (disableShadowReceiveForFace)
             {
                 SetFloatIfAnyExists(faceMaterial, new[] { "_ShadowReceive" }, 0f);
+            }
+
+            if (disableRimShadeForFace)
+            {
+                SetFloatIfAnyExists(faceMaterial, new[] { "_UseRimShade" }, 0f);
             }
 
             if (disableBacklightStrengthForFace)

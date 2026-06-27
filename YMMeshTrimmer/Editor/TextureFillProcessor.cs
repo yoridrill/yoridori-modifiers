@@ -10,6 +10,7 @@ namespace YoridoriModifiers.MeshTrimmer
 public static class TexturePostProcessProcessor
 {
     private const string ToolName = "YM Mesh Trimmer";
+    private const float SolidifyMinimumSeedAlpha = 0.25f;
 
     public static void ApplyBuildTimeReplacement(MeshTrimmerComponent trimmer, BuildContext context = null)
     {
@@ -148,7 +149,7 @@ public static class TexturePostProcessProcessor
         }
         else if (mode == MeshTrimmerComponent.TexturePostProcessMode.Solidify)
         {
-            ApplySolidify(pixels, width, height);
+            ApplySolidify(pixels, width, height, trimmer != null ? trimmer.alphaThreshold : 0f);
         }
 
         processed = CreateWritableTexture(width, height, source, linear);
@@ -274,24 +275,38 @@ public static class TexturePostProcessProcessor
         }
     }
 
-    private static void ApplySolidify(Color[] pixels, int width, int height)
+    private static void ApplySolidify(Color[] pixels, int width, int height, float configuredAlphaThreshold)
     {
         int size = width * height;
         bool[] isSeed = new bool[size];
         int[] nearest = new int[size];
         Queue<int> queue = new Queue<int>(size);
+        float maxAlpha = 0f;
 
         for (int i = 0; i < size; i++)
         {
             nearest[i] = -1;
+            maxAlpha = Mathf.Max(maxAlpha, pixels[i].a);
         }
+
+        if (maxAlpha <= 0f) return;
+
+        // Block compression can turn transparent black texels into dark pixels with a
+        // small non-zero alpha. Treating every alpha > 0 pixel as a source spreads those
+        // artifacts across the transparent area. Use only sufficiently opaque pixels as
+        // color sources, while retaining a fallback for textures that are translucent
+        // throughout.
+        float requestedSeedAlpha = Mathf.Max(SolidifyMinimumSeedAlpha, configuredAlphaThreshold);
+        float seedAlpha = maxAlpha >= requestedSeedAlpha
+            ? requestedSeedAlpha
+            : maxAlpha * 0.5f;
 
         for (int y = 0; y < height; y++)
         {
             for (int x = 0; x < width; x++)
             {
                 int index = y * width + x;
-                if (pixels[index].a > 0f)
+                if (pixels[index].a >= seedAlpha)
                 {
                     isSeed[index] = true;
                     nearest[index] = index;

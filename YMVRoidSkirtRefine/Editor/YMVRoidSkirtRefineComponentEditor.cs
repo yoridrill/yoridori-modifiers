@@ -1097,9 +1097,9 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                         floorEnableProp,
                         TT(
                             "床を追加",
-                            "アバタールート直下にPlane形状の床コライダーを追加し、対象の揺れボーンに設定します。",
+                            "Hipsと同階層（Armature直下）にPlane形状の床コライダーを追加し、対象の揺れボーンに設定します。",
                             "Add Floor",
-                            "Adds a Plane floor collider under the avatar root and assigns it to the target swing PhysBones."));
+                            "Adds a Plane floor collider alongside Hips under the Armature and assigns it to the target swing PhysBones."));
                 }
             }
         }

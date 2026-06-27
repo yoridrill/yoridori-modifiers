@@ -199,7 +199,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         [Tooltip("Add generated capsule PhysBone colliders under both LowerLeg bones for one-piece refinement.")]
         public bool onePieceUseLowerLegColliders = true;
 
-        [Tooltip("Add a generated floor PhysBone collider under the avatar root for one-piece refinement.")]
+        [Tooltip("Add a generated floor PhysBone collider alongside Hips under the Armature for one-piece refinement.")]
         public bool onePieceUseFloorCollider = false;
 
         [Tooltip("Use rotation constraints on the front root bones for one-piece refinement.")]
@@ -292,7 +292,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         [Tooltip("Add generated capsule PhysBone colliders under both LowerLeg bones for long coat refinement.")]
         public bool longCoatUseLowerLegColliders = true;
 
-        [Tooltip("Add a generated floor PhysBone collider under the avatar root for long coat refinement.")]
+        [Tooltip("Add a generated floor PhysBone collider alongside Hips under the Armature for long coat refinement.")]
         public bool longCoatUseFloorCollider = false;
 
         [Tooltip("PhysBone settings applied to the generated long coat unified root.")]

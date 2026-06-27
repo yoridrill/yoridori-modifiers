@@ -75,7 +75,7 @@ Front-Left、Front-Right、Side-Left、Side-Right、Back-Left、Back-Right の6�
 
 `UpperLegに追加`、`LowerLegに追加` を有効にすると、左右の脚ボーン配下にカプセルPhysBoneColliderを追加します。追加前に、左右UpperLeg/LowerLeg配下の既存PhysBoneColliderは削除されます。
 
-`床を追加` を有効にすると、アバタールート直下にPlane形状の床PhysBoneColliderを追加し、ワンピースの揺れボーンへ設定します。Planeは無限平面として扱われるため、Scaleは設定しません。
+`床を追加` を有効にすると、Hipsと同階層（Armature直下）にPlane形状の床PhysBoneColliderを追加し、ワンピースの揺れボーンへ設定します。Planeは無限平面として扱われるため、Scaleは設定しません。
 
 ### PhysBone
 

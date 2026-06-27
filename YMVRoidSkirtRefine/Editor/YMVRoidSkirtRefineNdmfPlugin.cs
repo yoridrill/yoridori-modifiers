@@ -457,7 +457,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 vqtSettings,
                 removedPhysBoneColliders);
             AddFloorCollider(
-                avatarRoot.transform,
+                hips.parent,
                 onePieceColliders,
                 "YM_VRoidSkirtRefine_OnePieceFloorCollider",
                 "one-piece",
@@ -998,7 +998,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 vqtSettings,
                 removedPhysBoneColliders);
             AddFloorCollider(
-                avatarRoot.transform,
+                hips.parent,
                 longCoatColliders,
                 "YM_VRoidSkirtRefine_LongCoatFloorCollider",
                 "long coat",
@@ -2092,21 +2092,21 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         }
 
         private static void AddFloorCollider(
-            Transform avatarRoot,
+            Transform armature,
             List<VRCPhysBoneColliderBase> colliders,
             string colliderName,
             string logLabel,
             bool enabled,
             bool verboseLog)
         {
-            if (!enabled || avatarRoot == null || colliders == null) return;
+            if (!enabled || armature == null || colliders == null) return;
 
-            var colliderTransform = avatarRoot.Find(colliderName);
+            var colliderTransform = armature.Find(colliderName);
             if (colliderTransform == null)
             {
                 var colliderObject = new GameObject(colliderName);
                 colliderTransform = colliderObject.transform;
-                colliderTransform.SetParent(avatarRoot, false);
+                colliderTransform.SetParent(armature, false);
             }
 
             colliderTransform.localPosition = Vector3.zero;
@@ -2118,7 +2118,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 collider = colliderTransform.gameObject.AddComponent<VRCPhysBoneCollider>();
             }
 
-            collider.rootTransform = avatarRoot;
+            collider.rootTransform = armature;
             collider.shapeType = VRCPhysBoneColliderBase.ShapeType.Plane;
             collider.insideBounds = false;
             collider.bonesAsSpheres = false;

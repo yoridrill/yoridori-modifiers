@@ -360,11 +360,11 @@ namespace YoridoriModifiers.MToonToLilToon
                 secondValueProp,
                 addBottomSpacing: false);
 
-            var thirdRowRect = EditorGUILayout.GetControlRect();
-            GetOverrideColumnRects(thirdRowRect, out var thirdCategoryRect, out var thirdItemLabelRect, out var thirdValueRect);
-            DrawCategoryColumn(thirdCategoryRect, enabledProp, string.Empty, showToggle: false);
-            using (new EditorGUI.DisabledScope(!enabledProp.boolValue))
+            if (enabledProp.boolValue)
             {
+                var thirdRowRect = EditorGUILayout.GetControlRect();
+                GetOverrideColumnRects(thirdRowRect, out var thirdCategoryRect, out var thirdItemLabelRect, out var thirdValueRect);
+                DrawCategoryColumn(thirdCategoryRect, enabledProp, string.Empty, showToggle: false);
                 DrawTwoColumnPropertyRow(thirdItemLabelRect, thirdValueRect, thirdLabel, thirdValueProp);
             }
 
@@ -382,7 +382,7 @@ namespace YoridoriModifiers.MToonToLilToon
             var colorRowRect = EditorGUILayout.GetControlRect();
             GetOverrideColumnRects(colorRowRect, out var categoryRect, out var itemLabelRect, out var valueRect);
             DrawCategoryColumn(categoryRect, enabledProp, groupLabel, showToggle: true);
-            using (new EditorGUI.DisabledScope(!enabledProp.boolValue))
+            if (enabledProp.boolValue)
             {
                 EditorGUI.LabelField(itemLabelRect, T("色", "Color"));
                 var mode = (BacklightColorMode)colorModeProp.intValue;
@@ -408,13 +408,13 @@ namespace YoridoriModifiers.MToonToLilToon
                 colorModeProp.intValue = (int)mode;
             }
 
-            for (var i = 0; i < labels.Length; i++)
+            if (enabledProp.boolValue)
             {
-                var rowRect = EditorGUILayout.GetControlRect();
-                GetOverrideColumnRects(rowRect, out categoryRect, out itemLabelRect, out valueRect);
-                DrawCategoryColumn(categoryRect, enabledProp, GUIContent.none, showToggle: false);
-                using (new EditorGUI.DisabledScope(!enabledProp.boolValue))
+                for (var i = 0; i < labels.Length; i++)
                 {
+                    var rowRect = EditorGUILayout.GetControlRect();
+                    GetOverrideColumnRects(rowRect, out categoryRect, out itemLabelRect, out valueRect);
+                    DrawCategoryColumn(categoryRect, enabledProp, GUIContent.none, showToggle: false);
                     DrawTwoColumnPropertyRow(itemLabelRect, valueRect, labels[i], valueProps[i]);
                 }
             }
@@ -430,13 +430,17 @@ namespace YoridoriModifiers.MToonToLilToon
         {
             if (labels == null || valueProps == null || labels.Length == 0 || labels.Length != valueProps.Length) return;
 
-            for (var i = 0; i < labels.Length; i++)
+            var firstRowRect = EditorGUILayout.GetControlRect();
+            GetOverrideColumnRects(firstRowRect, out var categoryRect, out var itemLabelRect, out var valueRect);
+            DrawCategoryColumn(categoryRect, enabledProp, groupLabel, showToggle: true);
+            if (enabledProp.boolValue)
             {
-                var rowRect = EditorGUILayout.GetControlRect();
-                GetOverrideColumnRects(rowRect, out var categoryRect, out var itemLabelRect, out var valueRect);
-                DrawCategoryColumn(categoryRect, enabledProp, i == 0 ? groupLabel : GUIContent.none, showToggle: i == 0);
-                using (new EditorGUI.DisabledScope(!enabledProp.boolValue))
+                DrawTwoColumnPropertyRow(itemLabelRect, valueRect, labels[0], valueProps[0]);
+                for (var i = 1; i < labels.Length; i++)
                 {
+                    var rowRect = EditorGUILayout.GetControlRect();
+                    GetOverrideColumnRects(rowRect, out categoryRect, out itemLabelRect, out valueRect);
+                    DrawCategoryColumn(categoryRect, enabledProp, GUIContent.none, showToggle: false);
                     DrawTwoColumnPropertyRow(itemLabelRect, valueRect, labels[i], valueProps[i]);
                 }
             }
@@ -456,16 +460,13 @@ namespace YoridoriModifiers.MToonToLilToon
             var firstRowRect = EditorGUILayout.GetControlRect();
             GetOverrideColumnRects(firstRowRect, out var firstCategoryRect, out var firstItemLabelRect, out var firstValueRect);
             DrawCategoryColumn(firstCategoryRect, enabledProp, groupLabel, showToggle: true);
-            using (new EditorGUI.DisabledScope(!enabledProp.boolValue))
+            if (enabledProp.boolValue)
             {
                 DrawTwoColumnPropertyRow(firstItemLabelRect, firstValueRect, firstLabel, firstValueProp);
-            }
 
-            var secondRowRect = EditorGUILayout.GetControlRect();
-            GetOverrideColumnRects(secondRowRect, out var secondCategoryRect, out var secondItemLabelRect, out var secondValueRect);
-            DrawCategoryColumn(secondCategoryRect, enabledProp, string.Empty, showToggle: false);
-            using (new EditorGUI.DisabledScope(!enabledProp.boolValue))
-            {
+                var secondRowRect = EditorGUILayout.GetControlRect();
+                GetOverrideColumnRects(secondRowRect, out var secondCategoryRect, out var secondItemLabelRect, out var secondValueRect);
+                DrawCategoryColumn(secondCategoryRect, enabledProp, string.Empty, showToggle: false);
                 DrawTwoColumnPropertyRow(secondItemLabelRect, secondValueRect, secondLabel, secondValueProp);
             }
 

@@ -44,6 +44,7 @@ namespace YoridoriModifiers.HairLookKit
             component.enableHairMerge = true;
             component.enableEyebrowStencil = true;
             component.enableFakeShadow = true;
+            component.fakeShadowCompositeMode = YMHairLookKitComponent.FakeShadowCompositeMode.Multiply;
             component.enableHairOutlineCorrection = true;
             component.hairSelections = HairMaterialSelector.BuildDefaultSelections(GetRendererMaterials(avatarRoot));
             component.representativeHairMaterialOverride = component.hairSelections.FirstOrDefault(s => s != null && s.selected)?.material;

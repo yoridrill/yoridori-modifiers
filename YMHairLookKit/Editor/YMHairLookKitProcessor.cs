@@ -42,11 +42,14 @@ namespace YoridoriModifiers.HairLookKit
             component.errors = errors;
 
             var warnings = new List<string>();
-            var selectedMergeMaterials = component.enableHairMerge
-                ? HairLookTargetResolver.ResolveMaterialSet(component.hairSelections
-                    .Where(s => s != null && s.selected && s.material != null)
-                    .Select(s => s.material), currentMaterials)
-                : new HashSet<Material>();
+            var selectedConfiguredMaterials = component.hairSelections
+                .Where(s => s != null && s.selected && s.material != null)
+                .Select(s => s.material)
+                .ToList();
+            var canonicalByMergeMaterial = component.enableHairMerge
+                ? HairLookTargetResolver.ResolveMaterialCanonicalMap(selectedConfiguredMaterials, currentMaterials)
+                : new Dictionary<Material, Material>();
+            var selectedMergeMaterials = canonicalByMergeMaterial.Keys.ToHashSet();
             var representative = HairLookTargetResolver.ResolveCurrentMaterialReference(component.representativeHairMaterialOverride, currentMaterials)
                 ?? selectedMergeMaterials.FirstOrDefault();
 
@@ -64,28 +67,30 @@ namespace YoridoriModifiers.HairLookKit
             if (component.enableHairMerge && selectedMergeMaterials.Count > 0)
             {
                 onProgress?.Invoke("Merging hair materials...");
-                foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
-                {
-                    var result = HairMaterialMerger.MergeRenderer(
-                        renderer,
-                        selectedMergeMaterials,
-                        representative,
-                        enableMergedOutline,
-                        component.hairTipOutlineWidth,
-                        component.hairTipRange,
-                        component.hairAtlasMaxSize,
-                        warnings,
-                        component.verboseLog,
-                        onProgress,
-                        buildContext);
-                    if (result != null) mergedResults.Add(result);
-                }
+                var result = HairMaterialMerger.MergeAvatar(
+                    root,
+                    selectedMergeMaterials,
+                    canonicalByMergeMaterial,
+                    representative,
+                    enableMergedOutline,
+                    component.hairTipOutlineWidth,
+                    component.hairTipRange,
+                    component.hairAtlasMaxSize,
+                    warnings,
+                    component.verboseLog,
+                    onProgress,
+                    buildContext);
+                if (result != null) mergedResults.Add(result);
             }
 
             currentMaterials = HairLookTargetResolver.CollectCurrentMaterials(root);
-            HairLookFeatureApplier.ApplyEyebrow(component, currentMaterials, mergedResults, errors, onProgress);
-            HairLookFeatureApplier.ApplyFakeShadow(component, root, currentMaterials, mergedResults, errors, warnings, onProgress, buildContext);
-            HairLookFeatureApplier.ApplyOutline(component, root, currentMaterials, errors, route, onProgress, buildContext);
+            var mutationContext = new HairLookMaterialMutationContext(
+                root,
+                buildContext,
+                mergedResults.Where(result => result?.mergedMaterial != null).Select(result => result.mergedMaterial));
+            HairLookFeatureApplier.ApplyEyebrow(component, currentMaterials, mergedResults, errors, onProgress, mutationContext);
+            HairLookFeatureApplier.ApplyFakeShadow(component, root, currentMaterials, mergedResults, errors, warnings, onProgress, buildContext, mutationContext);
+            HairLookFeatureApplier.ApplyOutline(component, root, currentMaterials, errors, route, onProgress, buildContext, mutationContext);
 
             component.warnings = warnings;
             if (component.verboseLog)

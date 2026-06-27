@@ -14,6 +14,12 @@ namespace YoridoriModifiers.HairLookKit
             Material = 1
         }
 
+        public enum FakeShadowCompositeMode
+        {
+            Multiply = 0,
+            Darken = 1,
+        }
+
         public bool enableHairMerge;
         public List<HairMaterialSelection> hairSelections = new();
         public Material representativeHairMaterialOverride;
@@ -31,6 +37,7 @@ namespace YoridoriModifiers.HairLookKit
         public Material fakeShadowFaceMaterial;
         public Vector3 fakeShadowDirection = new(1f, 4f, 2f);
         public float fakeShadowOffset = 0.005f;
+        public FakeShadowCompositeMode fakeShadowCompositeMode = FakeShadowCompositeMode.Multiply;
 
         public bool enableHairOutlineCorrection;
         public HairTargetMode outlineHairTargetMode = HairTargetMode.MergedHair;

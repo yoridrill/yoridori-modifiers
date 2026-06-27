@@ -196,6 +196,7 @@ namespace YoridoriModifiers.HairLookKit
             DrawMaterialPopupRow(T("顔", "Face"), serializedObject.FindProperty(nameof(YMHairLookKitComponent.fakeShadowFaceMaterial)), _materials, true);
             DrawPropertyRow(T("向き", "Direction"), serializedObject.FindProperty(nameof(YMHairLookKitComponent.fakeShadowDirection)));
             DrawPropertyRow(T("オフセット", "Offset"), serializedObject.FindProperty(nameof(YMHairLookKitComponent.fakeShadowOffset)));
+            DrawFakeShadowCompositeModeRow(serializedObject.FindProperty(nameof(YMHairLookKitComponent.fakeShadowCompositeMode)));
             DrawCategoryErrors(component, "FakeShadow");
         }
 
@@ -384,6 +385,20 @@ namespace YoridoriModifiers.HairLookKit
             GetThreeColumnRects(row, out _, out var labelRect, out var valueRect);
             EditorGUI.LabelField(labelRect, label);
             prop.floatValue = EditorGUI.Slider(valueRect, prop.floatValue, min, max);
+        }
+
+        private void DrawFakeShadowCompositeModeRow(SerializedProperty prop)
+        {
+            if (prop == null) return;
+            var row = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
+            GetThreeColumnRects(row, out _, out var labelRect, out var valueRect);
+            EditorGUI.LabelField(labelRect, TT(
+                "合成モード",
+                "FakeShadowと顔の色を合成する方式です。",
+                "Blend Mode",
+                "Chooses how FakeShadow is composited with the face."));
+            var options = new[] { T("乗算", "Multiply"), T("比較(暗)", "Darken") };
+            prop.enumValueIndex = GUI.Toolbar(valueRect, Mathf.Clamp(prop.enumValueIndex, 0, options.Length - 1), options);
         }
 
         private static void GetThreeColumnRects(Rect row, out Rect firstRect, out Rect secondRect, out Rect valueRect)

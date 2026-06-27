@@ -16,9 +16,17 @@ namespace YoridoriModifiers.HairLookKit
             public Material mergedMaterial;
         }
 
-        internal static Result MergeRenderer(
-            Renderer renderer,
+        private sealed class RendererMergeTarget
+        {
+            internal Renderer renderer;
+            internal Material[] originalMaterials;
+            internal List<int> mergeIndices;
+        }
+
+        internal static Result MergeAvatar(
+            GameObject root,
             HashSet<Material> selectedForMerge,
+            IReadOnlyDictionary<Material, Material> canonicalByMaterial,
             Material representativeMaterial,
             bool enableOutlineCorrection,
             float hairTipOutlineWidth,
@@ -29,44 +37,97 @@ namespace YoridoriModifiers.HairLookKit
             Action<string> onProgress,
             BuildContext buildContext)
         {
-            if (renderer == null || selectedForMerge == null || selectedForMerge.Count == 0) return null;
-            var originalMaterials = renderer.sharedMaterials;
-            if (originalMaterials == null || originalMaterials.Length == 0) return null;
-
-            var mergeIndices = new List<int>();
-            for (var i = 0; i < originalMaterials.Length; i++)
+            if (root == null || selectedForMerge == null || selectedForMerge.Count == 0) return null;
+            var targets = new List<RendererMergeTarget>();
+            foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
             {
-                if (originalMaterials[i] != null && selectedForMerge.Contains(originalMaterials[i])) mergeIndices.Add(i);
+                if (renderer == null) continue;
+                var originalMaterials = renderer.sharedMaterials;
+                if (originalMaterials == null || originalMaterials.Length == 0) continue;
+                var mergeIndices = Enumerable.Range(0, originalMaterials.Length)
+                    .Where(index => originalMaterials[index] != null && selectedForMerge.Contains(originalMaterials[index]))
+                    .ToList();
+                if (mergeIndices.Count == 0) continue;
+                targets.Add(new RendererMergeTarget
+                {
+                    renderer = renderer,
+                    originalMaterials = originalMaterials,
+                    mergeIndices = mergeIndices,
+                });
             }
-            if (mergeIndices.Count == 0) return null;
+            if (targets.Count == 0) return null;
 
-            var mergedOutputRenderType = ResolveMergedOutputRenderType(originalMaterials, mergeIndices);
-            var representativeIndex = ResolveMergedRepresentativeIndex(originalMaterials, mergeIndices, mergedOutputRenderType);
-            var rep = representativeMaterial != null && selectedForMerge.Contains(representativeMaterial)
-                ? representativeMaterial
-                : originalMaterials[representativeIndex];
+            var globalMaterials = new List<Material>();
+            var globalIndexByMaterial = new Dictionary<Material, int>();
+            foreach (var target in targets)
+            {
+                foreach (var materialIndex in target.mergeIndices)
+                {
+                    var material = target.originalMaterials[materialIndex];
+                    var canonical = ResolveCanonical(material, canonicalByMaterial);
+                    if (canonical == null || globalIndexByMaterial.ContainsKey(canonical)) continue;
+                    globalIndexByMaterial[canonical] = globalMaterials.Count;
+                    globalMaterials.Add(canonical);
+                }
+            }
+            if (globalMaterials.Count == 0) return null;
+
+            var globalIndices = Enumerable.Range(0, globalMaterials.Count).ToList();
+            var mergedOutputRenderType = ResolveMergedOutputRenderType(globalMaterials, globalIndices);
+            var representativeIndex = ResolveMergedRepresentativeIndex(globalMaterials, globalIndices, mergedOutputRenderType);
+            var representativeCanonical = ResolveCanonical(representativeMaterial, canonicalByMaterial);
+            var rep = representativeCanonical != null && globalIndexByMaterial.ContainsKey(representativeCanonical)
+                ? representativeCanonical
+                : globalMaterials[representativeIndex];
             if (rep == null) return null;
 
             var mergedMaterial = new Material(rep) { name = $"{rep.name}_Merged" };
-            RegisterReplacedObject(rep, mergedMaterial);
             EnsureReferenceTrackableObjectFlags(mergedMaterial);
             ForceMergedRenderType(mergedMaterial, rep, mergedOutputRenderType);
             buildContext?.AssetSaver.SaveAsset(mergedMaterial);
+            foreach (var source in targets
+                         .SelectMany(target => target.mergeIndices.Select(index => target.originalMaterials[index]))
+                         .Where(material => material != null)
+                         .Distinct())
+            {
+                RegisterReplacedObject(source, mergedMaterial);
+            }
 
-            var rectsBySubMesh = HairAtlasBuilder.BuildMainAtlas(originalMaterials, mergeIndices, mergedMaterial, atlasMaxSize, onProgress, buildContext);
-            HairAtlasBuilder.BakeOptionalAtlases(originalMaterials, mergeIndices, mergedMaterial, rectsBySubMesh, warnings, verboseLog, buildContext);
-            ApplyMergedMaterialAndMesh(
-                renderer,
-                originalMaterials,
-                mergeIndices,
-                mergedMaterial,
-                rectsBySubMesh,
-                enableOutlineCorrection,
-                hairTipOutlineWidth,
-                hairTipRange,
-                buildContext);
+            var globalRects = HairAtlasBuilder.BuildMainAtlas(globalMaterials, globalIndices, mergedMaterial, atlasMaxSize, onProgress, buildContext);
+            if (globalMaterials.Count > 1)
+            {
+                HairAtlasBuilder.BakeOptionalAtlases(globalMaterials, globalIndices, mergedMaterial, globalRects, warnings, verboseLog, buildContext);
+            }
+            foreach (var target in targets)
+            {
+                var rectsBySubMesh = new Dictionary<int, Rect>();
+                foreach (var materialIndex in target.mergeIndices)
+                {
+                    var canonical = ResolveCanonical(target.originalMaterials[materialIndex], canonicalByMaterial);
+                    if (canonical == null || !globalIndexByMaterial.TryGetValue(canonical, out var globalIndex)) continue;
+                    if (globalRects.TryGetValue(globalIndex, out var rect)) rectsBySubMesh[materialIndex] = rect;
+                }
+                ApplyMergedMaterialAndMesh(
+                    target.renderer,
+                    target.originalMaterials,
+                    target.mergeIndices,
+                    mergedMaterial,
+                    rectsBySubMesh,
+                    enableOutlineCorrection,
+                    hairTipOutlineWidth,
+                    hairTipRange,
+                    buildContext);
+            }
 
             return new Result { mergedMaterial = mergedMaterial };
+        }
+
+        private static Material ResolveCanonical(Material material, IReadOnlyDictionary<Material, Material> canonicalByMaterial)
+        {
+            if (material == null) return null;
+            return canonicalByMaterial != null && canonicalByMaterial.TryGetValue(material, out var canonical)
+                ? canonical
+                : material;
         }
 
         private static RenderType ResolveMergedOutputRenderType(IReadOnlyList<Material> materials, IReadOnlyList<int> mergeIndices)

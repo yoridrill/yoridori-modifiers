@@ -17,8 +17,19 @@ namespace YoridoriModifiers.HairLookKit
         {
             Color,
             LinearMask,
-            InvertedLinearMask,
             NormalMap,
+        }
+
+        private readonly struct TextureSourceCandidate
+        {
+            internal readonly string propertyName;
+            internal readonly bool invertRgb;
+
+            internal TextureSourceCandidate(string propertyName, bool invertRgb = false)
+            {
+                this.propertyName = propertyName;
+                this.invertRgb = invertRgb;
+            }
         }
 
         private sealed class AtlasPlacement
@@ -110,14 +121,20 @@ namespace YoridoriModifiers.HairLookKit
                 .Select(index => rectsBySubMesh != null && rectsBySubMesh.TryGetValue(index, out var rect) ? rect : new Rect(0f, 0f, 1f, 1f))
                 .ToList();
 
-            BakeOptionalAtlas(new[] { "_ShadowColorTex", "_Shadow1stColorTex" }, materials, mergeIndices, mergedMaterial, new[] { "_ShadeTex", "_ShadeTexture", "_ShadeMap", "_ShadeMultiplyTexture", "_ShadeColorTexture" }, mainTexture.width, mainTexture.height, rects, warnings, TextureBakeKind.Color, verboseLog, buildContext);
-            BakeOptionalAtlas(new[] { "_EmissionMap" }, materials, mergeIndices, mergedMaterial, new[] { "_EmissiveMap", "_EmissionMap" }, mainTexture.width, mainTexture.height, rects, warnings, TextureBakeKind.Color, verboseLog, buildContext);
-            BakeOptionalAtlas(new[] { "_BumpMap" }, materials, mergeIndices, mergedMaterial, new[] { "_NormalMap", "_BumpMap" }, mainTexture.width, mainTexture.height, rects, warnings, TextureBakeKind.NormalMap, verboseLog, buildContext);
-            BakeOptionalAtlas(new[] { "_ShadowStrengthMask" }, materials, mergeIndices, mergedMaterial, new[] { "_ShadingShiftTex" }, mainTexture.width, mainTexture.height, rects, warnings, TextureBakeKind.InvertedLinearMask, verboseLog, buildContext);
-            BakeOptionalAtlas(new[] { "_ShadowBorderMask" }, materials, mergeIndices, mergedMaterial, new[] { "_ShadingGradeTexture", "_ShadowBorderMask" }, mainTexture.width, mainTexture.height, rects, warnings, TextureBakeKind.LinearMask, verboseLog, buildContext);
-            BakeOptionalAtlas(new[] { "_OutlineTex", "_OutlineMask" }, materials, mergeIndices, mergedMaterial, new[] { "_OutlineWidthTex", "_OutlineWidthTexture", "_OutlineWidthMultiplyTexture", "_OutlineMask" }, mainTexture.width, mainTexture.height, rects, warnings, TextureBakeKind.LinearMask, verboseLog, buildContext);
+            BakeOptionalAtlas(new[] { "_ShadowColorTex", "_Shadow1stColorTex" }, materials, mergeIndices, mergedMaterial, Sources("_ShadowColorTex", "_Shadow1stColorTex", "_ShadeTex", "_ShadeTexture", "_ShadeMap", "_ShadeMultiplyTexture", "_ShadeColorTexture"), mainTexture.width, mainTexture.height, rects, warnings, TextureBakeKind.Color, verboseLog, buildContext);
+            BakeOptionalAtlas(new[] { "_EmissionMap" }, materials, mergeIndices, mergedMaterial, Sources("_EmissionMap", "_EmissiveMap"), mainTexture.width, mainTexture.height, rects, warnings, TextureBakeKind.Color, verboseLog, buildContext);
+            BakeOptionalAtlas(new[] { "_BumpMap" }, materials, mergeIndices, mergedMaterial, Sources("_BumpMap", "_NormalMap"), mainTexture.width, mainTexture.height, rects, warnings, TextureBakeKind.NormalMap, verboseLog, buildContext);
+            BakeOptionalAtlas(new[] { "_ShadowStrengthMask" }, materials, mergeIndices, mergedMaterial, new[] { new TextureSourceCandidate("_ShadowStrengthMask"), new TextureSourceCandidate("_ShadingShiftTex", true) }, mainTexture.width, mainTexture.height, rects, warnings, TextureBakeKind.LinearMask, verboseLog, buildContext);
+            BakeOptionalAtlas(new[] { "_ShadowBorderMask" }, materials, mergeIndices, mergedMaterial, Sources("_ShadowBorderMask", "_ShadingGradeTexture"), mainTexture.width, mainTexture.height, rects, warnings, TextureBakeKind.LinearMask, verboseLog, buildContext);
+            BakeOptionalAtlas(new[] { "_OutlineTex" }, materials, mergeIndices, mergedMaterial, Sources("_OutlineTex"), mainTexture.width, mainTexture.height, rects, warnings, TextureBakeKind.Color, verboseLog, buildContext);
+            BakeOptionalAtlas(new[] { "_OutlineWidthMask", "_OutlineMask" }, materials, mergeIndices, mergedMaterial, Sources("_OutlineWidthMask", "_OutlineMask", "_OutlineWidthTex", "_OutlineWidthTexture", "_OutlineWidthMultiplyTexture"), mainTexture.width, mainTexture.height, rects, warnings, TextureBakeKind.LinearMask, verboseLog, buildContext);
             NormalizeMergedEmissionAndMatCapState(materials, mergeIndices, mergedMaterial);
             ValidateMergedMaterialTextureReferences(mergedMaterial, warnings, verboseLog);
+        }
+
+        private static TextureSourceCandidate[] Sources(params string[] propertyNames)
+        {
+            return propertyNames.Select(propertyName => new TextureSourceCandidate(propertyName)).ToArray();
         }
 
         private static void BakeOptionalAtlas(
@@ -125,7 +142,7 @@ namespace YoridoriModifiers.HairLookKit
             IReadOnlyList<Material> materials,
             IReadOnlyList<int> mergeIndices,
             Material mergedMaterial,
-            IReadOnlyList<string> sourceProperties,
+            IReadOnlyList<TextureSourceCandidate> sourceProperties,
             int atlasWidth,
             int atlasHeight,
             IReadOnlyList<Rect> rects,
@@ -144,19 +161,25 @@ namespace YoridoriModifiers.HairLookKit
                 Texture texture = null;
                 var textureScale = Vector2.one;
                 var offset = Vector2.zero;
+                var invertRgb = false;
                 if (source != null)
                 {
-                    var sourceProperty = sourceProperties.FirstOrDefault(source.HasProperty);
-                    if (!string.IsNullOrEmpty(sourceProperty))
+                    for (var sourceIndex = 0; sourceIndex < sourceProperties.Count; sourceIndex++)
                     {
-                        texture = source.GetTexture(sourceProperty);
-                        textureScale = source.GetTextureScale(sourceProperty);
-                        offset = source.GetTextureOffset(sourceProperty);
+                        var candidate = sourceProperties[sourceIndex];
+                        if (!source.HasProperty(candidate.propertyName)) continue;
+                        var candidateTexture = source.GetTexture(candidate.propertyName);
+                        if (candidateTexture == null) continue;
+                        texture = candidateTexture;
+                        textureScale = source.GetTextureScale(candidate.propertyName);
+                        offset = source.GetTextureOffset(candidate.propertyName);
+                        invertRgb = candidate.invertRgb;
+                        break;
                     }
                 }
 
                 var readable = TextureReadUtility.ToReadableTextureWithTransform(texture, textureScale, offset, bakeKind == TextureBakeKind.NormalMap);
-                if (bakeKind == TextureBakeKind.InvertedLinearMask && readable != null)
+                if (invertRgb && readable != null)
                 {
                     InvertRgb(readable);
                 }
@@ -209,7 +232,7 @@ namespace YoridoriModifiers.HairLookKit
                 SetFloatIfAnyExists(mergedMaterial, new[] { "_BumpScale", "_NormalScale" }, 1f);
                 SetFloatIfAnyExists(mergedMaterial, new[] { "_UseBumpMap", "_UseNormalMap" }, 1f);
             }
-            else if (bakeKind == TextureBakeKind.InvertedLinearMask)
+            else if (sourceProperties.Any(candidate => candidate.invertRgb))
             {
                 SetFloatIfAnyExists(mergedMaterial, new[] { "_UseShadowMask", "_UseShadowStrengthMask" }, 1f);
                 SetFloatIfAnyExists(mergedMaterial, new[] { "_ShadowMaskType" }, 0f);
@@ -430,9 +453,9 @@ namespace YoridoriModifiers.HairLookKit
                     hasEmissionColor = true;
                 }
 
-                var matCapTex = GetTextureFromAny(source, new[] { "_MatcapTex", "_SphereAdd" });
+                var matCapTex = GetTextureFromAny(source, new[] { "_MatCapTex", "_MatcapTex", "_SphereAdd" });
                 if (matCapTex != null && !IsLikelyDummyTexture(matCapTex)) hasMatCapTexture = true;
-                if (TryGetColorFromAny(source, new[] { "_MatcapColor" }, out var sourceMatCapColor) && !IsApproximatelyBlack(sourceMatCapColor))
+                if (TryGetColorFromAny(source, new[] { "_MatCapColor", "_MatcapColor" }, out var sourceMatCapColor) && !IsApproximatelyBlack(sourceMatCapColor))
                 {
                     if (!hasMatCapColor) matCapColor = sourceMatCapColor;
                     hasMatCapColor = true;
@@ -448,7 +471,7 @@ namespace YoridoriModifiers.HairLookKit
         private static void ValidateMergedMaterialTextureReferences(Material mergedMaterial, List<string> warnings, bool verboseLog)
         {
             if (mergedMaterial == null) return;
-            foreach (var propertyName in new[] { "_MainTex", "_BaseMap", "_BumpMap", "_EmissionMap", "_ShadowColorTex", "_Shadow1stColorTex", "_ShadowBorderMask", "_ShadowStrengthMask", "_OutlineTex", "_OutlineMask" })
+            foreach (var propertyName in new[] { "_MainTex", "_BaseMap", "_BumpMap", "_EmissionMap", "_ShadowColorTex", "_Shadow1stColorTex", "_ShadowBorderMask", "_ShadowStrengthMask", "_OutlineTex", "_OutlineWidthMask", "_OutlineMask" })
             {
                 if (!mergedMaterial.HasProperty(propertyName)) continue;
                 var texture = mergedMaterial.GetTexture(propertyName);
@@ -524,7 +547,7 @@ namespace YoridoriModifiers.HairLookKit
             var pixels = texture.GetPixels();
             for (var i = 0; i < pixels.Length; i++)
             {
-                pixels[i] = EncodeRgbNormal(DecodePackedNormalAg(pixels[i]));
+                pixels[i] = EncodeRgbNormal(DecodeNormalFromSource(pixels[i]));
             }
             texture.SetPixels(pixels);
             texture.Apply(false, false);
@@ -544,15 +567,16 @@ namespace YoridoriModifiers.HairLookKit
 
         private static void ApplyNormalScaleToRgbNormal(Texture2D texture, float normalScale)
         {
-            if (texture == null || Mathf.Approximately(normalScale, 1f)) return;
+            if (texture == null) return;
+            var scale = Mathf.Max(0f, normalScale);
             var pixels = texture.GetPixels();
             for (var i = 0; i < pixels.Length; i++)
             {
                 var normal = DecodeRgbNormal(pixels[i]);
-                normal.x *= normalScale;
-                normal.y *= normalScale;
-                if (normal.sqrMagnitude <= 1e-8f) normal = Vector3.forward;
-                normal.Normalize();
+                normal.x *= scale;
+                normal.y *= scale;
+                var xyLengthSquared = normal.x * normal.x + normal.y * normal.y;
+                normal.z = Mathf.Sqrt(Mathf.Max(0f, 1f - Mathf.Clamp01(xyLengthSquared)));
                 pixels[i] = EncodeRgbNormal(normal);
             }
             texture.SetPixels(pixels);
@@ -572,7 +596,13 @@ namespace YoridoriModifiers.HairLookKit
             var x = color.a * 2f - 1f;
             var y = color.g * 2f - 1f;
             var z = Mathf.Sqrt(Mathf.Max(0f, 1f - Mathf.Clamp01(x * x + y * y)));
-            return new Vector3(x, y, z);
+            return new Vector3(x, y, z).normalized;
+        }
+
+        private static Vector3 DecodeNormalFromSource(Color color)
+        {
+            var looksPacked = color.r > 0.90f && color.a < 0.999f;
+            return looksPacked ? DecodePackedNormalAg(color) : DecodeRgbNormal(color);
         }
 
         private static Color EncodeRgbNormal(Vector3 normal)

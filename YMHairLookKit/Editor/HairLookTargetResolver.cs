@@ -19,39 +19,79 @@ namespace YoridoriModifiers.HairLookKit
                 .ToList();
         }
 
-        internal static HashSet<Material> ResolveMaterialSet(IEnumerable<Material> configuredMaterials, IReadOnlyList<Material> currentMaterials)
+        internal static Dictionary<Material, Material> ResolveMaterialCanonicalMap(
+            IEnumerable<Material> configuredMaterials,
+            IReadOnlyList<Material> currentMaterials)
         {
-            var result = new HashSet<Material>();
+            var result = new Dictionary<Material, Material>();
             foreach (var material in configuredMaterials ?? Enumerable.Empty<Material>())
             {
-                var resolved = ResolveCurrentMaterialReference(material, currentMaterials);
-                if (resolved != null) result.Add(resolved);
+                var resolvedMaterials = ResolveCurrentMaterialReferences(material, currentMaterials)
+                    .Where(resolved => resolved != null)
+                    .ToList();
+                var canonical = resolvedMaterials.FirstOrDefault();
+                if (canonical == null) continue;
+                foreach (var resolved in resolvedMaterials)
+                {
+                    if (!result.ContainsKey(resolved)) result[resolved] = canonical;
+                }
             }
             return result;
         }
 
         internal static Material ResolveCurrentMaterialReference(Material configuredMaterial, IReadOnlyList<Material> currentMaterials)
         {
-            if (configuredMaterial == null || currentMaterials == null) return configuredMaterial;
-            if (currentMaterials.Count == 0 || currentMaterials.Contains(configuredMaterial)) return configuredMaterial;
+            return ResolveCurrentMaterialReferences(configuredMaterial, currentMaterials).FirstOrDefault();
+        }
+
+        internal static IReadOnlyList<Material> ResolveCurrentMaterialReferences(Material configuredMaterial, IReadOnlyList<Material> currentMaterials)
+        {
+            if (configuredMaterial == null) return Array.Empty<Material>();
+            if (currentMaterials == null || currentMaterials.Count == 0) return new[] { configuredMaterial };
 
             var configuredName = configuredMaterial.name;
-            if (string.IsNullOrEmpty(configuredName)) return configuredMaterial;
+            if (string.IsNullOrEmpty(configuredName))
+            {
+                return currentMaterials.Contains(configuredMaterial)
+                    ? new[] { configuredMaterial }
+                    : Array.Empty<Material>();
+            }
 
-            return currentMaterials.FirstOrDefault(material =>
-                    material != null
-                    && (material.name == configuredName
-                        || material.name.StartsWith($"{configuredName}_", StringComparison.Ordinal)
-                        || material.name.StartsWith($"{configuredName} ", StringComparison.Ordinal)
-                        || material.name.StartsWith($"{configuredName}(", StringComparison.Ordinal)))
-                ?? configuredMaterial;
+            var exactMatches = currentMaterials
+                .Where(material => material != null && material.name == configuredName)
+                .Distinct()
+                .ToList();
+            if (exactMatches.Count > 0) return exactMatches;
+
+            foreach (var generatedName in new[]
+                     {
+                         $"{configuredName}_lilToon",
+                         $"{configuredName}_HairLookKit",
+                         $"{configuredName}_Merged",
+                     })
+            {
+                var generatedMatches = currentMaterials
+                    .Where(material => material != null && material.name == generatedName)
+                    .Distinct()
+                    .ToList();
+                if (generatedMatches.Count > 0) return generatedMatches;
+            }
+
+            var fallback = currentMaterials.FirstOrDefault(material =>
+                material != null
+                && (material.name.StartsWith($"{configuredName}_", StringComparison.Ordinal)
+                    || material.name.StartsWith($"{configuredName} ", StringComparison.Ordinal)
+                    || material.name.StartsWith($"{configuredName}(", StringComparison.Ordinal)));
+            if (fallback != null) return new[] { fallback };
+            return new[] { configuredMaterial };
         }
 
         internal static bool IsResolvedSupported(Material material, IReadOnlyList<Material> currentMaterials, bool allowMToonWithConverter)
         {
-            var resolved = ResolveCurrentMaterialReference(material, currentMaterials);
-            return IsLilToonLike(resolved)
-                || (allowMToonWithConverter && MToonDetector.IsMToonLike(resolved));
+            var resolved = ResolveCurrentMaterialReferences(material, currentMaterials);
+            return resolved.Count > 0 && resolved.All(candidate =>
+                IsLilToonLike(candidate)
+                || (allowMToonWithConverter && MToonDetector.IsMToonLike(candidate)));
         }
 
         internal static bool AreMergeTargetsSupported(YMHairLookKitComponent component, IReadOnlyList<Material> currentMaterials, bool allowMToonWithConverter)

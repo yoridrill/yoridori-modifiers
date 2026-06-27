@@ -33,6 +33,7 @@ namespace YoridoriModifiers.FacialMapper
         private SerializedProperty _handSignsProp;
         private SerializedProperty _presetMemoProp;
         private SerializedProperty _conflictPriorityProp;
+        private SerializedProperty _writeDefaultsProp;
         private SerializedProperty _verboseLogProp;
 
         private void OnEnable()
@@ -41,6 +42,7 @@ namespace YoridoriModifiers.FacialMapper
             _handSignsProp = serializedObject.FindProperty("handSigns");
             _presetMemoProp = serializedObject.FindProperty("presetMemo");
             _conflictPriorityProp = serializedObject.FindProperty("conflictPriority");
+            _writeDefaultsProp = serializedObject.FindProperty("writeDefaults");
             _verboseLogProp = serializedObject.FindProperty("verboseLog");
 
             _language = (Language)EditorPrefs.GetInt(PrefKeyLanguage, 0);
@@ -262,6 +264,13 @@ namespace YoridoriModifiers.FacialMapper
 
             using (new EditorGUI.IndentLevelScope())
             {
+                EditorGUILayout.PropertyField(
+                    _writeDefaultsProp,
+                    new GUIContent(
+                        "Write Defaults",
+                        T(
+                            "アバター内で統一している設定に合わせてください。 OFFでは各表情Clipにリセット値を含め、 ONでは有効なShape Keyのみを書き込みます。",
+                            "Match the convention used by the avatar's FX Animator. OFF includes reset values in every expression clip; ON writes only active shape keys.")));
                 EditorGUILayout.PropertyField(_verboseLogProp, new GUIContent("Verbose Log"));
             }
         }

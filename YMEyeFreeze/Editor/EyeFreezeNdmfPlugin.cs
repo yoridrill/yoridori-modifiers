@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using nadena.dev.ndmf;
+using nadena.dev.ndmf.animator;
+using nadena.dev.ndmf.fluent;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
@@ -34,13 +37,27 @@ namespace YoridoriModifiers.EyeFreeze
 
         protected override void Configure()
         {
-            InPhase(BuildPhase.Transforming)
+            var sequence = InPhase(BuildPhase.Transforming)
                 .AfterPlugin("jp.yoridrill.ym-arm-patch")
                 .AfterPlugin("jp.yoridrill.ym-mesh-trimmer")
                 .AfterPlugin("jp.yoridrill.ym-mtoon-to-liltoon")
                 .AfterPlugin("nadena.dev.modular-avatar")
-                .BeforePlugin("com.anatawa12.avatar-optimizer")
-                .Run("Build YM Eye Freeze", Execute);
+                .BeforePlugin("com.anatawa12.avatar-optimizer");
+
+            sequence.Run("Prepare YM Eye Freeze FX layer", PrepareFxLayer);
+            sequence.WithRequiredExtension(typeof(AnimatorServicesContext), scoped =>
+            {
+                scoped.Run("Build YM Eye Freeze", Execute);
+            });
+        }
+
+        private static void PrepareFxLayer(BuildContext context)
+        {
+            if (context?.AvatarRootObject == null) return;
+            if (!context.AvatarRootObject.GetComponentsInChildren<YMEyeFreeze>(true).Any()) return;
+
+            var descriptor = context.AvatarRootObject.GetComponent<VRCAvatarDescriptor>();
+            if (descriptor != null) EnsureFxLayer(descriptor);
         }
 
         private static void Execute(BuildContext context)
@@ -110,13 +127,11 @@ namespace YoridoriModifiers.EyeFreeze
             var leftConstraint = BuildEyeRotationConstraint(leftEye, CreateFreezeTarget(head, leftEye, LeftEyeTargetName));
             var rightConstraint = BuildEyeRotationConstraint(rightEye, CreateFreezeTarget(head, rightEye, RightEyeTargetName));
 
-            var offClip = CreateEyeFreezeClip(avatarRoot, leftConstraint, rightConstraint, false, "YM Eye Freeze Off");
-            var onClip = CreateEyeFreezeClip(avatarRoot, leftConstraint, rightConstraint, true, "YM Eye Freeze On");
-            context.AssetSaver.SaveAsset(offClip);
-            context.AssetSaver.SaveAsset(onClip);
+            var animatorServices = context.Extension<AnimatorServicesContext>();
+            var offClip = CreateEyeFreezeClip(animatorServices, leftConstraint, rightConstraint, false, "YM Eye Freeze Off");
+            var onClip = CreateEyeFreezeClip(animatorServices, leftConstraint, rightConstraint, true, "YM Eye Freeze On");
 
-            var controller = BuildFxController(context, descriptor, parameterName, offClip, onClip);
-            if (controller == null) return;
+            if (!BuildFxController(animatorServices, parameterName, offClip, onClip)) return;
 
             if (MergeExpressionParameter(context, descriptor, parameterName, component.saved, component.synced))
             {
@@ -163,26 +178,33 @@ namespace YoridoriModifiers.EyeFreeze
             return constraint;
         }
 
-        private static AnimationClip CreateEyeFreezeClip(
-            GameObject avatarRoot,
+        private static VirtualClip CreateEyeFreezeClip(
+            AnimatorServicesContext animatorServices,
             VRCRotationConstraint leftConstraint,
             VRCRotationConstraint rightConstraint,
             bool isActive,
             string clipName)
         {
-            var clip = new AnimationClip
-            {
-                name = clipName
-            };
+            var clip = VirtualClip.Create(clipName);
 
-            AddConstraintActiveCurve(clip, AnimationUtility.CalculateTransformPath(leftConstraint.transform, avatarRoot.transform), isActive);
-            AddConstraintActiveCurve(clip, AnimationUtility.CalculateTransformPath(rightConstraint.transform, avatarRoot.transform), isActive);
+            AddConstraintActiveCurve(
+                clip,
+                animatorServices.ObjectPathRemapper.GetVirtualPathForObject(leftConstraint.gameObject),
+                isActive);
+            AddConstraintActiveCurve(
+                clip,
+                animatorServices.ObjectPathRemapper.GetVirtualPathForObject(rightConstraint.gameObject),
+                isActive);
             return clip;
         }
 
-        private static void AddConstraintActiveCurve(AnimationClip clip, string path, bool isActive)
+        private static void AddConstraintActiveCurve(VirtualClip clip, string path, bool isActive)
         {
-            clip.SetCurve(path, typeof(VRCRotationConstraint), nameof(VRCConstraintBase.IsActive), OneKeyCurve(isActive ? 1f : 0f));
+            clip.SetFloatCurve(
+                path,
+                typeof(VRCRotationConstraint),
+                nameof(VRCConstraintBase.IsActive),
+                OneKeyCurve(isActive ? 1f : 0f));
         }
 
         private static AnimationCurve OneKeyCurve(float value)
@@ -190,48 +212,35 @@ namespace YoridoriModifiers.EyeFreeze
             return new AnimationCurve(new Keyframe(0f, value));
         }
 
-        private static AnimatorController BuildFxController(
-            BuildContext context,
-            VRCAvatarDescriptor descriptor,
+        private static bool BuildFxController(
+            AnimatorServicesContext animatorServices,
             string parameterName,
-            AnimationClip offClip,
-            AnimationClip onClip)
+            VirtualClip offClip,
+            VirtualClip onClip)
         {
-            var layerIndex = EnsureFxLayer(descriptor);
-            if (layerIndex < 0)
+            if (!animatorServices.ControllerContext.Controllers.TryGetValue(
+                    VRCAvatarDescriptor.AnimLayerType.FX,
+                    out var controller))
             {
                 Debug.LogWarning("[YM Eye Freeze] FX layer not found. Skipped.");
-                return null;
+                return false;
             }
 
-            var sourceController = ResolveFxSourceController(descriptor.baseAnimationLayers[layerIndex]);
-            var controller = sourceController != null
-                ? NdmfObjectRegistry.Clone(sourceController)
-                : new AnimatorController();
-
-            controller.name = "YM Eye Freeze FX";
-            context.AssetSaver.SaveAsset(controller);
+            controller.Name = "YM Eye Freeze FX";
 
             EnsureBlendTreeParameters(controller);
             AddBoolParameterIfMissing(controller, parameterName);
             var eyeTrackingActiveParameter = FindExistingParameterName(controller, JerryEyeTrackingActiveParameterCandidates);
             AddEyeFreezeLayer(controller, parameterName, offClip, onClip, eyeTrackingActiveParameter);
-
-            descriptor.customizeAnimationLayers = true;
-            var layers = descriptor.baseAnimationLayers;
-            layers[layerIndex].isDefault = false;
-            layers[layerIndex].animatorController = controller;
-            descriptor.baseAnimationLayers = layers;
-
-            return controller;
+            return true;
         }
 
-        private static int EnsureFxLayer(VRCAvatarDescriptor descriptor)
+        private static void EnsureFxLayer(VRCAvatarDescriptor descriptor)
         {
             var layers = descriptor.baseAnimationLayers ?? Array.Empty<VRCAvatarDescriptor.CustomAnimLayer>();
             for (var i = 0; i < layers.Length; i++)
             {
-                if (layers[i].type == VRCAvatarDescriptor.AnimLayerType.FX) return i;
+                if (layers[i].type == VRCAvatarDescriptor.AnimLayerType.FX) return;
             }
 
             Array.Resize(ref layers, layers.Length + 1);
@@ -242,31 +251,13 @@ namespace YoridoriModifiers.EyeFreeze
                 isDefault = false
             };
             descriptor.baseAnimationLayers = layers;
-            return index;
         }
 
-        private static AnimatorController ResolveFxSourceController(VRCAvatarDescriptor.CustomAnimLayer layer)
+        private static void AddBoolParameterIfMissing(VirtualAnimatorController controller, string parameterName)
         {
-            if (!layer.isDefault)
-            {
-                if (layer.animatorController is AnimatorController controller) return controller;
-                if (layer.animatorController != null)
-                {
-                    Debug.LogWarning("[YM Eye Freeze] FX layer controller is not an AnimatorController. A new controller will be created.");
-                }
-            }
+            if (controller.Parameters.ContainsKey(parameterName)) return;
 
-            return null;
-        }
-
-        private static void AddBoolParameterIfMissing(AnimatorController controller, string parameterName)
-        {
-            if (controller.parameters.Any(p => p.name == parameterName))
-            {
-                return;
-            }
-
-            controller.AddParameter(new AnimatorControllerParameter
+            controller.Parameters = controller.Parameters.Add(parameterName, new AnimatorControllerParameter
             {
                 name = parameterName,
                 type = AnimatorControllerParameterType.Bool,
@@ -274,7 +265,7 @@ namespace YoridoriModifiers.EyeFreeze
             });
         }
 
-        private static string FindExistingParameterName(AnimatorController controller, string[] candidates)
+        private static string FindExistingParameterName(VirtualAnimatorController controller, string[] candidates)
         {
             if (controller == null || candidates == null) return null;
 
@@ -282,7 +273,7 @@ namespace YoridoriModifiers.EyeFreeze
             {
                 if (string.IsNullOrWhiteSpace(candidate)) continue;
                 var parameterName = candidate.Trim();
-                if (controller.parameters.Any(parameter => parameter.name == parameterName))
+                if (controller.Parameters.ContainsKey(parameterName))
                 {
                     return parameterName;
                 }
@@ -291,56 +282,33 @@ namespace YoridoriModifiers.EyeFreeze
             return null;
         }
 
-        private static void EnsureBlendTreeParameters(AnimatorController controller)
+        private static void EnsureBlendTreeParameters(VirtualAnimatorController controller)
         {
             if (controller == null) return;
 
-            var existing = new HashSet<string>(controller.parameters.Select(parameter => parameter.name), StringComparer.Ordinal);
+            var parameters = controller.Parameters;
             var referenced = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var layer in controller.layers)
+            foreach (var blendTree in controller.AllReachableNodes().OfType<VirtualBlendTree>())
             {
-                CollectBlendTreeParameters(layer?.stateMachine, referenced);
+                AddParameterName(referenced, blendTree.BlendParameter);
+                AddParameterName(referenced, blendTree.BlendParameterY);
+                foreach (var child in blendTree.Children)
+                {
+                    AddParameterName(referenced, child.DirectBlendParameter);
+                }
             }
 
             foreach (var parameterName in referenced.OrderBy(name => name, StringComparer.Ordinal))
             {
-                if (string.IsNullOrWhiteSpace(parameterName) || existing.Contains(parameterName)) continue;
-                controller.AddParameter(new AnimatorControllerParameter
+                if (string.IsNullOrWhiteSpace(parameterName) || parameters.ContainsKey(parameterName)) continue;
+                parameters = parameters.Add(parameterName, new AnimatorControllerParameter
                 {
                     name = parameterName,
                     type = AnimatorControllerParameterType.Float,
                     defaultFloat = 0f
                 });
-                existing.Add(parameterName);
             }
-        }
-
-        private static void CollectBlendTreeParameters(AnimatorStateMachine stateMachine, HashSet<string> parameters)
-        {
-            if (stateMachine == null || parameters == null) return;
-
-            foreach (var childState in stateMachine.states)
-            {
-                CollectBlendTreeParameters(childState.state?.motion, parameters);
-            }
-
-            foreach (var childMachine in stateMachine.stateMachines)
-            {
-                CollectBlendTreeParameters(childMachine.stateMachine, parameters);
-            }
-        }
-
-        private static void CollectBlendTreeParameters(Motion motion, HashSet<string> parameters)
-        {
-            if (motion is not BlendTree blendTree || parameters == null) return;
-
-            AddParameterName(parameters, blendTree.blendParameter);
-            AddParameterName(parameters, blendTree.blendParameterY);
-            foreach (var child in blendTree.children)
-            {
-                AddParameterName(parameters, child.directBlendParameter);
-                CollectBlendTreeParameters(child.motion, parameters);
-            }
+            controller.Parameters = parameters;
         }
 
         private static void AddParameterName(HashSet<string> parameters, string parameterName)
@@ -350,93 +318,99 @@ namespace YoridoriModifiers.EyeFreeze
         }
 
         private static void AddEyeFreezeLayer(
-            AnimatorController controller,
+            VirtualAnimatorController controller,
             string parameterName,
-            AnimationClip offClip,
-            AnimationClip onClip,
+            VirtualClip offClip,
+            VirtualClip onClip,
             string eyeTrackingActiveParameter)
         {
-            var existingLayers = controller.layers
-                .Where(layer => layer != null && layer.name != ToolName)
-                .ToArray();
-            controller.layers = existingLayers;
+            controller.RemoveLayers(layer => layer.Name == ToolName);
 
-            controller.AddLayer(ToolName);
-            var layers = controller.layers;
-            var layer = layers[layers.Length - 1];
-            layer.defaultWeight = 1f;
+            var layer = controller.AddLayer(LayerPriority.Default, ToolName);
+            layer.DefaultWeight = 1f;
 
-            var stateMachine = layer.stateMachine;
-            stateMachine.name = ToolName;
+            var stateMachine = layer.StateMachine;
+            stateMachine.Name = ToolName;
 
-            var offState = stateMachine.AddState("Off", new Vector3(240f, 80f, 0f));
-            offState.motion = offClip;
-            offState.writeDefaultValues = false;
+            var offState = stateMachine.AddState("Off", offClip, new Vector3(240f, 80f, 0f));
+            offState.WriteDefaultValues = false;
 
-            var onState = stateMachine.AddState("On", new Vector3(240f, 180f, 0f));
-            onState.motion = onClip;
-            onState.writeDefaultValues = false;
+            var onState = stateMachine.AddState("On", onClip, new Vector3(240f, 180f, 0f));
+            onState.WriteDefaultValues = false;
 
-            stateMachine.defaultState = offState;
+            stateMachine.DefaultState = offState;
 
-            var toOn = offState.AddTransition(onState);
-            ConfigureTransition(toOn);
-            toOn.AddCondition(AnimatorConditionMode.If, 0f, parameterName);
+            var toOnConditions = ImmutableList.Create(new AnimatorCondition
+            {
+                mode = AnimatorConditionMode.If,
+                parameter = parameterName,
+                threshold = 0f
+            });
             if (!string.IsNullOrWhiteSpace(eyeTrackingActiveParameter))
             {
-                AddFalsyCondition(toOn, controller, eyeTrackingActiveParameter);
+                toOnConditions = toOnConditions.Add(CreateFalsyCondition(controller, eyeTrackingActiveParameter));
             }
+            offState.Transitions = ImmutableList.Create(CreateTransition(onState, toOnConditions));
 
-            var toOff = onState.AddTransition(offState);
-            ConfigureTransition(toOff);
-            toOff.AddCondition(AnimatorConditionMode.IfNot, 0f, parameterName);
+            var toOff = CreateTransition(offState, ImmutableList.Create(new AnimatorCondition
+            {
+                mode = AnimatorConditionMode.IfNot,
+                parameter = parameterName,
+                threshold = 0f
+            }));
+            var onTransitions = ImmutableList.Create(toOff);
             if (!string.IsNullOrWhiteSpace(eyeTrackingActiveParameter))
             {
-                var toOffForEyeTracking = onState.AddTransition(offState);
-                ConfigureTransition(toOffForEyeTracking);
-                AddTruthyCondition(toOffForEyeTracking, controller, eyeTrackingActiveParameter);
+                onTransitions = onTransitions.Add(CreateTransition(
+                    offState,
+                    ImmutableList.Create(CreateTruthyCondition(controller, eyeTrackingActiveParameter))));
             }
-
-            layers[layers.Length - 1] = layer;
-            controller.layers = layers;
+            onState.Transitions = onTransitions;
         }
 
-        private static void AddTruthyCondition(AnimatorStateTransition transition, AnimatorController controller, string parameterName)
+        private static AnimatorCondition CreateTruthyCondition(VirtualAnimatorController controller, string parameterName)
         {
             var type = GetParameterType(controller, parameterName);
-            if (type == AnimatorControllerParameterType.Float || type == AnimatorControllerParameterType.Int)
+            return new AnimatorCondition
             {
-                transition.AddCondition(AnimatorConditionMode.Greater, 0.5f, parameterName);
-                return;
-            }
-
-            transition.AddCondition(AnimatorConditionMode.If, 0f, parameterName);
+                mode = type is AnimatorControllerParameterType.Float or AnimatorControllerParameterType.Int
+                    ? AnimatorConditionMode.Greater
+                    : AnimatorConditionMode.If,
+                parameter = parameterName,
+                threshold = type is AnimatorControllerParameterType.Float or AnimatorControllerParameterType.Int ? 0.5f : 0f
+            };
         }
 
-        private static void AddFalsyCondition(AnimatorStateTransition transition, AnimatorController controller, string parameterName)
+        private static AnimatorCondition CreateFalsyCondition(VirtualAnimatorController controller, string parameterName)
         {
             var type = GetParameterType(controller, parameterName);
-            if (type == AnimatorControllerParameterType.Float || type == AnimatorControllerParameterType.Int)
+            return new AnimatorCondition
             {
-                transition.AddCondition(AnimatorConditionMode.Less, 0.5f, parameterName);
-                return;
-            }
-
-            transition.AddCondition(AnimatorConditionMode.IfNot, 0f, parameterName);
+                mode = type is AnimatorControllerParameterType.Float or AnimatorControllerParameterType.Int
+                    ? AnimatorConditionMode.Less
+                    : AnimatorConditionMode.IfNot,
+                parameter = parameterName,
+                threshold = type is AnimatorControllerParameterType.Float or AnimatorControllerParameterType.Int ? 0.5f : 0f
+            };
         }
 
-        private static AnimatorControllerParameterType? GetParameterType(AnimatorController controller, string parameterName)
+        private static AnimatorControllerParameterType? GetParameterType(VirtualAnimatorController controller, string parameterName)
         {
             if (controller == null || string.IsNullOrWhiteSpace(parameterName)) return null;
-            return controller.parameters.FirstOrDefault(parameter => parameter.name == parameterName)?.type;
+            return controller.Parameters.TryGetValue(parameterName, out var parameter) ? parameter.type : null;
         }
 
-        private static void ConfigureTransition(AnimatorStateTransition transition)
+        private static VirtualStateTransition CreateTransition(
+            VirtualState destination,
+            ImmutableList<AnimatorCondition> conditions)
         {
-            transition.hasExitTime = false;
-            transition.hasFixedDuration = true;
-            transition.duration = 0f;
-            transition.exitTime = 0f;
+            var transition = VirtualStateTransition.Create();
+            transition.SetDestination(destination);
+            transition.ExitTime = null;
+            transition.HasFixedDuration = true;
+            transition.Duration = 0f;
+            transition.Conditions = conditions;
+            return transition;
         }
 
         private static bool MergeExpressionParameter(

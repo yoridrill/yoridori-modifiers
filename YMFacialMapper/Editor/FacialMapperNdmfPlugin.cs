@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Globalization;
 using System.Linq;
 using nadena.dev.ndmf;
+using nadena.dev.ndmf.animator;
+using nadena.dev.ndmf.fluent;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
@@ -28,14 +31,28 @@ namespace YoridoriModifiers.FacialMapper
 
         protected override void Configure()
         {
-            InPhase(BuildPhase.Transforming)
+            var sequence = InPhase(BuildPhase.Transforming)
                 .AfterPlugin("jp.yoridrill.ym-arm-patch")
                 .AfterPlugin("jp.yoridrill.ym-mesh-trimmer")
                 .AfterPlugin("jp.yoridrill.ym-mtoon-to-liltoon")
                 .AfterPlugin("jp.yoridrill.ym-eye-freeze")
                 .AfterPlugin("nadena.dev.modular-avatar")
-                .BeforePlugin("com.anatawa12.avatar-optimizer")
-                .Run("Build YM Facial Mapper", Execute);
+                .BeforePlugin("com.anatawa12.avatar-optimizer");
+
+            sequence.Run("Prepare YM Facial Mapper FX layer", PrepareFxLayer);
+            sequence.WithRequiredExtension(typeof(AnimatorServicesContext), scoped =>
+            {
+                scoped.Run("Build YM Facial Mapper", Execute);
+            });
+        }
+
+        private static void PrepareFxLayer(BuildContext context)
+        {
+            if (context?.AvatarRootObject == null) return;
+            if (!context.AvatarRootObject.GetComponentsInChildren<YMFacialMapper>(true).Any()) return;
+
+            var descriptor = context.AvatarRootObject.GetComponent<VRCAvatarDescriptor>();
+            if (descriptor != null) EnsureFxLayer(descriptor);
         }
 
         private static void Execute(BuildContext context)
@@ -91,37 +108,31 @@ namespace YoridoriModifiers.FacialMapper
                     component);
             }
 
-            StripOriginalGestureLayerFaceCurves(context, descriptor, component);
-            var controller = BuildFxController(context, descriptor, component, candidates, renderers);
-            if (controller == null) return;
+            var animatorServices = context.Extension<AnimatorServicesContext>();
+            StripOriginalGestureLayerFaceCurves(animatorServices, component);
+            if (!BuildFxController(animatorServices, component, candidates, renderers)) return;
 
             LogUtility.Verbose(ToolName, component.verboseLog, "Build", $"Built {candidates.Count} expression candidates.");
         }
 
-        private static AnimatorController BuildFxController(
-            BuildContext context,
-            VRCAvatarDescriptor descriptor,
+        private static bool BuildFxController(
+            AnimatorServicesContext animatorServices,
             YMFacialMapper component,
             List<Candidate> candidates,
             Dictionary<string, SkinnedMeshRenderer> rendererMap)
         {
-            var layerIndex = EnsureFxLayer(descriptor);
-            if (layerIndex < 0)
+            if (!animatorServices.ControllerContext.Controllers.TryGetValue(
+                    VRCAvatarDescriptor.AnimLayerType.FX,
+                    out var controller))
             {
                 LogUtility.Warning(ToolName, "Build", "FX layer not found. Skipped.", component);
-                return null;
+                return false;
             }
 
-            var sourceController = GetFxAnimatorController(descriptor);
-            var controller = sourceController != null
-                ? NdmfObjectRegistry.Clone(sourceController)
-                : new AnimatorController();
-
-            controller.name = "YM Facial Mapper FX";
-            context.AssetSaver.SaveAsset(controller);
+            controller.Name = "YM Facial Mapper FX";
 
             RemoveExistingLayers(controller);
-            StripGestureDrivenFxFaceCurves(controller, context, component.verboseLog);
+            StripGestureDrivenFxFaceCurves(controller, component.verboseLog);
             EnsureBlendTreeParameters(controller, component.verboseLog);
             RedirectJerryFacialExpressionsDisabledDrivers(controller, component.verboseLog);
             SuppressExistingEyeTrackingRestores(controller, component.verboseLog);
@@ -139,34 +150,35 @@ namespace YoridoriModifiers.FacialMapper
                 LogUtility.Verbose(ToolName, component.verboseLog, "FX", $"Detected {externalFaceBlockers.Count} external face expression conditions.");
             }
 
-            AddResolverLayer(controller, context, candidates, rendererMap, externalFaceBlockers);
+            AddResolverLayer(
+                controller,
+                animatorServices,
+                candidates,
+                rendererMap,
+                externalFaceBlockers,
+                component.writeDefaults);
 
-            descriptor.customizeAnimationLayers = true;
-            var layers = descriptor.baseAnimationLayers;
-            layers[layerIndex].isDefault = false;
-            layers[layerIndex].animatorController = controller;
-            descriptor.baseAnimationLayers = layers;
-
-            return controller;
+            return true;
         }
 
-        private static AnimationClip CreateResolvedExpressionClip(
-            GameObject avatarRoot,
+        private static VirtualClip CreateResolvedExpressionClip(
+            AnimatorServicesContext animatorServices,
             string clipName,
             IReadOnlyList<Candidate> activeCandidates,
             IReadOnlyCollection<ShapeKeySpec> allShapeKeys,
             Dictionary<string, SkinnedMeshRenderer> rendererMap,
-            bool includeActiveValues)
+            bool includeActiveValues,
+            bool includeResetValues)
         {
-            var clip = new AnimationClip
-            {
-                name = clipName
-            };
+            var clip = VirtualClip.Create(clipName);
 
             var values = new Dictionary<string, float>(StringComparer.Ordinal);
-            foreach (var shapeKey in allShapeKeys)
+            if (includeResetValues)
             {
-                values[shapeKey.Name] = 0f;
+                foreach (var shapeKey in allShapeKeys)
+                {
+                    values[shapeKey.Name] = 0f;
+                }
             }
 
             if (includeActiveValues && activeCandidates != null)
@@ -183,8 +195,8 @@ namespace YoridoriModifiers.FacialMapper
             foreach (var pair in values)
             {
                 if (!rendererMap.TryGetValue(pair.Key, out var renderer) || renderer == null) continue;
-                var path = AnimationUtility.CalculateTransformPath(renderer.transform, avatarRoot.transform);
-                clip.SetCurve(
+                var path = animatorServices.ObjectPathRemapper.GetVirtualPathForObject(renderer.gameObject);
+                clip.SetFloatCurve(
                     path,
                     typeof(SkinnedMeshRenderer),
                     "blendShape." + pair.Key,
@@ -195,11 +207,12 @@ namespace YoridoriModifiers.FacialMapper
         }
 
         private static void AddResolverLayer(
-            AnimatorController controller,
-            BuildContext context,
+            VirtualAnimatorController controller,
+            AnimatorServicesContext animatorServices,
             List<Candidate> candidates,
             Dictionary<string, SkinnedMeshRenderer> rendererMap,
-            IReadOnlyList<ConditionGroup> externalFaceBlockers)
+            IReadOnlyList<ConditionGroup> externalFaceBlockers,
+            bool writeDefaults)
         {
             var allShapeKeys = candidates
                 .SelectMany(candidate => candidate.ShapeKeys)
@@ -207,28 +220,38 @@ namespace YoridoriModifiers.FacialMapper
                 .Select(group => group.First())
                 .ToArray();
 
-            controller.AddLayer($"{ToolName} Resolver");
-            var layers = controller.layers;
-            var layer = layers[layers.Length - 1];
-            layer.defaultWeight = 1f;
+            var layerName = $"{ToolName} Resolver";
+            var layer = controller.AddLayer(LayerPriority.Default, layerName);
+            layer.DefaultWeight = 1f;
 
-            var stateMachine = layer.stateMachine;
-            stateMachine.name = $"{ToolName} Resolver";
+            var stateMachine = layer.StateMachine;
+            stateMachine.Name = layerName;
+            var externalBlendDurations = ResolveExternalBlendDurations(controller, externalFaceBlockers);
 
             var resetClip = CreateResolvedExpressionClip(
-                context.AvatarRootObject,
+                animatorServices,
                 $"{ToolName} Reset",
                 Array.Empty<Candidate>(),
                 allShapeKeys,
                 rendererMap,
-                includeActiveValues: false);
-            context.AssetSaver.SaveAsset(resetClip);
+                includeActiveValues: false,
+                includeResetValues: !writeDefaults);
 
-            var resetState = stateMachine.AddState("Reset", new Vector3(220f, 80f, 0f));
-            resetState.motion = resetClip;
-            resetState.writeDefaultValues = false;
+            var resetState = stateMachine.AddState("Reset", resetClip, new Vector3(220f, 80f, 0f));
+            resetState.WriteDefaultValues = writeDefaults;
             AddFaceTrackingControl(resetState, stopEyelids: false, stopViseme: false);
-            stateMachine.defaultState = resetState;
+            stateMachine.DefaultState = resetState;
+
+            var hasExternalFaceBlockers = externalFaceBlockers is { Count: > 0 };
+            if (hasExternalFaceBlockers)
+            {
+                AddLayerWeightControl(resetState, layer, 1f, externalBlendDurations.restore);
+                AddExternalFaceOverrideState(
+                    stateMachine,
+                    resetState,
+                    externalFaceBlockers,
+                    new Vector3(20f, 80f, 0f));
+            }
 
             foreach (var leftSign in Enum.GetValues(typeof(YMFacialMapper.HandSign)).Cast<YMFacialMapper.HandSign>())
             {
@@ -237,45 +260,160 @@ namespace YoridoriModifiers.FacialMapper
                     var activeCandidates = ResolveActiveCandidates(candidates, leftSign, rightSign);
                     var stateName = $"L{(int)leftSign}_R{(int)rightSign}";
                     var clip = CreateResolvedExpressionClip(
-                        context.AvatarRootObject,
+                        animatorServices,
                         $"{ToolName} {stateName}",
                         activeCandidates,
                         allShapeKeys,
                         rendererMap,
-                        includeActiveValues: true);
-                    context.AssetSaver.SaveAsset(clip);
+                        includeActiveValues: true,
+                        includeResetValues: !writeDefaults);
 
-                    var state = stateMachine.AddState(stateName, new Vector3(220f + (int)rightSign * 180f, 180f + (int)leftSign * 60f, 0f));
-                    state.motion = clip;
-                    state.writeDefaultValues = false;
+                    var state = stateMachine.AddState(
+                        stateName,
+                        clip,
+                        new Vector3(220f + (int)rightSign * 180f, 180f + (int)leftSign * 60f, 0f));
+                    state.WriteDefaultValues = writeDefaults;
                     AddFaceTrackingControl(state, activeCandidates);
-                    AddExternalFaceResetTransitions(state, resetState, externalFaceBlockers);
+                    if (hasExternalFaceBlockers)
+                    {
+                        AddLayerWeightControl(state, layer, 1f, externalBlendDurations.restore);
+                        AddExternalFaceOverrideState(
+                            stateMachine,
+                            state,
+                            externalFaceBlockers,
+                            new Vector3(20f + (int)rightSign * 180f, 180f + (int)leftSign * 60f, 0f));
+                    }
 
-                    var transition = stateMachine.AddAnyStateTransition(state);
-                    ConfigureTransition(transition);
-                    transition.canTransitionToSelf = false;
-                    transition.AddCondition(AnimatorConditionMode.Equals, (float)leftSign, GestureLeft);
-                    transition.AddCondition(AnimatorConditionMode.Equals, (float)rightSign, GestureRight);
-                    AddSingleConditionExternalFaceGuards(transition, externalFaceBlockers);
+                    var conditions = ImmutableList.Create(
+                        new AnimatorCondition
+                        {
+                            mode = AnimatorConditionMode.Equals,
+                            parameter = GestureLeft,
+                            threshold = (float)leftSign
+                        },
+                        new AnimatorCondition
+                        {
+                            mode = AnimatorConditionMode.Equals,
+                            parameter = GestureRight,
+                            threshold = (float)rightSign
+                        });
+                    conditions = AddSingleConditionExternalFaceGuards(conditions, externalFaceBlockers);
+                    var transition = CreateTransition(state, conditions);
+                    transition.CanTransitionToSelf = false;
+                    stateMachine.AnyStateTransitions = stateMachine.AnyStateTransitions.Add(transition);
                 }
             }
 
-            layers[layers.Length - 1] = layer;
-            controller.layers = layers;
+            foreach (var externalState in (externalFaceBlockers ?? Array.Empty<ConditionGroup>())
+                         .Where(blocker => blocker != null)
+                         .SelectMany(blocker => blocker.DestinationStates)
+                         .Where(state => state != null)
+                         .Distinct())
+            {
+                AddLayerWeightControl(externalState, layer, 0f, externalBlendDurations.disable);
+            }
         }
 
-        private static void AddFaceTrackingControl(AnimatorState state, IReadOnlyList<Candidate> candidates)
+        private static (float disable, float restore) ResolveExternalBlendDurations(
+            VirtualAnimatorController controller,
+            IReadOnlyList<ConditionGroup> externalFaceBlockers)
+        {
+            const float defaultDisableDuration = 0.1f;
+            const float defaultRestoreDuration = 0.2f;
+            if (controller == null || externalFaceBlockers == null)
+            {
+                return (defaultDisableDuration, defaultRestoreDuration);
+            }
+
+            var externalStates = externalFaceBlockers
+                .Where(blocker => blocker != null)
+                .SelectMany(blocker => blocker.DestinationStates)
+                .Where(state => state != null)
+                .Distinct()
+                .ToArray();
+            var disableControls = externalStates
+                .SelectMany(state => state.Behaviours.OfType<VRCAnimatorLayerControl>())
+                .Where(control =>
+                    control.playable == VRC_AnimatorLayerControl.BlendableLayer.FX &&
+                    control.goalWeight <= 0.001f)
+                .ToArray();
+            var controlledLayers = disableControls.Select(control => control.layer).ToHashSet();
+
+            var externalParameters = externalFaceBlockers
+                .Where(blocker => blocker?.Conditions != null)
+                .SelectMany(blocker => blocker.Conditions)
+                .Select(condition => condition.Parameter)
+                .Where(parameter => !string.IsNullOrWhiteSpace(parameter))
+                .ToHashSet(StringComparer.Ordinal);
+            var parameterTransitionDurations = controller.AllReachableNodes()
+                .OfType<VirtualStateTransition>()
+                .Where(transition =>
+                    transition.HasFixedDuration &&
+                    transition.Duration > 0f &&
+                    transition.Conditions.Any(condition => externalParameters.Contains(condition.parameter)))
+                .Select(transition => transition.Duration)
+                .ToArray();
+
+            var disableDuration = new[]
+                {
+                    disableControls.Length > 0
+                        ? disableControls.Max(control => Mathf.Max(0f, control.blendDuration))
+                        : 0f,
+                    parameterTransitionDurations.Length > 0
+                        ? parameterTransitionDurations.Max()
+                        : 0f
+                }
+                .Max();
+            if (disableDuration <= 0f) disableDuration = defaultDisableDuration;
+            var restoreDurations = controller.AllReachableNodes()
+                .OfType<VirtualState>()
+                .SelectMany(state => state.Behaviours.OfType<VRCAnimatorLayerControl>())
+                .Where(control =>
+                    control.playable == VRC_AnimatorLayerControl.BlendableLayer.FX &&
+                    control.goalWeight >= 0.999f &&
+                    controlledLayers.Contains(control.layer))
+                .Select(control => Mathf.Max(0f, control.blendDuration))
+                .ToArray();
+            var restoreDuration = new[]
+                {
+                    restoreDurations.Length > 0 ? restoreDurations.Max() : 0f,
+                    parameterTransitionDurations.Length > 0 ? parameterTransitionDurations.Max() : 0f
+                }
+                .Max();
+            if (restoreDuration <= 0f) restoreDuration = defaultRestoreDuration;
+
+            return (disableDuration, restoreDuration);
+        }
+
+        private static void AddLayerWeightControl(
+            VirtualState state,
+            VirtualLayer layer,
+            float goalWeight,
+            float blendDuration)
+        {
+            if (state == null || layer == null) return;
+
+            var control = ScriptableObject.CreateInstance<VRCAnimatorLayerControl>();
+            control.playable = VRC_AnimatorLayerControl.BlendableLayer.FX;
+            control.layer = layer.VirtualLayerIndex;
+            control.goalWeight = goalWeight;
+            control.blendDuration = Mathf.Max(0f, blendDuration);
+            control.debugString = $"{ToolName}: {layer.Name} weight {goalWeight:0}";
+            state.Behaviours = state.Behaviours.Add(control);
+        }
+
+        private static void AddFaceTrackingControl(VirtualState state, IReadOnlyList<Candidate> candidates)
         {
             var stopEyelids = candidates != null && candidates.Any(candidate => candidate.StopEyelidLeft || candidate.StopEyelidRight);
             var stopViseme = candidates != null && candidates.Any(candidate => candidate.StopViseme);
             AddFaceTrackingControl(state, stopEyelids, stopViseme);
         }
 
-        private static void AddFaceTrackingControl(AnimatorState state, bool stopEyelids, bool stopViseme)
+        private static void AddFaceTrackingControl(VirtualState state, bool stopEyelids, bool stopViseme)
         {
             if (state == null) return;
 
-            var control = state.AddStateMachineBehaviour<VRCAnimatorTrackingControl>();
+            var control = ScriptableObject.CreateInstance<VRCAnimatorTrackingControl>();
             var noChange = VRC_AnimatorTrackingControl.TrackingType.NoChange;
             var tracking = VRC_AnimatorTrackingControl.TrackingType.Tracking;
             var animation = VRC_AnimatorTrackingControl.TrackingType.Animation;
@@ -290,39 +428,72 @@ namespace YoridoriModifiers.FacialMapper
             control.trackingRightFingers = noChange;
             control.trackingEyes = stopEyelids ? animation : tracking;
             control.trackingMouth = stopViseme ? animation : tracking;
+            state.Behaviours = state.Behaviours.Add(control);
         }
 
-        private static void AddExternalFaceResetTransitions(
-            AnimatorState state,
-            AnimatorState resetState,
-            IReadOnlyList<ConditionGroup> externalFaceBlockers)
+        private static void AddExternalFaceOverrideState(
+            VirtualStateMachine stateMachine,
+            VirtualState sourceState,
+            IReadOnlyList<ConditionGroup> externalFaceBlockers,
+            Vector3 position)
         {
-            if (state == null || resetState == null || externalFaceBlockers == null) return;
+            if (stateMachine == null || sourceState == null || externalFaceBlockers == null) return;
+
+            // Keep the exact source motion while the resolver layer fades out. Transitioning to an empty motion
+            // makes Unity blend through the avatar setup pose when Write Defaults is enabled, which can produce a
+            // one-frame eyebrow/face twitch before an external expression takes over.
+            var externalOverrideState = stateMachine.AddState(
+                $"External Override {sourceState.Name}",
+                sourceState.Motion,
+                position);
+            externalOverrideState.WriteDefaultValues = sourceState.WriteDefaultValues;
 
             foreach (var blocker in externalFaceBlockers)
             {
                 if (blocker?.Conditions == null || blocker.Conditions.Length == 0) continue;
-                var transition = state.AddTransition(resetState);
-                ConfigureTransition(transition);
-                foreach (var condition in blocker.Conditions)
-                {
-                    transition.AddCondition(condition.Mode, condition.Threshold, condition.Parameter);
-                }
+                var conditions = blocker.Conditions.Select(ToAnimatorCondition).ToImmutableList();
+                var transition = CreateTransition(externalOverrideState, conditions);
+                sourceState.Transitions = sourceState.Transitions.Add(transition);
             }
         }
 
-        private static void AddSingleConditionExternalFaceGuards(
-            AnimatorStateTransition transition,
+        private static ImmutableList<AnimatorCondition> AddSingleConditionExternalFaceGuards(
+            ImmutableList<AnimatorCondition> conditions,
             IReadOnlyList<ConditionGroup> externalFaceBlockers)
         {
-            if (transition == null || externalFaceBlockers == null) return;
+            if (externalFaceBlockers == null) return conditions;
 
             foreach (var blocker in externalFaceBlockers)
             {
                 if (blocker?.Conditions == null || blocker.Conditions.Length != 1) continue;
                 var inverse = InvertCondition(blocker.Conditions[0]);
-                transition.AddCondition(inverse.Mode, inverse.Threshold, inverse.Parameter);
+                conditions = conditions.Add(ToAnimatorCondition(inverse));
             }
+
+            return conditions;
+        }
+
+        private static AnimatorCondition ToAnimatorCondition(ConditionSpec condition)
+        {
+            return new AnimatorCondition
+            {
+                mode = condition.Mode,
+                parameter = condition.Parameter,
+                threshold = condition.Threshold
+            };
+        }
+
+        private static VirtualStateTransition CreateTransition(
+            VirtualState destination,
+            ImmutableList<AnimatorCondition> conditions)
+        {
+            var transition = VirtualStateTransition.Create();
+            transition.SetDestination(destination);
+            transition.ExitTime = null;
+            transition.HasFixedDuration = true;
+            transition.Duration = 0f;
+            transition.Conditions = conditions;
+            return transition;
         }
 
         private static bool Conflicts(Candidate candidate, Candidate other)
@@ -513,18 +684,10 @@ namespace YoridoriModifiers.FacialMapper
             return new AnimationCurve(new Keyframe(0f, value));
         }
 
-        private static void ConfigureTransition(AnimatorStateTransition transition)
+        private static void AddIntParameterIfMissing(VirtualAnimatorController controller, string parameterName)
         {
-            transition.hasExitTime = false;
-            transition.hasFixedDuration = true;
-            transition.duration = 0f;
-            transition.exitTime = 0f;
-        }
-
-        private static void AddIntParameterIfMissing(AnimatorController controller, string parameterName)
-        {
-            if (controller.parameters.Any(p => p.name == parameterName)) return;
-            controller.AddParameter(new AnimatorControllerParameter
+            if (controller.Parameters.ContainsKey(parameterName)) return;
+            controller.Parameters = controller.Parameters.Add(parameterName, new AnimatorControllerParameter
             {
                 name = parameterName,
                 type = AnimatorControllerParameterType.Int,
@@ -532,10 +695,10 @@ namespace YoridoriModifiers.FacialMapper
             });
         }
 
-        private static void AddBoolParameterIfMissing(AnimatorController controller, string parameterName)
+        private static void AddBoolParameterIfMissing(VirtualAnimatorController controller, string parameterName)
         {
-            if (controller.parameters.Any(p => p.name == parameterName)) return;
-            controller.AddParameter(new AnimatorControllerParameter
+            if (controller.Parameters.ContainsKey(parameterName)) return;
+            controller.Parameters = controller.Parameters.Add(parameterName, new AnimatorControllerParameter
             {
                 name = parameterName,
                 type = AnimatorControllerParameterType.Bool,
@@ -543,62 +706,39 @@ namespace YoridoriModifiers.FacialMapper
             });
         }
 
-        private static void EnsureBlendTreeParameters(AnimatorController controller, bool verbose)
+        private static void EnsureBlendTreeParameters(VirtualAnimatorController controller, bool verbose)
         {
             if (controller == null) return;
 
-            var existing = new HashSet<string>(controller.parameters.Select(parameter => parameter.name), StringComparer.Ordinal);
+            var parameters = controller.Parameters;
             var referenced = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var layer in controller.layers)
+            foreach (var blendTree in controller.AllReachableNodes().OfType<VirtualBlendTree>())
             {
-                CollectBlendTreeParameters(layer?.stateMachine, referenced);
+                AddParameterName(referenced, blendTree.BlendParameter);
+                AddParameterName(referenced, blendTree.BlendParameterY);
+                foreach (var child in blendTree.Children)
+                {
+                    AddParameterName(referenced, child.DirectBlendParameter);
+                }
             }
 
             var added = 0;
             foreach (var parameterName in referenced.OrderBy(name => name, StringComparer.Ordinal))
             {
-                if (string.IsNullOrWhiteSpace(parameterName) || existing.Contains(parameterName)) continue;
-                controller.AddParameter(new AnimatorControllerParameter
+                if (string.IsNullOrWhiteSpace(parameterName) || parameters.ContainsKey(parameterName)) continue;
+                parameters = parameters.Add(parameterName, new AnimatorControllerParameter
                 {
                     name = parameterName,
                     type = AnimatorControllerParameterType.Float,
                     defaultFloat = 0f
                 });
-                existing.Add(parameterName);
                 added++;
             }
+            controller.Parameters = parameters;
 
             if (added > 0)
             {
-                LogUtility.Verbose(ToolName, verbose, "FX", $"Added {added} missing BlendTree parameters to the copied FX controller.");
-            }
-        }
-
-        private static void CollectBlendTreeParameters(AnimatorStateMachine stateMachine, HashSet<string> parameters)
-        {
-            if (stateMachine == null || parameters == null) return;
-
-            foreach (var childState in stateMachine.states)
-            {
-                CollectBlendTreeParameters(childState.state?.motion, parameters);
-            }
-
-            foreach (var childMachine in stateMachine.stateMachines)
-            {
-                CollectBlendTreeParameters(childMachine.stateMachine, parameters);
-            }
-        }
-
-        private static void CollectBlendTreeParameters(Motion motion, HashSet<string> parameters)
-        {
-            if (motion is not BlendTree blendTree || parameters == null) return;
-
-            AddParameterName(parameters, blendTree.blendParameter);
-            AddParameterName(parameters, blendTree.blendParameterY);
-            foreach (var child in blendTree.children)
-            {
-                AddParameterName(parameters, child.directBlendParameter);
-                CollectBlendTreeParameters(child.motion, parameters);
+                LogUtility.Verbose(ToolName, verbose, "FX", $"Added {added} missing BlendTree parameters to the virtualized FX controller.");
             }
         }
 
@@ -608,16 +748,14 @@ namespace YoridoriModifiers.FacialMapper
             parameters.Add(parameterName.Trim());
         }
 
-        private static void RedirectJerryFacialExpressionsDisabledDrivers(AnimatorController controller, bool verbose)
+        private static void RedirectJerryFacialExpressionsDisabledDrivers(VirtualAnimatorController controller, bool verbose)
         {
             if (controller == null) return;
 
-            var redirected = 0;
-            var layers = controller.layers;
-            foreach (var layer in layers)
-            {
-                redirected += RedirectParameterDrivers(layer?.stateMachine, JerryDisableFacialExpressions, JerryInternalFacialExpressionsDisabled);
-            }
+            var redirected = RedirectParameterDrivers(
+                controller.AllReachableNodes().OfType<VirtualState>(),
+                JerryDisableFacialExpressions,
+                JerryInternalFacialExpressionsDisabled);
 
             if (redirected <= 0) return;
 
@@ -630,11 +768,11 @@ namespace YoridoriModifiers.FacialMapper
         }
 
         private static int RedirectParameterDrivers(
-            AnimatorStateMachine stateMachine,
+            IEnumerable<VirtualState> states,
             string sourceParameter,
             string destinationParameter)
         {
-            if (stateMachine == null ||
+            if (states == null ||
                 string.IsNullOrWhiteSpace(sourceParameter) ||
                 string.IsNullOrWhiteSpace(destinationParameter))
             {
@@ -642,11 +780,10 @@ namespace YoridoriModifiers.FacialMapper
             }
 
             var redirected = 0;
-            foreach (var childState in stateMachine.states)
+            foreach (var state in states)
             {
-                var state = childState.state;
                 if (state == null) continue;
-                foreach (var driver in state.behaviours.OfType<VRCAvatarParameterDriver>())
+                foreach (var driver in state.Behaviours.OfType<VRCAvatarParameterDriver>())
                 {
                     if (driver.parameters == null) continue;
                     foreach (var parameter in driver.parameters)
@@ -658,25 +795,20 @@ namespace YoridoriModifiers.FacialMapper
                 }
             }
 
-            foreach (var childMachine in stateMachine.stateMachines)
-            {
-                redirected += RedirectParameterDrivers(childMachine.stateMachine, sourceParameter, destinationParameter);
-            }
-
             return redirected;
         }
 
-        private static void SuppressExistingEyeTrackingRestores(AnimatorController controller, bool verbose)
+        private static void SuppressExistingEyeTrackingRestores(VirtualAnimatorController controller, bool verbose)
         {
             if (controller == null) return;
 
             var changed = 0;
             var tracking = VRC_AnimatorTrackingControl.TrackingType.Tracking;
             var noChange = VRC_AnimatorTrackingControl.TrackingType.NoChange;
-            foreach (var layer in controller.layers)
-            {
-                changed += SuppressExistingEyeTrackingRestores(layer?.stateMachine, tracking, noChange);
-            }
+            changed += SuppressExistingEyeTrackingRestores(
+                controller.AllReachableNodes().OfType<VirtualState>(),
+                tracking,
+                noChange);
 
             if (changed > 0)
             {
@@ -689,18 +821,17 @@ namespace YoridoriModifiers.FacialMapper
         }
 
         private static int SuppressExistingEyeTrackingRestores(
-            AnimatorStateMachine stateMachine,
+            IEnumerable<VirtualState> states,
             VRC_AnimatorTrackingControl.TrackingType tracking,
             VRC_AnimatorTrackingControl.TrackingType noChange)
         {
-            if (stateMachine == null) return 0;
+            if (states == null) return 0;
 
             var changed = 0;
-            foreach (var childState in stateMachine.states)
+            foreach (var state in states)
             {
-                var state = childState.state;
                 if (state == null) continue;
-                foreach (var control in state.behaviours.OfType<VRCAnimatorTrackingControl>())
+                foreach (var control in state.Behaviours.OfType<VRCAnimatorTrackingControl>())
                 {
                     if (control.trackingEyes != tracking) continue;
                     control.trackingEyes = noChange;
@@ -708,82 +839,61 @@ namespace YoridoriModifiers.FacialMapper
                 }
             }
 
-            foreach (var childMachine in stateMachine.stateMachines)
-            {
-                changed += SuppressExistingEyeTrackingRestores(childMachine.stateMachine, tracking, noChange);
-            }
-
             return changed;
         }
 
         private static void StripOriginalGestureLayerFaceCurves(
-            BuildContext context,
-            VRCAvatarDescriptor descriptor,
+            AnimatorServicesContext animatorServices,
             YMFacialMapper component)
         {
-            var layerIndex = FindBaseLayerIndex(descriptor, VRCAvatarDescriptor.AnimLayerType.Gesture);
-            if (layerIndex < 0) return;
+            if (!animatorServices.ControllerContext.Controllers.TryGetValue(
+                    VRCAvatarDescriptor.AnimLayerType.Gesture,
+                    out var controller)) return;
 
-            var layers = descriptor.baseAnimationLayers;
-            if (layers == null || layerIndex >= layers.Length || layers[layerIndex].isDefault) return;
-            if (layers[layerIndex].animatorController is not AnimatorController sourceController) return;
-
-            var controller = NdmfObjectRegistry.Clone(sourceController);
-            controller.name = $"{sourceController.name} YM Facial Mapper Gesture Face Stripped";
-            context.AssetSaver.SaveAsset(controller);
-
-            var clipMap = new Dictionary<AnimationClip, AnimationClip>();
-            var stripped = RewriteStateMachineFaceMotions(controller.layers, context, clipMap);
+            var stripped = RewriteControllerFaceMotions(controller);
+            controller.Name = $"{controller.Name} YM Facial Mapper Gesture Face Stripped";
             if (stripped > 0)
             {
-                LogUtility.Verbose(ToolName, component.verboseLog, "Gesture", $"Stripped {stripped} blend shape curves from copied Gesture animations.");
+                LogUtility.Verbose(ToolName, component.verboseLog, "Gesture", $"Stripped {stripped} blend shape curves from Gesture animations.");
             }
-
-            layers[layerIndex].animatorController = controller;
-            descriptor.baseAnimationLayers = layers;
         }
 
         private static void StripGestureDrivenFxFaceCurves(
-            AnimatorController controller,
-            BuildContext context,
+            VirtualAnimatorController controller,
             bool verbose)
         {
             if (controller == null) return;
-            var clipMap = new Dictionary<AnimationClip, AnimationClip>();
             var stripped = 0;
+            var clipMap = new Dictionary<VirtualClip, VirtualClip>();
 
-            var layers = controller.layers;
-            for (var i = 0; i < layers.Length; i++)
+            foreach (var layer in controller.Layers)
             {
-                var layer = layers[i];
-                if (layer == null || !StateMachineUsesGestureParameters(layer.stateMachine)) continue;
-                stripped += RewriteStateMachineFaceMotions(layer.stateMachine, context, clipMap);
-                layers[i] = layer;
+                if (layer?.StateMachine == null || !StateMachineUsesGestureParameters(layer.StateMachine)) continue;
+                stripped += RewriteStateMachineFaceMotions(layer.StateMachine, clipMap);
             }
 
-            controller.layers = layers;
             if (stripped > 0)
             {
-                LogUtility.Verbose(ToolName, verbose, "FX", $"Stripped {stripped} blend shape curves from copied gesture-driven FX animations.");
+                LogUtility.Verbose(ToolName, verbose, "FX", $"Stripped {stripped} blend shape curves from gesture-driven FX animations.");
             }
         }
 
-        private static List<ConditionGroup> CollectExternalFaceBlockers(AnimatorController controller)
+        private static List<ConditionGroup> CollectExternalFaceBlockers(VirtualAnimatorController controller)
         {
             var groups = new List<ConditionGroup>();
-            var keys = new HashSet<string>(StringComparer.Ordinal);
+            var groupsByKey = new Dictionary<string, ConditionGroup>(StringComparer.Ordinal);
             if (controller == null) return groups;
 
-            foreach (var layer in controller.layers)
+            foreach (var transition in controller.AllReachableNodes().OfType<VirtualTransitionBase>())
             {
-                CollectExternalFaceBlockers(controller, layer?.stateMachine, groups, keys);
+                TryAddExternalFaceBlocker(controller, transition, groups, groupsByKey);
             }
 
             return groups;
         }
 
         private static void AddExistingParameterBlocker(
-            AnimatorController controller,
+            VirtualAnimatorController controller,
             List<ConditionGroup> groups,
             string parameterName,
             bool verbose,
@@ -809,51 +919,17 @@ namespace YoridoriModifiers.FacialMapper
             LogUtility.Verbose(ToolName, verbose, "FX", $"Detected {label} parameter: {condition.Parameter}");
         }
 
-        private static void CollectExternalFaceBlockers(
-            AnimatorController controller,
-            AnimatorStateMachine stateMachine,
-            List<ConditionGroup> groups,
-            HashSet<string> keys)
-        {
-            if (stateMachine == null) return;
-
-            foreach (var transition in stateMachine.anyStateTransitions)
-            {
-                TryAddExternalFaceBlocker(controller, transition, groups, keys);
-            }
-
-            foreach (var transition in stateMachine.entryTransitions)
-            {
-                TryAddExternalFaceBlocker(controller, transition, groups, keys);
-            }
-
-            foreach (var childState in stateMachine.states)
-            {
-                var state = childState.state;
-                if (state == null) continue;
-                foreach (var transition in state.transitions)
-                {
-                    TryAddExternalFaceBlocker(controller, transition, groups, keys);
-                }
-            }
-
-            foreach (var childMachine in stateMachine.stateMachines)
-            {
-                CollectExternalFaceBlockers(controller, childMachine.stateMachine, groups, keys);
-            }
-        }
-
         private static void TryAddExternalFaceBlocker(
-            AnimatorController controller,
-            AnimatorTransitionBase transition,
+            VirtualAnimatorController controller,
+            VirtualTransitionBase transition,
             List<ConditionGroup> groups,
-            HashSet<string> keys)
+            Dictionary<string, ConditionGroup> groupsByKey)
         {
-            if (transition == null || transition.destinationState == null) return;
-            if (IsFaceTrackingState(transition.destinationState)) return;
-            if (!MotionHasBlendShapeCurves(transition.destinationState.motion)) return;
+            if (transition?.DestinationState == null) return;
+            if (IsFaceTrackingState(transition.DestinationState)) return;
+            if (!MotionHasBlendShapeCurves(transition.DestinationState.Motion)) return;
 
-            var conditions = transition.conditions
+            var conditions = transition.Conditions
                 .Where(condition => IsExternalFaceBlockerCondition(condition.parameter))
                 .Select(condition => NormalizeCondition(controller, condition.parameter, condition.mode, condition.threshold))
                 .ToArray();
@@ -864,32 +940,38 @@ namespace YoridoriModifiers.FacialMapper
                 .ThenBy(condition => condition.Mode)
                 .ThenBy(condition => condition.Threshold)
                 .Select(condition => $"{condition.Parameter}:{condition.Mode}:{condition.Threshold.ToString(CultureInfo.InvariantCulture)}"));
-            if (!keys.Add(key)) return;
+            if (groupsByKey.TryGetValue(key, out var existing))
+            {
+                existing.DestinationStates.Add(transition.DestinationState);
+                return;
+            }
 
-            groups.Add(new ConditionGroup(conditions));
+            var group = new ConditionGroup(conditions, transition.DestinationState);
+            groupsByKey[key] = group;
+            groups.Add(group);
         }
 
-        private static bool IsFaceTrackingState(AnimatorState state)
+        private static bool IsFaceTrackingState(VirtualState state)
         {
             if (state == null) return false;
-            return IsFaceTrackingName(state.name) || IsFaceTrackingMotion(state.motion);
+            return IsFaceTrackingName(state.Name) || IsFaceTrackingMotion(state.Motion);
         }
 
-        private static bool IsFaceTrackingMotion(Motion motion)
+        private static bool IsFaceTrackingMotion(VirtualMotion motion)
         {
             switch (motion)
             {
                 case null:
                     return false;
-                case BlendTree blendTree:
-                    return IsFaceTrackingName(blendTree.name) ||
-                           IsFaceTrackingParameter(blendTree.blendParameter) ||
-                           IsFaceTrackingParameter(blendTree.blendParameterY) ||
-                           blendTree.children.Any(child =>
-                               IsFaceTrackingParameter(child.directBlendParameter) ||
-                               IsFaceTrackingMotion(child.motion));
+                case VirtualBlendTree blendTree:
+                    return IsFaceTrackingName(blendTree.Name) ||
+                           IsFaceTrackingParameter(blendTree.BlendParameter) ||
+                           IsFaceTrackingParameter(blendTree.BlendParameterY) ||
+                           blendTree.Children.Any(child =>
+                               IsFaceTrackingParameter(child.DirectBlendParameter) ||
+                               IsFaceTrackingMotion(child.Motion));
                 default:
-                    return IsFaceTrackingName(motion.name);
+                    return IsFaceTrackingName(motion.Name);
             }
         }
 
@@ -917,17 +999,17 @@ namespace YoridoriModifiers.FacialMapper
                    lower.Contains("eyedilationenable");
         }
 
-        private static bool MotionHasBlendShapeCurves(Motion motion)
+        private static bool MotionHasBlendShapeCurves(VirtualMotion motion)
         {
             switch (motion)
             {
                 case null:
                     return false;
-                case AnimationClip clip:
-                    return AnimationUtility.GetCurveBindings(clip).Any(IsBlendShapeBinding) ||
-                           AnimationUtility.GetObjectReferenceCurveBindings(clip).Any(IsBlendShapeBinding);
-                case BlendTree blendTree:
-                    return blendTree.children.Any(child => MotionHasBlendShapeCurves(child.motion));
+                case VirtualClip clip:
+                    return clip.GetFloatCurveBindings().Any(IsBlendShapeBinding) ||
+                           clip.GetObjectCurveBindings().Any(IsBlendShapeBinding);
+                case VirtualBlendTree blendTree:
+                    return blendTree.Children.Any(child => MotionHasBlendShapeCurves(child.Motion));
                 default:
                     return false;
             }
@@ -970,7 +1052,7 @@ namespace YoridoriModifiers.FacialMapper
         }
 
         private static ConditionSpec NormalizeCondition(
-            AnimatorController controller,
+            VirtualAnimatorController controller,
             string parameterName,
             AnimatorConditionMode mode,
             float threshold)
@@ -988,7 +1070,7 @@ namespace YoridoriModifiers.FacialMapper
         }
 
         private static bool TryCreateTruthyCondition(
-            AnimatorController controller,
+            VirtualAnimatorController controller,
             string parameterName,
             out ConditionSpec condition)
         {
@@ -1008,10 +1090,10 @@ namespace YoridoriModifiers.FacialMapper
             }
         }
 
-        private static AnimatorControllerParameterType? GetParameterType(AnimatorController controller, string parameterName)
+        private static AnimatorControllerParameterType? GetParameterType(VirtualAnimatorController controller, string parameterName)
         {
             if (controller == null || string.IsNullOrWhiteSpace(parameterName)) return null;
-            return controller.parameters.FirstOrDefault(parameter => parameter.name == parameterName)?.type;
+            return controller.Parameters.TryGetValue(parameterName, out var parameter) ? parameter.type : null;
         }
 
         private static ConditionSpec InvertCondition(ConditionSpec condition)
@@ -1029,86 +1111,127 @@ namespace YoridoriModifiers.FacialMapper
             };
         }
 
-        private static int RewriteStateMachineFaceMotions(
-            AnimatorControllerLayer[] layers,
-            BuildContext context,
-            Dictionary<AnimationClip, AnimationClip> clipMap)
+        private static int RewriteControllerFaceMotions(VirtualAnimatorController controller)
         {
-            if (layers == null) return 0;
+            if (controller == null) return 0;
             var stripped = 0;
-            foreach (var layer in layers)
+            var clipMap = new Dictionary<VirtualClip, VirtualClip>();
+            foreach (var layer in controller.Layers)
             {
-                stripped += RewriteStateMachineFaceMotions(layer?.stateMachine, context, clipMap);
+                stripped += RewriteStateMachineFaceMotions(layer?.StateMachine, clipMap);
             }
 
             return stripped;
         }
 
         private static int RewriteStateMachineFaceMotions(
-            AnimatorStateMachine stateMachine,
-            BuildContext context,
-            Dictionary<AnimationClip, AnimationClip> clipMap)
+            VirtualStateMachine stateMachine,
+            Dictionary<VirtualClip, VirtualClip> clipMap)
         {
             if (stateMachine == null) return 0;
             var stripped = 0;
-
-            foreach (var childState in stateMachine.states)
+            foreach (var state in stateMachine.AllStates())
             {
-                var state = childState.state;
-                if (state == null || state.motion == null) continue;
-                var result = RewriteFaceMotion(state.motion, context, clipMap);
-                if (result.motion != state.motion)
-                {
-                    state.motion = result.motion;
-                }
-
+                var result = RewriteFaceMotion(state.Motion, clipMap);
+                if (!ReferenceEquals(result.motion, state.Motion)) state.Motion = result.motion;
                 stripped += result.strippedCurves;
-            }
-
-            foreach (var childMachine in stateMachine.stateMachines)
-            {
-                stripped += RewriteStateMachineFaceMotions(childMachine.stateMachine, context, clipMap);
             }
 
             return stripped;
         }
 
-        private static bool StateMachineUsesGestureParameters(AnimatorStateMachine stateMachine)
+        private static (VirtualMotion motion, int strippedCurves) RewriteFaceMotion(
+            VirtualMotion motion,
+            Dictionary<VirtualClip, VirtualClip> clipMap)
+        {
+            switch (motion)
+            {
+                case null:
+                    return (null, 0);
+                case VirtualClip clip:
+                    return RewriteFaceClip(clip, clipMap);
+                case VirtualBlendTree blendTree:
+                    return RewriteFaceBlendTree(blendTree, clipMap);
+                default:
+                    return (motion, 0);
+            }
+        }
+
+        private static (VirtualMotion motion, int strippedCurves) RewriteFaceClip(
+            VirtualClip sourceClip,
+            Dictionary<VirtualClip, VirtualClip> clipMap)
+        {
+            if (sourceClip == null || sourceClip.IsMarkerClip) return (sourceClip, 0);
+            if (clipMap.TryGetValue(sourceClip, out var existing)) return (existing, 0);
+
+            var floatBindings = sourceClip.GetFloatCurveBindings().Where(IsBlendShapeBinding).ToArray();
+            var objectBindings = sourceClip.GetObjectCurveBindings().Where(IsBlendShapeBinding).ToArray();
+            var stripped = floatBindings.Length + objectBindings.Length;
+            if (stripped == 0) return (sourceClip, 0);
+
+            var clip = sourceClip.Clone();
+            clip.Name = $"{sourceClip.Name} YM Facial Mapper Face Stripped";
+            foreach (var binding in floatBindings) clip.SetFloatCurve(binding, null);
+            foreach (var binding in objectBindings) clip.SetObjectCurve(binding, null);
+            clipMap[sourceClip] = clip;
+            return (clip, stripped);
+        }
+
+        private static (VirtualMotion motion, int strippedCurves) RewriteFaceBlendTree(
+            VirtualBlendTree sourceTree,
+            Dictionary<VirtualClip, VirtualClip> clipMap)
+        {
+            if (sourceTree == null) return (null, 0);
+            var stripped = 0;
+            var changed = false;
+            var children = sourceTree.Children.Select(child =>
+            {
+                var result = RewriteFaceMotion(child.Motion, clipMap);
+                stripped += result.strippedCurves;
+                changed |= !ReferenceEquals(result.motion, child.Motion);
+                return new VirtualBlendTree.VirtualChildMotion
+                {
+                    Motion = result.motion,
+                    CycleOffset = child.CycleOffset,
+                    DirectBlendParameter = child.DirectBlendParameter,
+                    Mirror = child.Mirror,
+                    Threshold = child.Threshold,
+                    Position = child.Position,
+                    TimeScale = child.TimeScale
+                };
+            }).ToImmutableList();
+
+            if (!changed) return (sourceTree, stripped);
+
+            var tree = VirtualBlendTree.Create($"{sourceTree.Name} YM Facial Mapper Face Stripped");
+            tree.BlendParameter = sourceTree.BlendParameter;
+            tree.BlendParameterY = sourceTree.BlendParameterY;
+            tree.BlendType = sourceTree.BlendType;
+            tree.MaxThreshold = sourceTree.MaxThreshold;
+            tree.MinThreshold = sourceTree.MinThreshold;
+            tree.UseAutomaticThresholds = sourceTree.UseAutomaticThresholds;
+            tree.NormalizedBlendValues = sourceTree.NormalizedBlendValues;
+            tree.Children = children;
+            return (tree, stripped);
+        }
+
+        private static bool StateMachineUsesGestureParameters(VirtualStateMachine stateMachine)
         {
             if (stateMachine == null) return false;
 
-            if (stateMachine.anyStateTransitions.Any(TransitionUsesGestureParameters) ||
-                stateMachine.entryTransitions.Any(TransitionUsesGestureParameters))
+            if (stateMachine.AllReachableNodes()
+                .OfType<VirtualTransitionBase>()
+                .Any(transition => transition.Conditions.Any(condition => IsGestureParameter(condition.parameter))))
             {
                 return true;
             }
 
-            foreach (var childState in stateMachine.states)
-            {
-                var state = childState.state;
-                if (state == null) continue;
-                if (state.transitions.Any(TransitionUsesGestureParameters)) return true;
-                if (MotionUsesGestureParameters(state.motion)) return true;
-            }
-
-            return stateMachine.stateMachines.Any(child => StateMachineUsesGestureParameters(child.stateMachine));
-        }
-
-        private static bool TransitionUsesGestureParameters(AnimatorTransitionBase transition)
-        {
-            return transition != null && transition.conditions.Any(condition => IsGestureParameter(condition.parameter));
-        }
-
-        private static bool MotionUsesGestureParameters(Motion motion)
-        {
-            if (motion is not BlendTree blendTree) return false;
-            if (IsGestureParameter(blendTree.blendParameter) ||
-                IsGestureParameter(blendTree.blendParameterY))
-            {
-                return true;
-            }
-
-            return blendTree.children.Any(child => MotionUsesGestureParameters(child.motion));
+            return stateMachine.AllReachableNodes()
+                .OfType<VirtualBlendTree>()
+                .Any(blendTree =>
+                    IsGestureParameter(blendTree.BlendParameter) ||
+                    IsGestureParameter(blendTree.BlendParameterY) ||
+                    blendTree.Children.Any(child => IsGestureParameter(child.DirectBlendParameter)));
         }
 
         private static bool IsGestureParameter(string parameterName)
@@ -1119,128 +1242,24 @@ namespace YoridoriModifiers.FacialMapper
                    parameterName == "GestureRightWeight";
         }
 
-        private static (Motion motion, int strippedCurves) RewriteFaceMotion(
-            Motion motion,
-            BuildContext context,
-            Dictionary<AnimationClip, AnimationClip> clipMap)
-        {
-            switch (motion)
-            {
-                case null:
-                    return (null, 0);
-                case AnimationClip clip:
-                    var strippedClip = StripBlendShapeCurvesFromClip(clip, context, clipMap, out var strippedCurves);
-                    return (strippedClip, strippedCurves);
-                case BlendTree blendTree:
-                    return RewriteFaceBlendTree(blendTree, context, clipMap);
-                default:
-                    return (motion, 0);
-            }
-        }
-
-        private static (Motion motion, int strippedCurves) RewriteFaceBlendTree(
-            BlendTree sourceTree,
-            BuildContext context,
-            Dictionary<AnimationClip, AnimationClip> clipMap)
-        {
-            if (sourceTree == null) return (null, 0);
-            var stripped = 0;
-            var children = sourceTree.children;
-            var rewrittenChildren = children;
-            var changed = false;
-
-            for (var i = 0; i < children.Length; i++)
-            {
-                var result = RewriteFaceMotion(children[i].motion, context, clipMap);
-                stripped += result.strippedCurves;
-                if (result.motion == children[i].motion) continue;
-                if (!changed)
-                {
-                    rewrittenChildren = children.ToArray();
-                    changed = true;
-                }
-
-                rewrittenChildren[i].motion = result.motion;
-            }
-
-            if (!changed) return (sourceTree, stripped);
-
-            var tree = NdmfObjectRegistry.Clone(sourceTree);
-            tree.name = $"{sourceTree.name} YM Facial Mapper Face Stripped";
-            tree.children = rewrittenChildren;
-            context.AssetSaver.SaveAsset(tree);
-            return (tree, stripped);
-        }
-
-        private static AnimationClip StripBlendShapeCurvesFromClip(
-            AnimationClip sourceClip,
-            BuildContext context,
-            Dictionary<AnimationClip, AnimationClip> clipMap,
-            out int strippedCurves)
-        {
-            strippedCurves = 0;
-            if (sourceClip == null) return null;
-            if (clipMap.TryGetValue(sourceClip, out var existing)) return existing;
-
-            var bindings = AnimationUtility.GetCurveBindings(sourceClip)
-                .Where(IsBlendShapeBinding)
-                .ToArray();
-            var objectBindings = AnimationUtility.GetObjectReferenceCurveBindings(sourceClip)
-                .Where(IsBlendShapeBinding)
-                .ToArray();
-            strippedCurves = bindings.Length + objectBindings.Length;
-            if (strippedCurves == 0) return sourceClip;
-
-            var clip = NdmfObjectRegistry.Clone(sourceClip);
-            clip.name = $"{sourceClip.name} YM Facial Mapper Face Stripped";
-
-            foreach (var binding in bindings)
-            {
-                AnimationUtility.SetEditorCurve(clip, binding, null);
-            }
-
-            foreach (var binding in objectBindings)
-            {
-                AnimationUtility.SetObjectReferenceCurve(clip, binding, null);
-            }
-
-            context.AssetSaver.SaveAsset(clip);
-            clipMap[sourceClip] = clip;
-            return clip;
-        }
-
         private static bool IsBlendShapeBinding(EditorCurveBinding binding)
         {
             return binding.type == typeof(SkinnedMeshRenderer) &&
                    binding.propertyName.StartsWith("blendShape.", StringComparison.Ordinal);
         }
 
-        private static void RemoveExistingLayers(AnimatorController controller)
+        private static void RemoveExistingLayers(VirtualAnimatorController controller)
         {
-            controller.layers = controller.layers
-                .Where(layer => layer != null && !layer.name.StartsWith(ToolName, StringComparison.Ordinal))
-                .ToArray();
+            controller.RemoveLayers(layer =>
+                layer?.Name != null && layer.Name.StartsWith(ToolName, StringComparison.Ordinal));
         }
 
-        internal static AnimatorController GetFxAnimatorController(VRCAvatarDescriptor descriptor)
-        {
-            if (descriptor == null) return null;
-            var layers = descriptor.baseAnimationLayers ?? Array.Empty<VRCAvatarDescriptor.CustomAnimLayer>();
-            foreach (var layer in layers)
-            {
-                if (layer.type != VRCAvatarDescriptor.AnimLayerType.FX || layer.isDefault) continue;
-                return layer.animatorController as AnimatorController;
-            }
-
-            return null;
-        }
-
-        private static int EnsureFxLayer(VRCAvatarDescriptor descriptor)
+        private static void EnsureFxLayer(VRCAvatarDescriptor descriptor)
         {
             var layers = descriptor.baseAnimationLayers ?? Array.Empty<VRCAvatarDescriptor.CustomAnimLayer>();
             for (var i = 0; i < layers.Length; i++)
             {
-                if (layers[i].type == VRCAvatarDescriptor.AnimLayerType.FX) return i;
+                if (layers[i].type == VRCAvatarDescriptor.AnimLayerType.FX) return;
             }
 
             Array.Resize(ref layers, layers.Length + 1);
@@ -1251,20 +1270,6 @@ namespace YoridoriModifiers.FacialMapper
                 isDefault = false
             };
             descriptor.baseAnimationLayers = layers;
-            return index;
-        }
-
-        private static int FindBaseLayerIndex(VRCAvatarDescriptor descriptor, VRCAvatarDescriptor.AnimLayerType layerType)
-        {
-            var layers = descriptor != null
-                ? descriptor.baseAnimationLayers ?? Array.Empty<VRCAvatarDescriptor.CustomAnimLayer>()
-                : Array.Empty<VRCAvatarDescriptor.CustomAnimLayer>();
-            for (var i = 0; i < layers.Length; i++)
-            {
-                if (layers[i].type == layerType) return i;
-            }
-
-            return -1;
         }
 
         private static YMFacialMapper SelectPreferredComponent(YMFacialMapper[] components, GameObject avatarRoot)
@@ -1299,10 +1304,12 @@ namespace YoridoriModifiers.FacialMapper
         private sealed class ConditionGroup
         {
             public readonly ConditionSpec[] Conditions;
+            public readonly HashSet<VirtualState> DestinationStates = new();
 
-            public ConditionGroup(ConditionSpec[] conditions)
+            public ConditionGroup(ConditionSpec[] conditions, VirtualState destinationState = null)
             {
                 Conditions = conditions ?? Array.Empty<ConditionSpec>();
+                if (destinationState != null) DestinationStates.Add(destinationState);
             }
         }
 

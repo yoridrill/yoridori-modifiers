@@ -81,6 +81,8 @@ namespace YoridoriModifiers.FacialMapper
 
         public string disableHandGesturesParameter = string.Empty;
 
+        public bool writeDefaults;
+
         public bool verboseLog;
     }
 

@@ -284,7 +284,7 @@ public static class MeshTrimProcessor
 
         Mesh dst = new Mesh
         {
-            name = src.name + "_YoridoriMeshTrimmerTrimmed",
+            name = src.name + "_YMMeshTrimmerTrimmed",
             indexFormat = vertices.Count > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16,
             subMeshCount = src.subMeshCount,
             bindposes = src.bindposes

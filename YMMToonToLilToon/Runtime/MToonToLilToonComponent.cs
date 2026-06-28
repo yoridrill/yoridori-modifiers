@@ -21,6 +21,13 @@ namespace YoridoriModifiers.MToonToLilToon
         public Texture2D faceShadowSdfTexture;
         public FaceShadowMaskType faceShadowMaskType = FaceShadowMaskType.Flat;
         public float shadowStrengthMaskLod;
+        public bool enableSilhouetteTransparency;
+        public Material silhouetteClothingMaterial;
+        public Color silhouetteClothingColor = Color.white;
+        public Material silhouetteBodyMaterial;
+        public Color silhouetteShadowColor = new(0.35f, 0.25f, 0.3f, 1f);
+        [Range(0f, 1f)] public float silhouetteOpacity = 0.8f;
+        [Range(0f, 1f)] public float silhouetteBlur = 0.85f;
         public bool disableShadowReceiveForFace;
         public bool disableRimShadeForFace;
         public bool disableBacklightStrengthForFace;

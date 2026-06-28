@@ -14,8 +14,8 @@ namespace YoridoriModifiers.MeshTrimmer
 [CustomEditor(typeof(MeshTrimmerComponent))]
 public class MeshTrimmerComponentEditor : Editor
 {
-    private const string PreviewRootName = "__YoridoriMeshTrimmerPreviewRoot";
-    private const string PreviewAvatarName = "__YoridoriMeshTrimmerPreviewAvatar";
+    private const string PreviewRootName = "__YMMeshTrimmerPreviewRoot";
+    private const string PreviewAvatarName = "__YMMeshTrimmerPreviewAvatar";
     private const string LanguagePrefKey = "MeshTrimmerComponentEditor.Language";
     private const string ToolName = "YM Mesh Trimmer";
 

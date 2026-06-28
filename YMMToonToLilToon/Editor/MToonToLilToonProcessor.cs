@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using nadena.dev.ndmf;
+using nadena.dev.ndmf.animator;
 using UnityEditor;
 using UnityEngine;
 using YoridoriModifiers.Core.Editor;
@@ -62,13 +63,16 @@ namespace YoridoriModifiers.MToonToLilToon
             MToonToLilToonComponent component,
             System.Action<string> onProgress = null,
             ConversionRoute route = ConversionRoute.Build,
-            BuildContext buildContext = null)
+            BuildContext buildContext = null,
+            AnimatorServicesContext animatorServices = null)
         {
             if (component == null) return;
             var processingRoot = ResolveProcessingRoot(component);
             if (processingRoot == null) return;
             var currentMaterials = CollectCurrentMaterials(processingRoot);
             var faceShadowFaceMaterial = ResolveCurrentMaterialReference(component.faceShadowFaceMaterial, currentMaterials);
+            var silhouetteClothingMaterial = ResolveCurrentMaterialReference(component.silhouetteClothingMaterial, currentMaterials);
+            var silhouetteBodyMaterial = ResolveCurrentMaterialReference(component.silhouetteBodyMaterial, currentMaterials);
 
             if (component.isPreviewing)
             {
@@ -141,6 +145,27 @@ namespace YoridoriModifiers.MToonToLilToon
 
             ApplyBacklightExclusionToMouthMaterials(convertedBySource.Values);
 
+            var shouldApplySilhouetteTransparency = component.enableSilhouetteTransparency
+                && (route == ConversionRoute.Preview
+                    || MToonToLilToonBuildTargetUtility.IsPcBuildTarget(processingRoot));
+            if (shouldApplySilhouetteTransparency)
+            {
+                var resolvedClothingMaterial = ResolveConvertedMaterial(silhouetteClothingMaterial, convertedBySource);
+                var resolvedBodyMaterial = ResolveConvertedMaterial(silhouetteBodyMaterial, convertedBySource);
+                onProgress?.Invoke("Creating silhouette transparency materials...");
+                SilhouetteTransparencyProcessor.Apply(
+                    processingRoot,
+                    resolvedClothingMaterial,
+                    resolvedBodyMaterial,
+                    component.silhouetteClothingColor,
+                    component.silhouetteShadowColor,
+                    component.silhouetteOpacity,
+                    component.silhouetteBlur,
+                    report,
+                    buildContext,
+                    animatorServices);
+            }
+
             component.scannedMaterialCount = report.ScannedMaterialCount;
             component.convertedMaterialCount = report.ConvertedMaterialCount;
             component.skippedMaterialCount = report.SkippedMaterialCount;
@@ -171,6 +196,14 @@ namespace YoridoriModifiers.MToonToLilToon
 
             return currentMaterials.FirstOrDefault(material => IsCurrentVersionOfConfiguredMaterial(material, configuredName))
                 ?? configuredMaterial;
+        }
+
+        private static Material ResolveConvertedMaterial(
+            Material source,
+            IReadOnlyDictionary<Material, Material> convertedBySource)
+        {
+            if (source == null || convertedBySource == null) return source;
+            return convertedBySource.TryGetValue(source, out var converted) ? converted : source;
         }
 
         private static bool IsCurrentVersionOfConfiguredMaterial(Material candidate, string sourceName)
@@ -509,7 +542,18 @@ namespace YoridoriModifiers.MToonToLilToon
                     _ => null
                 };
 
-                if (mesh != null && mesh.subMeshCount != materials.Length)
+                var hasBodySilhouetteOverflow = mesh != null
+                    && materials.Length == mesh.subMeshCount + 1
+                    && materials[materials.Length - 1] != null
+                    && materials[materials.Length - 1].name.EndsWith("_Silhouette", System.StringComparison.Ordinal);
+                var hasClothingSilhouetteOverflow = mesh != null
+                    && materials.Length == mesh.subMeshCount + 2
+                    && materials[materials.Length - 2] != null
+                    && materials[materials.Length - 1] != null
+                    && materials[materials.Length - 2].name.EndsWith("_SilhouetteStencil", System.StringComparison.Ordinal)
+                    && materials[materials.Length - 1].name.EndsWith("_SilhouetteRefractionBlur", System.StringComparison.Ordinal);
+                var isExpectedSilhouetteOverflow = hasBodySilhouetteOverflow || hasClothingSilhouetteOverflow;
+                if (mesh != null && mesh.subMeshCount != materials.Length && !isExpectedSilhouetteOverflow)
                 {
                     var message = $"{renderer.name}: subMeshCount({mesh.subMeshCount}) != sharedMaterials.Length({materials.Length})";
                     report?.Warnings.Add(new ConversionWarning(message));
@@ -520,7 +564,8 @@ namespace YoridoriModifiers.MToonToLilToon
                 }
                 else if (verbose)
                 {
-                    LogUtility.Info(ToolName, "AAO-precheck", $"{renderer.name}: subMeshCount/materialCount OK ({materials.Length})", renderer);
+                    var suffix = isExpectedSilhouetteOverflow ? " (expected silhouette overflow)" : string.Empty;
+                    LogUtility.Info(ToolName, "AAO-precheck", $"{renderer.name}: subMeshCount/materialCount OK ({materials.Length}){suffix}", renderer);
                 }
 
                 for (var i = 0; i < materials.Length; i++)

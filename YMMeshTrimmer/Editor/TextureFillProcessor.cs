@@ -74,7 +74,7 @@ public static class TexturePostProcessProcessor
                         currentMaterial,
                         () => new Material(currentMaterial)
                         {
-                            name = currentMaterial.name + "_YoridoriMeshTrimmerProcessed"
+                            name = currentMaterial.name + "_YMMeshTrimmerProcessed"
                         });
                     replacement.SetTexture(textureProperty, processedTexture);
                     ReplaceAllMatchingTextureSlots(replacement, sourceMainTexture, processedTexture);
@@ -205,7 +205,7 @@ public static class TexturePostProcessProcessor
             {
                 tex = new Texture2D(width, height, format, true, linear)
                 {
-                    name = source.name + "_YoridoriMeshTrimmerProcessed",
+                    name = source.name + "_YMMeshTrimmerProcessed",
                     wrapMode = source.wrapMode,
                     filterMode = source.filterMode,
                     anisoLevel = source.anisoLevel

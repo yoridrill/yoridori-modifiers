@@ -32,6 +32,7 @@ namespace YoridoriModifiers.MToonToLilToon
             var undoGroup = Undo.GetCurrentGroup();
             serializedObject.Update();
             EnsureFaceMaterialsDetected(serializedObject, _cachedRendererMaterials);
+            EnsureSilhouetteMaterialsDetected(serializedObject, _cachedRendererMaterials);
             if (serializedObject.ApplyModifiedProperties())
             {
                 Undo.CollapseUndoOperations(undoGroup);
@@ -62,6 +63,10 @@ namespace YoridoriModifiers.MToonToLilToon
             var faceShadowSettingsChanged = EditorGUI.EndChangeCheck();
 
             EditorGUI.BeginChangeCheck();
+            DrawSilhouetteTransparencySection(component);
+            var silhouetteSettingsChanged = EditorGUI.EndChangeCheck();
+
+            EditorGUI.BeginChangeCheck();
             directValueChanged |= DrawAdvancedSection(component);
             var advancedSettingsChanged = EditorGUI.EndChangeCheck();
 
@@ -79,6 +84,7 @@ namespace YoridoriModifiers.MToonToLilToon
                 && globalOverridesChanged
                 && !hairSettingsChanged
                 && !faceShadowSettingsChanged
+                && !silhouetteSettingsChanged
                 && !advancedSettingsChanged;
 
             if (onlyGlobalOverridesChanged)
@@ -102,6 +108,13 @@ namespace YoridoriModifiers.MToonToLilToon
             AppendObject(builder, component.faceShadowSdfTexture);
             builder.Append('|').Append((int)component.faceShadowMaskType);
             builder.Append('|').Append(component.shadowStrengthMaskLod);
+            builder.Append('|').Append(component.enableSilhouetteTransparency);
+            AppendObject(builder, component.silhouetteClothingMaterial);
+            AppendColor(builder, component.silhouetteClothingColor);
+            AppendObject(builder, component.silhouetteBodyMaterial);
+            AppendColor(builder, component.silhouetteShadowColor);
+            builder.Append('|').Append(component.silhouetteOpacity);
+            builder.Append('|').Append(component.silhouetteBlur);
             builder.Append('|').Append(component.disableShadowReceiveForFace);
             builder.Append('|').Append(component.disableRimShadeForFace);
             builder.Append('|').Append(component.disableBacklightStrengthForFace);
@@ -593,6 +606,108 @@ namespace YoridoriModifiers.MToonToLilToon
             maskTypeProperty.intValue = (int)nextType;
         }
 
+        private void DrawSilhouetteTransparencySection(MToonToLilToonComponent component)
+        {
+            var enabledProp = serializedObject.FindProperty(nameof(MToonToLilToonComponent.enableSilhouetteTransparency));
+            DrawLeftToggle(
+                enabledProp,
+                TT(
+                    "シルエット透け(高負荷)",
+                    "ステンシル設定と屈折ぼかしを併用して、 逆光時に体のシルエットが服越しに透けて見えるのを再現します。 マテリアルが3つ増えます。",
+                    "Silhouette Transparency (High Cost)",
+                    "Uses stencil settings and refraction blur to reproduce the body's silhouette showing through clothing in backlight. Adds three materials."));
+            if (!enabledProp.boolValue) return;
+
+            var avatarRoot = PreviewCoordinator.FindAvatarRoot(component.gameObject);
+            var buildRoot = avatarRoot != null ? avatarRoot : component.gameObject;
+            if (!MToonToLilToonBuildTargetUtility.IsPcBuildTarget(buildRoot))
+            {
+                EditorGUILayout.HelpBox(
+                    T(
+                        "シルエット透けはPCビルド時のみ適用されます。現在のビルドターゲットではBuild時にスキップされます。",
+                        "Silhouette transparency is applied only to PC builds and will be skipped for the current build target."),
+                    MessageType.Info);
+            }
+
+            using (new EditorGUI.IndentLevelScope())
+            {
+                var candidates = _cachedRendererMaterials ?? GetRendererMaterials(component);
+                DrawMaterialPopup(
+                    serializedObject.FindProperty(nameof(MToonToLilToonComponent.silhouetteClothingMaterial)),
+                    candidates,
+                    T("服", "Clothing"));
+                EditorGUILayout.PropertyField(
+                    serializedObject.FindProperty(nameof(MToonToLilToonComponent.silhouetteClothingColor)),
+                    new GUIContent(T("服の色", "Clothing Color")));
+                DrawMaterialPopup(
+                    serializedObject.FindProperty(nameof(MToonToLilToonComponent.silhouetteBodyMaterial)),
+                    candidates,
+                    T("体", "Body"));
+                EditorGUILayout.PropertyField(
+                    serializedObject.FindProperty(nameof(MToonToLilToonComponent.silhouetteShadowColor)),
+                    new GUIContent(T("影の色", "Shadow Color")));
+
+                var opacityProp = serializedObject.FindProperty(nameof(MToonToLilToonComponent.silhouetteOpacity));
+                opacityProp.floatValue = EditorGUILayout.Slider(T("不透明度", "Opacity"), opacityProp.floatValue, 0f, 1f);
+                var blurProp = serializedObject.FindProperty(nameof(MToonToLilToonComponent.silhouetteBlur));
+                blurProp.floatValue = EditorGUILayout.Slider(T("ぼかし", "Blur"), blurProp.floatValue, 0f, 1f);
+
+                var clothing = serializedObject.FindProperty(nameof(MToonToLilToonComponent.silhouetteClothingMaterial)).objectReferenceValue as Material;
+                var body = serializedObject.FindProperty(nameof(MToonToLilToonComponent.silhouetteBodyMaterial)).objectReferenceValue as Material;
+                if (clothing == null || body == null)
+                {
+                    EditorGUILayout.HelpBox(
+                        T("服と体のマテリアルを指定してください。", "Select both clothing and body materials."),
+                        MessageType.Warning);
+                }
+                else if (clothing == body)
+                {
+                    EditorGUILayout.HelpBox(
+                        T(
+                            "服と体で同じマテリアルを選んでいるため、適用できません。",
+                            "The same material is selected for clothing and body, so silhouette transparency cannot be applied."),
+                        MessageType.Error);
+                }
+                else if (AreMaterialsOnSameRenderer(component, clothing, body))
+                {
+                    EditorGUILayout.HelpBox(
+                        T(
+                            "服と体が同じ SkinnedMeshRenderer にあるため、 ビルド時に服のサブメッシュを専用 Renderer へ分離します。",
+                            "Clothing and body are on the same SkinnedMeshRenderer. The clothing submesh will be separated into a dedicated Renderer during the build."),
+                        MessageType.Info);
+                }
+            }
+
+            EditorGUILayout.Space(OverrideGroupSpacing);
+        }
+
+        private void DrawMaterialPopup(SerializedProperty property, IReadOnlyList<Material> candidates, string label)
+        {
+            var available = candidates?.ToList() ?? new List<Material>();
+            var labels = new[] { T("未設定", "None") }
+                .Concat(available.Select(material => material != null ? material.name : "(null)"))
+                .ToArray();
+            var current = property.objectReferenceValue as Material;
+            var currentIndex = current != null ? available.IndexOf(current) + 1 : 0;
+            var nextIndex = EditorGUILayout.Popup(label, currentIndex, labels);
+            property.objectReferenceValue = nextIndex <= 0 ? null : available[nextIndex - 1];
+        }
+
+        private static bool AreMaterialsOnSameRenderer(
+            MToonToLilToonComponent component,
+            Material clothing,
+            Material body)
+        {
+            if (component == null || clothing == null || body == null) return false;
+            var avatarRoot = PreviewCoordinator.FindAvatarRoot(component.gameObject);
+            var searchRoot = avatarRoot != null ? avatarRoot : component.gameObject;
+            return searchRoot.GetComponentsInChildren<Renderer>(true).Any(renderer =>
+            {
+                var materials = renderer.sharedMaterials;
+                return materials.Contains(clothing) && materials.Contains(body);
+            });
+        }
+
         private bool DrawAdvancedSection(MToonToLilToonComponent component)
         {
             var changed = false;
@@ -710,6 +825,23 @@ namespace YoridoriModifiers.MToonToLilToon
             return materials.FirstOrDefault();
         }
 
+        private static Material DetectDefaultSilhouetteClothingMaterial(IReadOnlyList<Material> materials)
+        {
+            return materials?.FirstOrDefault(material => MaterialNameContains(material, "tops"));
+        }
+
+        private static Material DetectDefaultSilhouetteBodyMaterial(IReadOnlyList<Material> materials)
+        {
+            return materials?.FirstOrDefault(material =>
+                MaterialNameContains(material, "body") && MaterialNameContains(material, "skin"));
+        }
+
+        private static bool MaterialNameContains(Material material, string value)
+        {
+            return material != null
+                && material.name.IndexOf(value, System.StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         private string T(string ja, string en)
         {
             return _language == Language.Japanese ? ja : en;
@@ -771,7 +903,38 @@ namespace YoridoriModifiers.MToonToLilToon
             return changed;
         }
 
+        private static bool EnsureSilhouetteMaterialsDetected(
+            SerializedObject serializedComponent,
+            IReadOnlyList<Material> scannedMaterials)
+        {
+            if (serializedComponent == null || scannedMaterials == null || scannedMaterials.Count == 0) return false;
+
+            var changed = false;
+            var clothingProp = serializedComponent.FindProperty(nameof(MToonToLilToonComponent.silhouetteClothingMaterial));
+            var clothing = clothingProp.objectReferenceValue as Material;
+            if (clothing == null || !scannedMaterials.Contains(clothing))
+            {
+                clothingProp.objectReferenceValue = DetectDefaultSilhouetteClothingMaterial(scannedMaterials);
+                changed = clothingProp.objectReferenceValue != clothing;
+            }
+
+            var bodyProp = serializedComponent.FindProperty(nameof(MToonToLilToonComponent.silhouetteBodyMaterial));
+            var body = bodyProp.objectReferenceValue as Material;
+            if (body == null || !scannedMaterials.Contains(body))
+            {
+                bodyProp.objectReferenceValue = DetectDefaultSilhouetteBodyMaterial(scannedMaterials);
+                changed |= bodyProp.objectReferenceValue != body;
+            }
+
+            return changed;
+        }
+
         private static void DrawLeftToggle(SerializedProperty boolProperty, string label)
+        {
+            DrawLeftToggle(boolProperty, new GUIContent(label));
+        }
+
+        private static void DrawLeftToggle(SerializedProperty boolProperty, GUIContent label)
         {
             using (new EditorGUILayout.HorizontalScope())
             {

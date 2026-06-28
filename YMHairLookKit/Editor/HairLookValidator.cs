@@ -26,7 +26,9 @@ namespace YoridoriModifiers.HairLookKit
                 {
                     errors.Add($"Eyebrow: {T("結合した髪マテリアルを選んでいますが、髪マテリアル結合がオフです。", "Merged Hair Material is selected, but Merge Hair Materials is disabled.", english)}");
                 }
-                if (component.eyebrowHairTargetMode == YMHairLookKitComponent.HairTargetMode.MergedHair && !HairLookTargetResolver.AreMergeTargetsSupported(component, currentMaterials, allowMToonWithConverter))
+                if (component.eyebrowHairTargetMode == YMHairLookKitComponent.HairTargetMode.MergedHair
+                    && !mergedUnavailable
+                    && !HairLookTargetResolver.AreMergeTargetsSupported(component, currentMaterials, allowMToonWithConverter))
                 {
                     unsupportedLilToonTargets.Add(T("髪", "Hair", english));
                 }
@@ -57,7 +59,9 @@ namespace YoridoriModifiers.HairLookKit
                 {
                     errors.Add($"FakeShadow: {T("結合した髪マテリアルを選んでいますが、髪マテリアル結合がオフです。", "Merged Hair Material is selected, but Merge Hair Materials is disabled.", english)}");
                 }
-                if (component.fakeShadowHairTargetMode == YMHairLookKitComponent.HairTargetMode.MergedHair && !HairLookTargetResolver.AreMergeTargetsSupported(component, currentMaterials, allowMToonWithConverter))
+                if (component.fakeShadowHairTargetMode == YMHairLookKitComponent.HairTargetMode.MergedHair
+                    && !mergedUnavailable
+                    && !HairLookTargetResolver.AreMergeTargetsSupported(component, currentMaterials, allowMToonWithConverter))
                 {
                     unsupportedLilToonTargets.Add(T("髪", "Hair", english));
                 }
@@ -84,7 +88,9 @@ namespace YoridoriModifiers.HairLookKit
                 {
                     errors.Add($"Outline: {T("結合した髪マテリアルを選んでいますが、髪マテリアル結合がオフです。", "Merged Hair Material is selected, but Merge Hair Materials is disabled.", english)}");
                 }
-                if (component.outlineHairTargetMode == YMHairLookKitComponent.HairTargetMode.MergedHair && !HairLookTargetResolver.AreMergeTargetsSupported(component, currentMaterials, allowMToonWithConverter))
+                if (component.outlineHairTargetMode == YMHairLookKitComponent.HairTargetMode.MergedHair
+                    && !mergedUnavailable
+                    && !HairLookTargetResolver.AreMergeTargetsSupported(component, currentMaterials, allowMToonWithConverter))
                 {
                     unsupportedLilToonTargets.Add(T("髪", "Hair", english));
                 }

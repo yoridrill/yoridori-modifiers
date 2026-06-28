@@ -1,5 +1,7 @@
 using System.Linq;
 using nadena.dev.ndmf;
+using nadena.dev.ndmf.animator;
+using nadena.dev.ndmf.fluent;
 using UnityEngine;
 using YoridoriModifiers.Core.Editor;
 
@@ -14,11 +16,15 @@ namespace YoridoriModifiers.MToonToLilToon
 
         protected override void Configure()
         {
-            InPhase(BuildPhase.Transforming)
+            var sequence = InPhase(BuildPhase.Transforming)
                 .AfterPlugin("jp.yoridrill.ym-arm-patch")
                 .AfterPlugin("jp.yoridrill.ym-mesh-trimmer")
-                .BeforePlugin("com.github.kurotu.vrc-quest-tools")
-                .Run("Convert MToon10 Materials to lilToon", Execute);
+                .BeforePlugin("com.github.kurotu.vrc-quest-tools");
+
+            sequence.WithRequiredExtension(typeof(AnimatorServicesContext), scoped =>
+            {
+                scoped.Run("Convert MToon10 Materials to lilToon", Execute);
+            });
         }
 
         private static void Execute(BuildContext context)
@@ -64,7 +70,10 @@ namespace YoridoriModifiers.MToonToLilToon
 
         private static void ApplyOnBuild(MToonToLilToonComponent component, BuildContext context)
         {
-            MToonToLilToonProcessor.ApplyOnBuild(component, buildContext: context);
+            MToonToLilToonProcessor.ApplyOnBuild(
+                component,
+                buildContext: context,
+                animatorServices: context.Extension<AnimatorServicesContext>());
         }
 
         private static MToonToLilToonComponent SelectPreferredComponent(

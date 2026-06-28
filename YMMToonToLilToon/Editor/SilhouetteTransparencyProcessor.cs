@@ -6,6 +6,7 @@ using nadena.dev.ndmf.animator;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
+using YoridoriModifiers.Core.Editor;
 
 namespace YoridoriModifiers.MToonToLilToon
 {
@@ -230,7 +231,7 @@ namespace YoridoriModifiers.MToonToLilToon
 
         private static Mesh CreateSubMeshSelection(Mesh source, IReadOnlyList<int> sourceIndices, string name)
         {
-            var mesh = UnityEngine.Object.Instantiate(source);
+            var mesh = NdmfObjectRegistry.Clone(source);
             mesh.name = name;
             var descriptors = sourceIndices.Select(source.GetSubMesh).ToArray();
 
@@ -392,7 +393,7 @@ namespace YoridoriModifiers.MToonToLilToon
                 .Where(index => index != targetIndex)
                 .Concat(new[] { targetIndex })
                 .ToArray();
-            var reorderedMesh = UnityEngine.Object.Instantiate(mesh);
+            var reorderedMesh = NdmfObjectRegistry.Clone(mesh);
             reorderedMesh.name = $"{mesh.name}_SilhouetteSubMeshOrder";
             var reorderedSubMeshes = order
                 .Select(mesh.GetSubMesh)
@@ -477,7 +478,9 @@ namespace YoridoriModifiers.MToonToLilToon
 
         private static Material CreateClothingStencilMaterial(Material source)
         {
-            var material = new Material(source) { name = $"{source.name}_SilhouetteStencil" };
+            var material = NdmfObjectRegistry.CreateReplacement(
+                source,
+                () => new Material(source) { name = $"{source.name}_SilhouetteStencil" });
             SetFloatIfExists(material, "_Cull", (float)CullMode.Back);
             SetFloatIfExists(material, "_UseOutline", 0f);
             SetFloatIfExists(material, "_ColorMask", 0f);
@@ -492,7 +495,9 @@ namespace YoridoriModifiers.MToonToLilToon
 
         private static Material CreateSilhouetteMaterial(Material source, Color clothingColor, Color shadowColor)
         {
-            var material = new Material(source) { name = $"{source.name}_Silhouette" };
+            var material = NdmfObjectRegistry.CreateReplacement(
+                source,
+                () => new Material(source) { name = $"{source.name}_Silhouette" });
             foreach (var property in new[]
                      {
                          "_UseMain2ndTex", "_UseMain3rdTex", "_UseBacklight", "_UseRimShade",
@@ -533,12 +538,14 @@ namespace YoridoriModifiers.MToonToLilToon
             float opacity,
             float blur)
         {
-            var material = new Material(source)
-            {
-                name = $"{source.name}_SilhouetteRefractionBlur",
-                shader = shader,
-                renderQueue = RefractionBlurRenderQueue
-            };
+            var material = NdmfObjectRegistry.CreateReplacement(
+                source,
+                () => new Material(source)
+                {
+                    name = $"{source.name}_SilhouetteRefractionBlur",
+                    shader = shader,
+                    renderQueue = RefractionBlurRenderQueue
+                });
             // lilToon refraction premultiplies the lit clothing color by alpha and then
             // interpolates it with the blurred background using alpha again. Without
             // compensation the clothing contribution becomes alpha squared and the

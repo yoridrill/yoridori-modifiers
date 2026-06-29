@@ -30,11 +30,9 @@ Inspector を開いたとき、未指定の Bone Extension 枠には VRoid 標�
 
 ロングコートは左右 LowerLeg 配下の `L_CoatSkirtFront` / `L_CoatSkirtSide` / `L_CoatSkirtBack` / `R_CoatSkirtFront` / `R_CoatSkirtSide` / `R_CoatSkirtBack` を探します。
 
-新規追加またはコピー直後にボーンを自動検出できた場合のみ、Refine が自動で有効になります。このときの初期Presetは以下です。
+新規追加またはコピー直後にワンピースのボーンを自動検出できた場合のみ、One-Piece Refine が自動で有効になります。このときの初期Presetは `ショートスカート軽め` です。
 
-- Long Coat Refine: `ロングスカート重め`
-- One-Piece Refine: Long Coat Refine が有効なら `ロングコートに合わせる`
-- One-Piece Refine: Long Coat Refine が無効なら `ショートスカート軽め`
+Long Coat Refine はロングコートの検出結果にかかわらず無効のままです。
 
 手動でRefineをオン/オフした場合、Presetは自動で切り替わりません。
 

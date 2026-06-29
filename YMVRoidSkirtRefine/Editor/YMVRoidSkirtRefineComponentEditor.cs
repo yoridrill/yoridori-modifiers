@@ -1796,7 +1796,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             var longCoatDetected = AutoDetectLongCoatBones(component.longCoatBones, animator);
             changed |= onePieceDetected;
             changed |= longCoatDetected;
-            changed |= AutoEnableRefinesIfNewOrCopied(component, onePieceDetected, longCoatDetected);
+            changed |= AutoEnableRefinesIfNewOrCopied(component, onePieceDetected);
 
             if (changed)
             {
@@ -1806,8 +1806,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
         private static bool AutoEnableRefinesIfNewOrCopied(
             YMVRoidSkirtRefine component,
-            bool onePieceDetected,
-            bool longCoatDetected)
+            bool onePieceDetected)
         {
             if (component == null) return false;
 
@@ -1819,28 +1818,22 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
             if (onePieceDetected && HasAllBones(component.onePieceBones) && !component.enableOnePieceRefine)
             {
-                var hasLongCoatRefine = component.enableLongCoatRefine
-                    || (longCoatDetected && HasAllBones(component.longCoatBones));
                 component.enableOnePieceRefine = true;
-                ApplyAutoDetectedOnePiecePreset(component, hasLongCoatRefine);
+                ApplyAutoDetectedOnePiecePreset(component);
             }
 
-            if (longCoatDetected && HasAllBones(component.longCoatBones) && !component.enableLongCoatRefine)
-            {
-                component.enableLongCoatRefine = true;
-                ApplyAutoDetectedLongCoatPreset(component);
-            }
+            component.enableLongCoatRefine = false;
 
             component.autoEnableRefinesObjectId = objectId;
             return true;
         }
 
-        private static void ApplyAutoDetectedOnePiecePreset(YMVRoidSkirtRefine component, bool hasLongCoatTarget)
+        private static void ApplyAutoDetectedOnePiecePreset(YMVRoidSkirtRefine component)
         {
             if (component == null) return;
 
             var serialized = new SerializedObject(component);
-            var preset = hasLongCoatTarget ? OnePiecePreset.MatchLongCoat : OnePiecePreset.ShortSkirtLight;
+            const OnePiecePreset preset = OnePiecePreset.ShortSkirtLight;
             serialized.FindProperty("onePiecePreset").enumValueIndex = (int)preset;
             ApplyOnePiecePhysBonePreset(serialized.FindProperty("onePiecePhysBone"), preset);
             serialized.FindProperty("onePieceMatchLongCoat").boolValue = preset == OnePiecePreset.MatchLongCoat;
@@ -1853,32 +1846,6 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             serialized.FindProperty("onePieceMoveFrontRootsTowardUpperLeg").floatValue = 0.0f;
             serialized.FindProperty("onePieceRootHeightOffsetMultiplier").floatValue = preset == OnePiecePreset.MatchLongCoat ? 0.0f : 0.4f;
             serialized.FindProperty("onePieceHipWeightReduction").floatValue = 0.5f;
-            serialized.ApplyModifiedPropertiesWithoutUndo();
-        }
-
-        private static void ApplyAutoDetectedLongCoatPreset(YMVRoidSkirtRefine component)
-        {
-            if (component == null) return;
-
-            var serialized = new SerializedObject(component);
-            const LongCoatPreset preset = LongCoatPreset.LongSkirtHeavy;
-            serialized.FindProperty("longCoatPreset").enumValueIndex = (int)preset;
-            ApplyLongCoatPhysBonePreset(serialized.FindProperty("longCoatPhysBone"), preset);
-            serialized.FindProperty("longCoatMatchOnePiece").boolValue = false;
-            serialized.FindProperty("enableLongCoatBoneExtension").boolValue = true;
-            serialized.FindProperty("longCoatShortSkirtUsePrependedRootsOnly").boolValue = false;
-            serialized.FindProperty("longCoatMoveFrontBonesOutward").boolValue = false;
-            serialized.FindProperty("longCoatUseRotationConstraints").boolValue = true;
-            serialized.FindProperty("longCoatUseFrontRootRotationConstraints").boolValue = false;
-            ApplySerializedRotationConstraintWeightDefaults(serialized, component.onePiecePreset);
-            serialized.FindProperty("longCoatMoveConstrainedRootsTowardUpperLeg").floatValue = preset == LongCoatPreset.OpenFront ? 0.0f : 0.8f;
-            serialized.FindProperty("longCoatAimFrontLimitsForward").boolValue = true;
-            serialized.FindProperty("longCoatUseUpperLegColliders").boolValue = UsesLongCoatUpperLegColliders(preset);
-            serialized.FindProperty("longCoatUseLowerLegColliders").boolValue = UsesLongCoatLowerLegColliders(preset);
-            serialized.FindProperty("longCoatUseFloorCollider").boolValue = UsesLongCoatFloorCollider(preset);
-            serialized.FindProperty("longCoatRootHeightOffsetMultiplier").floatValue = preset == LongCoatPreset.OpenFront ? 2.0f : 0.6f;
-            serialized.FindProperty("longCoatHipWeightReduction").floatValue = preset == LongCoatPreset.OpenFront ? 0.4f : 0.5f;
-            serialized.FindProperty("longCoatSpineWeightReduction").floatValue = preset == LongCoatPreset.OpenFront ? 0.4f : 0.0f;
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 

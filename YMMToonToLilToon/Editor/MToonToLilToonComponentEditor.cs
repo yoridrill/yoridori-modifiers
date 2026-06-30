@@ -110,10 +110,10 @@ namespace YoridoriModifiers.MToonToLilToon
             builder.Append('|').Append(component.shadowStrengthMaskLod);
             builder.Append('|').Append(component.enableSilhouetteTransparency);
             AppendObject(builder, component.silhouetteClothingMaterial);
-            AppendColor(builder, component.silhouetteClothingColor);
             AppendObject(builder, component.silhouetteBodyMaterial);
             AppendColor(builder, component.silhouetteShadowColor);
             builder.Append('|').Append(component.silhouetteOpacity);
+            builder.Append('|').Append(component.useSilhouetteRefractionBlur);
             builder.Append('|').Append(component.silhouetteBlur);
             builder.Append('|').Append(component.disableShadowReceiveForFace);
             builder.Append('|').Append(component.disableRimShadeForFace);
@@ -532,13 +532,15 @@ namespace YoridoriModifiers.MToonToLilToon
             var changed = false;
             var enableFaceShadowTuningProp = serializedObject.FindProperty(nameof(MToonToLilToonComponent.enableFaceShadowTuning));
             DrawLeftToggle(enableFaceShadowTuningProp, T("顔の影を整える", "Tune Face Shadow"));
-            if (!enableFaceShadowTuningProp.boolValue) return changed;
-
-            using (new EditorGUI.IndentLevelScope())
+            if (enableFaceShadowTuningProp.boolValue)
             {
-                DrawFaceShadowMaskSettings(component);
+                using (new EditorGUI.IndentLevelScope())
+                {
+                    DrawFaceShadowMaskSettings(component);
+                }
             }
 
+            EditorGUILayout.Space(OverrideGroupSpacing);
             return changed;
         }
 
@@ -612,10 +614,10 @@ namespace YoridoriModifiers.MToonToLilToon
             DrawLeftToggle(
                 enabledProp,
                 TT(
-                    "シルエット透け(高負荷)",
-                    "ステンシル設定と屈折ぼかしを併用して、 逆光時に体のシルエットが服越しに透けて見えるのを再現します。 マテリアルが3つ増えます。",
-                    "Silhouette Transparency (High Cost)",
-                    "Uses stencil settings and refraction blur to reproduce the body's silhouette showing through clothing in backlight. Adds three materials."));
+                    "シルエット透け",
+                    "逆光時に体のシルエットが服越しに透けて見えます。 Render Queueを他ユーザーと重複しないよう ランダムにしたマテリアルを、 ステンシル用とシルエット用で2つ増やします。",
+                    "Silhouette Transparency",
+                    "Makes the body's silhouette visible through clothing in backlight. Adds stencil and silhouette materials, and randomizes their Render Queues to reduce overlap with other users."));
             if (!enabledProp.boolValue) return;
 
             var avatarRoot = PreviewCoordinator.FindAvatarRoot(component.gameObject);
@@ -636,9 +638,6 @@ namespace YoridoriModifiers.MToonToLilToon
                     serializedObject.FindProperty(nameof(MToonToLilToonComponent.silhouetteClothingMaterial)),
                     candidates,
                     T("服", "Clothing"));
-                EditorGUILayout.PropertyField(
-                    serializedObject.FindProperty(nameof(MToonToLilToonComponent.silhouetteClothingColor)),
-                    new GUIContent(T("服の色", "Clothing Color")));
                 DrawMaterialPopup(
                     serializedObject.FindProperty(nameof(MToonToLilToonComponent.silhouetteBodyMaterial)),
                     candidates,
@@ -649,8 +648,25 @@ namespace YoridoriModifiers.MToonToLilToon
 
                 var opacityProp = serializedObject.FindProperty(nameof(MToonToLilToonComponent.silhouetteOpacity));
                 opacityProp.floatValue = EditorGUILayout.Slider(T("不透明度", "Opacity"), opacityProp.floatValue, 0f, 1f);
-                var blurProp = serializedObject.FindProperty(nameof(MToonToLilToonComponent.silhouetteBlur));
-                blurProp.floatValue = EditorGUILayout.Slider(T("ぼかし", "Blur"), blurProp.floatValue, 0f, 1f);
+                var refractionBlurProp = serializedObject.FindProperty(nameof(MToonToLilToonComponent.useSilhouetteRefractionBlur));
+                refractionBlurProp.boolValue = EditorGUILayout.Toggle(
+                    new GUIContent(
+                        T("屈折ぼかし(高負荷)", "Refraction Blur (High Cost)"),
+                        T(
+                            "オフの場合はディザで行うため軽量ですが、 モアレがしばしば発生します。 オンの場合はディザを解除し、 屈折ぼかしマテリアルを追加するため、 なめらかなぼかし表現が可能になりますが、 高負荷です。",
+                            "When off, lightweight dithering is used but may produce moire patterns. When on, dithering is disabled and a refraction blur material is added for smooth blur at a higher rendering cost.")),
+                    refractionBlurProp.boolValue);
+                if (refractionBlurProp.boolValue)
+                {
+                    var blurProp = serializedObject.FindProperty(nameof(MToonToLilToonComponent.silhouetteBlur));
+                    blurProp.floatValue = EditorGUILayout.Slider(
+                        new GUIContent(
+                            T("ぼかし", "Blur"),
+                            T("0でくっきり、1に近づくほど強くぼけます。", "0 is sharp; values closer to 1 produce stronger blur.")),
+                        blurProp.floatValue,
+                        0f,
+                        1f);
+                }
 
                 var clothing = serializedObject.FindProperty(nameof(MToonToLilToonComponent.silhouetteClothingMaterial)).objectReferenceValue as Material;
                 var body = serializedObject.FindProperty(nameof(MToonToLilToonComponent.silhouetteBodyMaterial)).objectReferenceValue as Material;

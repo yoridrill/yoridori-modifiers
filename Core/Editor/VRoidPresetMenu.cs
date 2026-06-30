@@ -237,6 +237,7 @@ namespace YoridoriModifiers.Core.Editor
             var faceMaterial = DetectDefaultFaceMaterial(avatarRoot);
             component.faceShadowFaceMaterial = faceMaterial;
             component.faceShadowSdfTexture = LoadDefaultFaceShadowMaskTexture();
+            component.silhouetteBlur = MToonToLilToonComponent.DefaultSilhouetteBlur;
             EditorUtility.SetDirty(component);
         }
 

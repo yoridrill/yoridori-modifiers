@@ -157,9 +157,9 @@ namespace YoridoriModifiers.MToonToLilToon
                     processingRoot,
                     resolvedClothingMaterial,
                     resolvedBodyMaterial,
-                    component.silhouetteClothingColor,
                     component.silhouetteShadowColor,
                     component.silhouetteOpacity,
+                    component.useSilhouetteRefractionBlur,
                     component.silhouetteBlur,
                     report,
                     buildContext,
@@ -542,17 +542,23 @@ namespace YoridoriModifiers.MToonToLilToon
                     _ => null
                 };
 
-                var hasBodySilhouetteOverflow = mesh != null
+                var hasDitherClothingOverflow = mesh != null
                     && materials.Length == mesh.subMeshCount + 1
                     && materials[materials.Length - 1] != null
-                    && materials[materials.Length - 1].name.EndsWith("_Silhouette", System.StringComparison.Ordinal);
-                var hasClothingSilhouetteOverflow = mesh != null
+                    && materials[materials.Length - 1].name.EndsWith("_SilhouetteDither", System.StringComparison.Ordinal);
+                var hasBodyStencilOverflow = mesh != null
+                    && materials.Length == mesh.subMeshCount + 1
+                    && materials[materials.Length - 1] != null
+                    && materials[materials.Length - 1].name.EndsWith("_SilhouetteBodyStencil", System.StringComparison.Ordinal);
+                var hasRefractionClothingOverflow = mesh != null
                     && materials.Length == mesh.subMeshCount + 2
                     && materials[materials.Length - 2] != null
                     && materials[materials.Length - 1] != null
-                    && materials[materials.Length - 2].name.EndsWith("_SilhouetteStencil", System.StringComparison.Ordinal)
+                    && materials[materials.Length - 2].name.EndsWith("_SilhouetteClothingOverlay", System.StringComparison.Ordinal)
                     && materials[materials.Length - 1].name.EndsWith("_SilhouetteRefractionBlur", System.StringComparison.Ordinal);
-                var isExpectedSilhouetteOverflow = hasBodySilhouetteOverflow || hasClothingSilhouetteOverflow;
+                var isExpectedSilhouetteOverflow = hasDitherClothingOverflow
+                    || hasBodyStencilOverflow
+                    || hasRefractionClothingOverflow;
                 if (mesh != null && mesh.subMeshCount != materials.Length && !isExpectedSilhouetteOverflow)
                 {
                     var message = $"{renderer.name}: subMeshCount({mesh.subMeshCount}) != sharedMaterials.Length({materials.Length})";

@@ -8,6 +8,9 @@ namespace YoridoriModifiers.MToonToLilToon
     [AddComponentMenu("Yoridori Modifiers/YM MToon to lilToon")]
     public sealed class MToonToLilToonComponent : MonoBehaviour, IEditorOnly
     {
+        public const float DefaultSilhouetteOpacity = 0.8f;
+        public const float DefaultSilhouetteBlur = 0.15f;
+
         public enum FaceShadowMaskType
         {
             Strength = 1,
@@ -23,11 +26,11 @@ namespace YoridoriModifiers.MToonToLilToon
         public float shadowStrengthMaskLod;
         public bool enableSilhouetteTransparency;
         public Material silhouetteClothingMaterial;
-        public Color silhouetteClothingColor = Color.white;
         public Material silhouetteBodyMaterial;
         public Color silhouetteShadowColor = new(0.35f, 0.25f, 0.3f, 1f);
-        [Range(0f, 1f)] public float silhouetteOpacity = 0.8f;
-        [Range(0f, 1f)] public float silhouetteBlur = 0.85f;
+        [Range(0f, 1f)] public float silhouetteOpacity = DefaultSilhouetteOpacity;
+        public bool useSilhouetteRefractionBlur;
+        [Range(0f, 1f)] public float silhouetteBlur = DefaultSilhouetteBlur;
         public bool disableShadowReceiveForFace;
         public bool disableRimShadeForFace;
         public bool disableBacklightStrengthForFace;

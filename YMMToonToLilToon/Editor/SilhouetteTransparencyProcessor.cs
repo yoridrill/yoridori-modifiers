@@ -12,19 +12,26 @@ namespace YoridoriModifiers.MToonToLilToon
 {
     internal static class SilhouetteTransparencyProcessor
     {
-        // Use one bit so the feature can coexist with avatars that use the other stencil bits.
-        private const int StencilBit = 64;
-        private const int ClothingStencilRenderQueue = 2498;
-        private const int SilhouetteRenderQueue = 2499;
-        private const int RefractionBlurRenderQueue = 2900;
+        // Reserve bit 128 for Hair Look Kit's eyebrow/front-hair stencil state.
+        private const int SilhouetteStencilMask = 127;
+        private const int MinimumBodyStencilRenderQueue = 2501;
+        private const int MaximumBodyStencilRenderQueue = 2987;
+        private const int RefractionBlurRenderQueue = 2989;
+        private const string Dither4x4TexturePath = "Packages/jp.lilxyzw.liltoon/Texture/lil_bayer_4x4.png";
+        private static readonly int[] AvailableStencilReferences = Enumerable.Range(1, 127)
+            // Hair Look Kit uses 51 for the face/FakeShadow comparison, produces 115
+            // after inverting bit 64, and uses the high bit for eyebrows/front hair.
+            // Keep the high bit clear and also avoid the former fixed YM value 64.
+            .Where(value => value != 51 && value != 64 && value != 115)
+            .ToArray();
 
         internal static void Apply(
             GameObject processingRoot,
             Material clothingMaterial,
             Material bodyMaterial,
-            Color clothingColor,
             Color shadowColor,
             float opacity,
+            bool useRefractionBlur,
             float blur,
             ConversionReport report,
             BuildContext buildContext,
@@ -52,11 +59,27 @@ namespace YoridoriModifiers.MToonToLilToon
                 return;
             }
 
-            var refractionBlurShader = Shader.Find("Hidden/lilToonRefractionBlur");
-            if (refractionBlurShader == null)
+            Shader refractionBlurShader = null;
+            Shader ditherShader = null;
+            Texture2D ditherTexture = null;
+            if (useRefractionBlur)
             {
-                Warn(report, "Silhouette transparency: Hidden/lilToonRefractionBlur was not found; the feature was skipped.");
-                return;
+                refractionBlurShader = Shader.Find("Hidden/lilToonRefractionBlur");
+                if (refractionBlurShader == null)
+                {
+                    Warn(report, "Silhouette transparency: Hidden/lilToonRefractionBlur was not found; the feature was skipped.");
+                    return;
+                }
+            }
+            else
+            {
+                ditherShader = Shader.Find("Hidden/lilToonCutout");
+                ditherTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(Dither4x4TexturePath);
+                if (ditherShader == null || ditherTexture == null)
+                {
+                    Warn(report, "Silhouette transparency: the lilToon Cutout shader or x4 dither texture was not found; the feature was skipped.");
+                    return;
+                }
             }
 
             var sharedRenderers = clothingRenderers.Intersect(bodyRenderers).ToList();
@@ -75,6 +98,7 @@ namespace YoridoriModifiers.MToonToLilToon
                         skinnedRenderer,
                         clothingMaterial,
                         bodyMaterial,
+                        useRefractionBlur,
                         report,
                         buildContext,
                         animatorServices,
@@ -100,16 +124,38 @@ namespace YoridoriModifiers.MToonToLilToon
                 return;
             }
 
-            var clothingStencil = CreateClothingStencilMaterial(clothingMaterial);
-            var silhouette = CreateSilhouetteMaterial(bodyMaterial, clothingColor, shadowColor);
-            var refractionBlur = CreateRefractionBlurMaterial(clothingMaterial, refractionBlurShader, opacity, blur);
+            var stencilReference = CreateStencilReference();
+            var bodyStencilRenderQueue = CreateBodyStencilRenderQueue();
+            var clothingOverlayRenderQueue = bodyStencilRenderQueue + 1;
+
+            var clothingAuxiliary = useRefractionBlur
+                ? CreateRefractionClothingOverlayMaterial(
+                    clothingMaterial,
+                    shadowColor,
+                    stencilReference,
+                    clothingOverlayRenderQueue)
+                : CreateDitheredClothingOverlayMaterial(
+                    clothingMaterial,
+                    shadowColor,
+                    opacity,
+                    ditherShader,
+                    ditherTexture,
+                    stencilReference,
+                    clothingOverlayRenderQueue);
+            var bodyAuxiliary = CreateBodyStencilMaterial(
+                bodyMaterial,
+                stencilReference,
+                bodyStencilRenderQueue);
+            var refractionBlur = useRefractionBlur
+                ? CreateRefractionBlurMaterial(clothingMaterial, refractionBlurShader, opacity, blur)
+                : null;
 
             var appliedClothingCount = 0;
             foreach (var renderer in compatibleClothingRenderers)
             {
                 if (!TryPrepareTargetSubMesh(renderer, clothingMaterial, report, buildContext)) continue;
-                AppendMaterial(renderer, clothingStencil);
-                AppendMaterial(renderer, refractionBlur);
+                AppendMaterial(renderer, clothingAuxiliary);
+                if (refractionBlur != null) AppendMaterial(renderer, refractionBlur);
                 appliedClothingCount++;
             }
 
@@ -117,15 +163,15 @@ namespace YoridoriModifiers.MToonToLilToon
             foreach (var renderer in compatibleBodyRenderers)
             {
                 if (!TryPrepareTargetSubMesh(renderer, bodyMaterial, report, buildContext)) continue;
-                AppendMaterial(renderer, silhouette);
+                AppendMaterial(renderer, bodyAuxiliary);
                 appliedBodyCount++;
             }
 
             if (appliedClothingCount == 0 || appliedBodyCount == 0) return;
 
-            SaveAsset(buildContext, clothingStencil);
-            SaveAsset(buildContext, silhouette);
-            SaveAsset(buildContext, refractionBlur);
+            SaveAsset(buildContext, clothingAuxiliary);
+            SaveAsset(buildContext, bodyAuxiliary);
+            if (refractionBlur != null) SaveAsset(buildContext, refractionBlur);
         }
 
         private static List<Renderer> FindRenderersUsing(IEnumerable<Renderer> renderers, Material material)
@@ -140,6 +186,7 @@ namespace YoridoriModifiers.MToonToLilToon
             SkinnedMeshRenderer sourceRenderer,
             Material clothingMaterial,
             Material bodyMaterial,
+            bool useRefractionBlur,
             ConversionReport report,
             BuildContext buildContext,
             AnimatorServicesContext animatorServices,
@@ -222,7 +269,10 @@ namespace YoridoriModifiers.MToonToLilToon
                 animatorServices);
             if (hasAnimatedClothingMaterial)
             {
-                Warn(report, $"Silhouette transparency: {sourceRenderer.name} animates the separated clothing material. The base-material animation was retargeted, but the generated stencil and refraction materials remain based on the configured clothing material.");
+                var generatedMaterialDescription = useRefractionBlur
+                    ? "stencil and refraction materials"
+                    : "stencil and dithered silhouette materials";
+                Warn(report, $"Silhouette transparency: {sourceRenderer.name} animates the separated clothing material. The base-material animation was retargeted, but the generated {generatedMaterialDescription} remain based on the configured clothing material.");
             }
             SaveAsset(buildContext, remainingMesh);
             SaveAsset(buildContext, clothingMesh);
@@ -476,28 +526,113 @@ namespace YoridoriModifiers.MToonToLilToon
             }
         }
 
-        private static Material CreateClothingStencilMaterial(Material source)
+        private static Material CreateBodyStencilMaterial(
+            Material source,
+            int stencilReference,
+            int renderQueue)
         {
             var material = NdmfObjectRegistry.CreateReplacement(
                 source,
-                () => new Material(source) { name = $"{source.name}_SilhouetteStencil" });
+                () => new Material(source) { name = $"{source.name}_SilhouetteBodyStencil" });
             SetFloatIfExists(material, "_Cull", (float)CullMode.Back);
             SetFloatIfExists(material, "_UseOutline", 0f);
+            SetFloatIfExists(material, "_OutlineEnable", 0f);
+            SetFloatIfExists(material, "_OutlineWidth", 0f);
             SetFloatIfExists(material, "_ColorMask", 0f);
             SetFloatIfExists(material, "_OutlineColorMask", 0f);
             SetFloatIfExists(material, "_ZWrite", 0f);
-            SetFloatIfExists(material, "_ZTest", (float)CompareFunction.LessEqual);
-            ConfigureStencil(material, CompareFunction.Always, StencilOp.Replace);
+            SetFloatIfExists(material, "_ZTest", (float)CompareFunction.Always);
+            SetFloatIfExists(material, "_AsOverlay", 1f);
+            material.SetShaderPassEnabled("Outline", false);
+            material.SetShaderPassEnabled("ForwardAdd", false);
+            material.SetShaderPassEnabled("ShadowCaster", false);
+            ConfigureStencil(
+                material,
+                stencilReference,
+                CompareFunction.Always,
+                StencilOp.Replace,
+                SilhouetteStencilMask);
             ConfigureHiddenSafetyFallback(material);
-            material.renderQueue = ClothingStencilRenderQueue;
+            material.renderQueue = renderQueue;
             return material;
         }
 
-        private static Material CreateSilhouetteMaterial(Material source, Color clothingColor, Color shadowColor)
+        private static Material CreateRefractionClothingOverlayMaterial(
+            Material source,
+            Color shadowColor,
+            int stencilReference,
+            int renderQueue)
         {
             var material = NdmfObjectRegistry.CreateReplacement(
                 source,
-                () => new Material(source) { name = $"{source.name}_Silhouette" });
+                () => new Material(source) { name = $"{source.name}_SilhouetteClothingOverlay" });
+            ConfigureSilhouetteAppearance(material, Color.white, shadowColor);
+            // The clothing has already been drawn. Multiply only the generated
+            // silhouette shading so both rendering modes preserve the clothing color.
+            SetTextureIfExists(material, "_MainTex", null);
+            SetTextureIfExists(material, "_BaseMap", null);
+            SetFloatIfExists(material, "_Cull", (float)CullMode.Back);
+            ConfigureMultiplyBlend(material);
+            SetFloatIfExists(material, "_AsOverlay", 1f);
+            SetFloatIfExists(material, "_ZWrite", 0f);
+            SetFloatIfExists(material, "_ZTest", (float)CompareFunction.Equal);
+            material.SetShaderPassEnabled("ForwardAdd", false);
+            material.SetShaderPassEnabled("ShadowCaster", false);
+            ConfigureStencil(
+                material,
+                stencilReference,
+                CompareFunction.Equal,
+                StencilOp.Keep,
+                0);
+            ConfigureHiddenSafetyFallback(material);
+            material.renderQueue = renderQueue;
+            return material;
+        }
+
+        private static Material CreateDitheredClothingOverlayMaterial(
+            Material source,
+            Color shadowColor,
+            float opacity,
+            Shader ditherShader,
+            Texture2D ditherTexture,
+            int stencilReference,
+            int renderQueue)
+        {
+            var material = NdmfObjectRegistry.CreateReplacement(
+                source,
+                () => new Material(source) { name = $"{source.name}_SilhouetteDither" });
+            material.shader = ditherShader;
+            var silhouetteColor = Color.white;
+            // Match refraction semantics: 0 shows the silhouette most strongly,
+            // while 1 restores the original clothing appearance.
+            silhouetteColor.a *= 1f - Mathf.Clamp01(opacity);
+            ConfigureSilhouetteAppearance(material, silhouetteColor, shadowColor);
+            // The clothing was already drawn once. Sampling its main texture again
+            // would square its RGB during multiply blending. Use the shader's default
+            // white texture; exact-depth testing still excludes cutout-hidden geometry.
+            SetTextureIfExists(material, "_MainTex", null);
+            SetTextureIfExists(material, "_BaseMap", null);
+            ConfigureDitheredMultiply(material, ditherTexture);
+            SetFloatIfExists(material, "_Cull", (float)CullMode.Back);
+            SetFloatIfExists(material, "_ZWrite", 0f);
+            // Draw only on the clothing surface that already populated the depth buffer.
+            SetFloatIfExists(material, "_ZTest", (float)CompareFunction.Equal);
+            ConfigureStencil(
+                material,
+                stencilReference,
+                CompareFunction.Equal,
+                StencilOp.Keep,
+                0);
+            ConfigureHiddenSafetyFallback(material);
+            material.renderQueue = renderQueue;
+            return material;
+        }
+
+        private static void ConfigureSilhouetteAppearance(
+            Material material,
+            Color mainColor,
+            Color shadowColor)
+        {
             foreach (var property in new[]
                      {
                          "_UseMain2ndTex", "_UseMain3rdTex", "_UseBacklight", "_UseRimShade",
@@ -515,8 +650,8 @@ namespace YoridoriModifiers.MToonToLilToon
             SetFloatIfExists(material, "_ShadowBorderRange", 0f);
             SetFloatIfExists(material, "_ShadowBorder", 0.5f);
             SetFloatIfExists(material, "_ShadowBlur", 0.5f);
-            SetColorIfExists(material, "_Color", clothingColor);
-            SetColorIfExists(material, "_BaseColor", clothingColor);
+            SetColorIfExists(material, "_Color", mainColor);
+            SetColorIfExists(material, "_BaseColor", mainColor);
             SetColorIfExists(material, "_ShadowColor", shadowColor);
             // Leave shader-default white textures unresolved. Texture2D.whiteTexture has
             // DontSaveInEditor and crashes NDMF Manual Bake when AssetSaver persists it.
@@ -524,12 +659,38 @@ namespace YoridoriModifiers.MToonToLilToon
             SetFloatIfExists(material, "_OutlineEnable", 0f);
             SetFloatIfExists(material, "_OutlineWidth", 0f);
             material.SetShaderPassEnabled("Outline", false);
-            SetFloatIfExists(material, "_ZWrite", 0f);
-            SetFloatIfExists(material, "_ZTest", (float)CompareFunction.Always);
-            ConfigureStencil(material, CompareFunction.Equal, StencilOp.Keep);
-            ConfigureHiddenSafetyFallback(material);
-            material.renderQueue = SilhouetteRenderQueue;
-            return material;
+        }
+
+        private static void ConfigureDitheredMultiply(Material material, Texture2D ditherTexture)
+        {
+            SetFloatIfExists(material, "_TransparentMode", 1f); // Cutout
+            SetFloatIfExists(material, "_UseDither", 1f);
+            SetTextureIfExists(material, "_DitherTex", ditherTexture);
+            SetFloatIfExists(material, "_DitherMaxValue", 15f); // x4 Bayer
+            SetFloatIfExists(material, "_Cutoff", 0.5f);
+            SetFloatIfExists(material, "_AlphaToMask", 1f);
+            SetFloatIfExists(material, "_AsOverlay", 1f);
+            SetFloatIfExists(material, "_ColorMask", (float)(ColorWriteMask.Red | ColorWriteMask.Green | ColorWriteMask.Blue));
+            ConfigureMultiplyBlend(material);
+            material.SetOverrideTag("RenderType", "TransparentCutout");
+            material.EnableKeyword("UNITY_UI_ALPHACLIP");
+            material.EnableKeyword("ETC1_EXTERNAL_ALPHA");
+            material.DisableKeyword("UNITY_UI_CLIP_RECT");
+            material.SetShaderPassEnabled("ForwardAdd", false);
+            material.SetShaderPassEnabled("ShadowCaster", false);
+            material.SetShaderPassEnabled("DepthOnly", false);
+            material.SetShaderPassEnabled("DepthNormals", false);
+            material.SetShaderPassEnabled("DepthForwardOnly", false);
+            material.SetShaderPassEnabled("MotionVectors", false);
+        }
+
+        private static void ConfigureMultiplyBlend(Material material)
+        {
+            SetFloatIfExists(material, "_SrcBlend", (float)BlendMode.DstColor);
+            SetFloatIfExists(material, "_DstBlend", (float)BlendMode.Zero);
+            SetFloatIfExists(material, "_SrcBlendAlpha", (float)BlendMode.One);
+            SetFloatIfExists(material, "_DstBlendAlpha", (float)BlendMode.Zero);
+            SetFloatIfExists(material, "_BlendOp", (float)BlendOp.Add);
         }
 
         private static Material CreateRefractionBlurMaterial(
@@ -560,7 +721,9 @@ namespace YoridoriModifiers.MToonToLilToon
             SetTextureIfExists(material, "_AlphaMask", null);
             SetFloatIfExists(material, "_AlphaMaskScale", 1f);
             SetFloatIfExists(material, "_AlphaMaskValue", refractionAlpha - 1f);
-            SetFloatIfExists(material, "_Smoothness", Mathf.Clamp01(blur));
+            // The Inspector exposes perceptual blur strength: 0 is sharp and 1 is
+            // strongly blurred. lilToon's _Smoothness uses the opposite direction.
+            SetFloatIfExists(material, "_Smoothness", 1f - Mathf.Clamp01(blur));
             SetFloatIfExists(material, "_RefractionStrength", 0f);
             SetFloatIfExists(material, "_RefractionColorFromMain", 0f);
             SetColorIfExists(
@@ -577,9 +740,12 @@ namespace YoridoriModifiers.MToonToLilToon
             SetFloatIfExists(material, "_ZWrite", 1f);
             // Refraction shaders still draw blurred background at alpha zero. Requiring
             // equal depth prevents cutout-hidden geometry in front of the visible dress
-            // (for example VRoid waist ribbons) from drawing over the dress stencil.
+            // (for example VRoid waist ribbons) from drawing over visible clothing.
             SetFloatIfExists(material, "_ZTest", (float)CompareFunction.Equal);
-            ConfigureStencil(material, CompareFunction.Equal, StencilOp.Keep);
+            // Do not clip refraction to the hard body mask. The silhouette overlay was
+            // already masked; drawing refraction across the visible clothing surface
+            // lets its blur kernel extend beyond the silhouette edge.
+            DisableStencil(material);
             ConfigureHiddenSafetyFallback(material);
             return material;
         }
@@ -589,13 +755,48 @@ namespace YoridoriModifiers.MToonToLilToon
             material?.SetOverrideTag("VRCFallback", "Hidden");
         }
 
-        private static void ConfigureStencil(Material material, CompareFunction comparison, StencilOp pass)
+        private static int CreateStencilReference()
         {
-            SetFloatIfExists(material, "_StencilRef", StencilBit);
-            SetFloatIfExists(material, "_StencilReadMask", StencilBit);
-            SetFloatIfExists(material, "_StencilWriteMask", StencilBit);
+            var randomValue = CreateRandomUInt32();
+            return AvailableStencilReferences[(int)(randomValue % (uint)AvailableStencilReferences.Length)];
+        }
+
+        private static int CreateBodyStencilRenderQueue()
+        {
+            var slotCount = (MaximumBodyStencilRenderQueue - MinimumBodyStencilRenderQueue) / 2 + 1;
+            var randomValue = CreateRandomUInt32();
+            var slot = (int)(randomValue % (uint)slotCount);
+            return MinimumBodyStencilRenderQueue + slot * 2;
+        }
+
+        private static uint CreateRandomUInt32()
+        {
+            return BitConverter.ToUInt32(Guid.NewGuid().ToByteArray(), 0);
+        }
+
+        private static void ConfigureStencil(
+            Material material,
+            int reference,
+            CompareFunction comparison,
+            StencilOp pass,
+            int writeMask)
+        {
+            SetFloatIfExists(material, "_StencilRef", reference);
+            SetFloatIfExists(material, "_StencilReadMask", SilhouetteStencilMask);
+            SetFloatIfExists(material, "_StencilWriteMask", writeMask);
             SetFloatIfExists(material, "_StencilComp", (float)comparison);
             SetFloatIfExists(material, "_StencilPass", (float)pass);
+            SetFloatIfExists(material, "_StencilFail", (float)StencilOp.Keep);
+            SetFloatIfExists(material, "_StencilZFail", (float)StencilOp.Keep);
+        }
+
+        private static void DisableStencil(Material material)
+        {
+            SetFloatIfExists(material, "_StencilRef", 0f);
+            SetFloatIfExists(material, "_StencilReadMask", 0f);
+            SetFloatIfExists(material, "_StencilWriteMask", 0f);
+            SetFloatIfExists(material, "_StencilComp", (float)CompareFunction.Always);
+            SetFloatIfExists(material, "_StencilPass", (float)StencilOp.Keep);
             SetFloatIfExists(material, "_StencilFail", (float)StencilOp.Keep);
             SetFloatIfExists(material, "_StencilZFail", (float)StencilOp.Keep);
         }

@@ -29,7 +29,7 @@ namespace YoridoriModifiers.MToonToLilToon
 
         private static void Execute(BuildContext context)
         {
-            var root = ResolveAvatarRoot(context);
+            var root = context?.AvatarRootObject;
             if (root == null) return;
 
             var components = root.GetComponentsInChildren<MToonToLilToonComponent>(true);
@@ -45,27 +45,15 @@ namespace YoridoriModifiers.MToonToLilToon
                 }
 
                 var selected = SelectPreferredComponent(components, root);
-                foreach (var component in components)
+                if (selected != null)
                 {
-                    if (component != selected) continue;
-                    ErrorReport.WithContextObject(component, () => ApplyOnBuild(component, context));
+                    ErrorReport.WithContextObject(selected, () => ApplyOnBuild(selected, context));
                 }
             }
             finally
             {
                 RemoveComponents(components);
             }
-        }
-
-        private static GameObject ResolveAvatarRoot(BuildContext context)
-        {
-            var contextType = context.GetType();
-
-            var avatarRootObject = contextType.GetProperty("AvatarRootObject")?.GetValue(context) as GameObject;
-            if (avatarRootObject != null) return avatarRootObject;
-
-            var avatarRootTransform = contextType.GetProperty("AvatarRootTransform")?.GetValue(context) as Transform;
-            return avatarRootTransform != null ? avatarRootTransform.gameObject : null;
         }
 
         private static void ApplyOnBuild(MToonToLilToonComponent component, BuildContext context)

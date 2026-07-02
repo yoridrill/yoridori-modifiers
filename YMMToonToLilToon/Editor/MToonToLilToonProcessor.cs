@@ -152,11 +152,14 @@ namespace YoridoriModifiers.MToonToLilToon
             {
                 var resolvedClothingMaterial = ResolveConvertedMaterial(silhouetteClothingMaterial, convertedBySource);
                 var resolvedBodyMaterial = ResolveConvertedMaterial(silhouetteBodyMaterial, convertedBySource);
+                var canModifyBodyMaterial = resolvedBodyMaterial != null
+                    && resolvedBodyMaterial != silhouetteBodyMaterial;
                 onProgress?.Invoke("Creating silhouette transparency materials...");
                 SilhouetteTransparencyProcessor.Apply(
                     processingRoot,
                     resolvedClothingMaterial,
                     resolvedBodyMaterial,
+                    canModifyBodyMaterial,
                     component.silhouetteShadowColor,
                     component.silhouetteOpacity,
                     component.useSilhouetteRefractionBlur,

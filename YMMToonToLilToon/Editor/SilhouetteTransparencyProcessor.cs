@@ -29,6 +29,7 @@ namespace YoridoriModifiers.MToonToLilToon
             GameObject processingRoot,
             Material clothingMaterial,
             Material bodyMaterial,
+            bool canModifyBodyMaterial,
             Color shadowColor,
             float opacity,
             bool useRefractionBlur,
@@ -82,18 +83,27 @@ namespace YoridoriModifiers.MToonToLilToon
                 }
             }
 
+            var stencilReference = CreateStencilReference();
+            var bodyStencilRenderQueue = CreateBodyStencilRenderQueue();
+            var clothingOverlayRenderQueue = bodyStencilRenderQueue + 1;
+            var useIntegratedBodyStencil = canModifyBodyMaterial
+                && TryPrepareIntegratedBodyStencil(
+                    bodyMaterial,
+                    clothingMaterial,
+                    clothingOverlayRenderQueue);
+
             var sharedRenderers = clothingRenderers.Intersect(bodyRenderers).ToList();
             foreach (var sharedRenderer in sharedRenderers)
             {
-                clothingRenderers.Remove(sharedRenderer);
-                if (sharedRenderer is not SkinnedMeshRenderer skinnedRenderer)
-                {
-                    bodyRenderers.Remove(sharedRenderer);
-                    Warn(report, $"Silhouette transparency: {sharedRenderer.name} contains both clothing and body, but only SkinnedMeshRenderer separation is supported.");
-                    continue;
-                }
+                // Only the clothing submesh needs overflow materials when the original
+                // body material writes the stencil, so keeping one Renderer is safe.
+                if (useIntegratedBodyStencil) continue;
 
-                if (TrySeparateClothingSubMesh(
+                clothingRenderers.Remove(sharedRenderer);
+                Renderer separatedClothingRenderer = null;
+                var separated = sharedRenderer switch
+                {
+                    SkinnedMeshRenderer skinnedRenderer => TrySeparateClothingSubMesh(
                         processingRoot,
                         skinnedRenderer,
                         clothingMaterial,
@@ -102,7 +112,21 @@ namespace YoridoriModifiers.MToonToLilToon
                         report,
                         buildContext,
                         animatorServices,
-                        out var separatedClothingRenderer))
+                        out separatedClothingRenderer),
+                    MeshRenderer meshRenderer => TrySeparateClothingSubMesh(
+                        processingRoot,
+                        meshRenderer,
+                        clothingMaterial,
+                        bodyMaterial,
+                        useRefractionBlur,
+                        report,
+                        buildContext,
+                        animatorServices,
+                        out separatedClothingRenderer),
+                    _ => false
+                };
+
+                if (separated)
                 {
                     clothingRenderers.Add(separatedClothingRenderer);
                 }
@@ -115,18 +139,16 @@ namespace YoridoriModifiers.MToonToLilToon
             var compatibleClothingRenderers = clothingRenderers
                 .Where(renderer => CanPrepareTargetSubMesh(renderer, clothingMaterial, report))
                 .ToList();
-            var compatibleBodyRenderers = bodyRenderers
-                .Where(renderer => CanPrepareTargetSubMesh(renderer, bodyMaterial, report))
-                .ToList();
+            var compatibleBodyRenderers = useIntegratedBodyStencil
+                ? bodyRenderers.Where(renderer => renderer != null).ToList()
+                : bodyRenderers
+                    .Where(renderer => CanPrepareTargetSubMesh(renderer, bodyMaterial, report))
+                    .ToList();
             if (compatibleClothingRenderers.Count == 0 || compatibleBodyRenderers.Count == 0)
             {
                 Warn(report, "Silhouette transparency: no compatible clothing or body submesh was found; the feature was skipped.");
                 return;
             }
-
-            var stencilReference = CreateStencilReference();
-            var bodyStencilRenderQueue = CreateBodyStencilRenderQueue();
-            var clothingOverlayRenderQueue = bodyStencilRenderQueue + 1;
 
             var clothingAuxiliary = useRefractionBlur
                 ? CreateRefractionClothingOverlayMaterial(
@@ -142,10 +164,12 @@ namespace YoridoriModifiers.MToonToLilToon
                     ditherTexture,
                     stencilReference,
                     clothingOverlayRenderQueue);
-            var bodyAuxiliary = CreateBodyStencilMaterial(
-                bodyMaterial,
-                stencilReference,
-                bodyStencilRenderQueue);
+            var bodyAuxiliary = useIntegratedBodyStencil
+                ? null
+                : CreateBodyStencilMaterial(
+                    bodyMaterial,
+                    stencilReference,
+                    bodyStencilRenderQueue);
             var refractionBlur = useRefractionBlur
                 ? CreateRefractionBlurMaterial(clothingMaterial, refractionBlurShader, opacity, blur)
                 : null;
@@ -153,25 +177,119 @@ namespace YoridoriModifiers.MToonToLilToon
             var appliedClothingCount = 0;
             foreach (var renderer in compatibleClothingRenderers)
             {
-                if (!TryPrepareTargetSubMesh(renderer, clothingMaterial, report, buildContext)) continue;
+                if (!TryPrepareTargetSubMesh(
+                        renderer,
+                        clothingMaterial,
+                        report,
+                        buildContext,
+                        animatorServices)) continue;
                 AppendMaterial(renderer, clothingAuxiliary);
                 if (refractionBlur != null) AppendMaterial(renderer, refractionBlur);
                 appliedClothingCount++;
             }
 
             var appliedBodyCount = 0;
-            foreach (var renderer in compatibleBodyRenderers)
+            if (useIntegratedBodyStencil)
             {
-                if (!TryPrepareTargetSubMesh(renderer, bodyMaterial, report, buildContext)) continue;
-                AppendMaterial(renderer, bodyAuxiliary);
-                appliedBodyCount++;
+                ConfigureStencil(
+                    bodyMaterial,
+                    stencilReference,
+                    CompareFunction.Always,
+                    StencilOp.Replace,
+                    SilhouetteStencilMask);
+                appliedBodyCount = compatibleBodyRenderers.Count;
+            }
+            else
+            {
+                foreach (var renderer in compatibleBodyRenderers)
+                {
+                    if (!TryPrepareTargetSubMesh(
+                            renderer,
+                            bodyMaterial,
+                            report,
+                            buildContext,
+                            animatorServices)) continue;
+                    AppendMaterial(renderer, bodyAuxiliary);
+                    appliedBodyCount++;
+                }
             }
 
             if (appliedClothingCount == 0 || appliedBodyCount == 0) return;
 
             SaveAsset(buildContext, clothingAuxiliary);
-            SaveAsset(buildContext, bodyAuxiliary);
+            if (bodyAuxiliary != null) SaveAsset(buildContext, bodyAuxiliary);
             if (refractionBlur != null) SaveAsset(buildContext, refractionBlur);
+        }
+
+        private static bool TryPrepareIntegratedBodyStencil(
+            Material bodyMaterial,
+            Material clothingMaterial,
+            int clothingOverlayRenderQueue)
+        {
+            if (!CanWriteIntegratedBodyStencil(bodyMaterial, clothingOverlayRenderQueue)
+                || clothingMaterial == null)
+            {
+                return false;
+            }
+
+            if (bodyMaterial.renderQueue < clothingMaterial.renderQueue) return true;
+
+            // VRoid body, underwear, and clothing are commonly all Cutout at 2450.
+            // Move the generated body material one slot earlier so it populates depth
+            // and stencil before any same-queue inner or outer clothing covers it.
+            if (bodyMaterial.renderQueue != clothingMaterial.renderQueue
+                || !IsCutoutMaterial(bodyMaterial)
+                || !IsCutoutMaterial(clothingMaterial)
+                || bodyMaterial.renderQueue <= 0)
+            {
+                return false;
+            }
+
+            bodyMaterial.renderQueue--;
+            return bodyMaterial.renderQueue < clothingOverlayRenderQueue;
+        }
+
+        private static bool CanWriteIntegratedBodyStencil(Material material, int clothingOverlayRenderQueue)
+        {
+            if (material == null || material.renderQueue >= clothingOverlayRenderQueue) return false;
+            if (!HasStencilProperties(material)
+                || !material.HasProperty("_TransparentMode")
+                || !material.HasProperty("_ZWrite"))
+            {
+                return false;
+            }
+
+            var transparentMode = Mathf.RoundToInt(material.GetFloat("_TransparentMode"));
+            if ((transparentMode != 0 && transparentMode != 1) || material.GetFloat("_ZWrite") < 0.5f)
+                return false;
+
+            return IsFloatProperty(material, "_StencilComp", (int)CompareFunction.Always)
+                && IsFloatProperty(material, "_StencilPass", (int)StencilOp.Keep)
+                && IsFloatProperty(material, "_StencilFail", (int)StencilOp.Keep)
+                && IsFloatProperty(material, "_StencilZFail", (int)StencilOp.Keep);
+        }
+
+        private static bool IsCutoutMaterial(Material material)
+        {
+            return material != null
+                && material.HasProperty("_TransparentMode")
+                && Mathf.RoundToInt(material.GetFloat("_TransparentMode")) == 1;
+        }
+
+        private static bool HasStencilProperties(Material material)
+        {
+            return material.HasProperty("_StencilRef")
+                && material.HasProperty("_StencilReadMask")
+                && material.HasProperty("_StencilWriteMask")
+                && material.HasProperty("_StencilComp")
+                && material.HasProperty("_StencilPass")
+                && material.HasProperty("_StencilFail")
+                && material.HasProperty("_StencilZFail");
+        }
+
+        private static bool IsFloatProperty(Material material, string property, int expected)
+        {
+            return Mathf.RoundToInt(material.GetFloat(property)) == expected;
         }
 
         private static List<Renderer> FindRenderersUsing(IEnumerable<Renderer> renderers, Material material)
@@ -190,7 +308,7 @@ namespace YoridoriModifiers.MToonToLilToon
             ConversionReport report,
             BuildContext buildContext,
             AnimatorServicesContext animatorServices,
-            out SkinnedMeshRenderer clothingRenderer)
+            out Renderer clothingRenderer)
         {
             clothingRenderer = null;
             var sourceMesh = sourceRenderer != null ? sourceRenderer.sharedMesh : null;
@@ -206,18 +324,167 @@ namespace YoridoriModifiers.MToonToLilToon
                 return false;
             }
 
-            var sourceMaterials = sourceRenderer.sharedMaterials ?? Array.Empty<Material>();
-            if (sourceMaterials.Length != sourceMesh.subMeshCount)
+            if (!TryCreateSeparatedMeshes(
+                    sourceRenderer,
+                    sourceMesh,
+                    clothingMaterial,
+                    bodyMaterial,
+                    report,
+                    out var sourceMaterials,
+                    out var clothingIndex,
+                    out var remainingIndices,
+                    out var remainingMesh,
+                    out var clothingMesh)) return false;
+
+            var clothingObject = new GameObject($"{sourceRenderer.name}_SilhouetteClothing")
             {
-                Warn(report, $"Silhouette transparency: {sourceRenderer.name} already has {sourceMaterials.Length} materials for {sourceMesh.subMeshCount} submeshes. Clothing separation was skipped.");
+                layer = sourceRenderer.gameObject.layer
+            };
+            clothingObject.transform.SetParent(sourceRenderer.transform, false);
+            var createdRenderer = clothingObject.AddComponent<SkinnedMeshRenderer>();
+            EditorUtility.CopySerialized(sourceRenderer, createdRenderer);
+            createdRenderer.sharedMesh = clothingMesh;
+            createdRenderer.sharedMaterials = new[] { clothingMaterial };
+            clothingRenderer = createdRenderer;
+
+            CopyPropertyBlock(sourceRenderer, createdRenderer);
+
+            sourceRenderer.sharedMesh = remainingMesh;
+            sourceRenderer.sharedMaterials = remainingIndices.Select(index => sourceMaterials[index]).ToArray();
+
+            AddSeparatedRendererToLodGroups(processingRoot, sourceRenderer, clothingRenderer);
+            WarnForAnimatedSeparatedClothingMaterial(
+                sourceRenderer,
+                createdRenderer,
+                clothingIndex,
+                remainingIndices,
+                useRefractionBlur,
+                report,
+                animatorServices);
+            SaveAsset(buildContext, remainingMesh);
+            SaveAsset(buildContext, clothingMesh);
+            return true;
+        }
+
+        private static void CopyPropertyBlock(Renderer source, Renderer destination)
+        {
+            if (source == null || destination == null || !source.HasPropertyBlock()) return;
+            var propertyBlock = new MaterialPropertyBlock();
+            source.GetPropertyBlock(propertyBlock);
+            destination.SetPropertyBlock(propertyBlock);
+        }
+
+        private static void WarnForAnimatedSeparatedClothingMaterial(
+            Renderer source,
+            Renderer destination,
+            int clothingMaterialIndex,
+            IReadOnlyList<int> remainingMaterialIndices,
+            bool useRefractionBlur,
+            ConversionReport report,
+            AnimatorServicesContext animatorServices)
+        {
+            if (!RemapSeparatedRendererAnimationCurves(
+                    source,
+                    destination,
+                    clothingMaterialIndex,
+                    remainingMaterialIndices,
+                    animatorServices)) return;
+
+            var generatedMaterialDescription = useRefractionBlur
+                ? "stencil and refraction materials"
+                : "stencil and dithered silhouette materials";
+            Warn(report, $"Silhouette transparency: {source.name} animates the separated clothing material. The base-material animation was retargeted, but the generated {generatedMaterialDescription} remain based on the configured clothing material.");
+        }
+
+        private static bool TrySeparateClothingSubMesh(
+            GameObject processingRoot,
+            MeshRenderer sourceRenderer,
+            Material clothingMaterial,
+            Material bodyMaterial,
+            bool useRefractionBlur,
+            ConversionReport report,
+            BuildContext buildContext,
+            AnimatorServicesContext animatorServices,
+            out Renderer clothingRenderer)
+        {
+            clothingRenderer = null;
+            var sourceFilter = sourceRenderer != null ? sourceRenderer.GetComponent<MeshFilter>() : null;
+            var sourceMesh = sourceFilter != null ? sourceFilter.sharedMesh : null;
+            if (sourceMesh == null)
+            {
+                Warn(report, $"Silhouette transparency: {sourceRenderer?.name} has no Mesh to separate.");
                 return false;
             }
 
-            var clothingIndices = Enumerable.Range(0, sourceMaterials.Length)
-                .Where(index => sourceMaterials[index] == clothingMaterial)
+            if (!TryCreateSeparatedMeshes(
+                    sourceRenderer,
+                    sourceMesh,
+                    clothingMaterial,
+                    bodyMaterial,
+                    report,
+                    out var sourceMaterials,
+                    out var clothingIndex,
+                    out var remainingIndices,
+                    out var remainingMesh,
+                    out var clothingMesh)) return false;
+
+            var clothingObject = new GameObject($"{sourceRenderer.name}_SilhouetteClothing")
+            {
+                layer = sourceRenderer.gameObject.layer
+            };
+            clothingObject.transform.SetParent(sourceRenderer.transform, false);
+            clothingObject.AddComponent<MeshFilter>().sharedMesh = clothingMesh;
+            var createdRenderer = clothingObject.AddComponent<MeshRenderer>();
+            EditorUtility.CopySerialized(sourceRenderer, createdRenderer);
+            createdRenderer.sharedMaterials = new[] { clothingMaterial };
+            clothingRenderer = createdRenderer;
+
+            CopyPropertyBlock(sourceRenderer, createdRenderer);
+            sourceFilter.sharedMesh = remainingMesh;
+            sourceRenderer.sharedMaterials = remainingIndices.Select(index => sourceMaterials[index]).ToArray();
+            AddSeparatedRendererToLodGroups(processingRoot, sourceRenderer, createdRenderer);
+            WarnForAnimatedSeparatedClothingMaterial(
+                sourceRenderer,
+                createdRenderer,
+                clothingIndex,
+                remainingIndices,
+                useRefractionBlur,
+                report,
+                animatorServices);
+            SaveAsset(buildContext, remainingMesh);
+            SaveAsset(buildContext, clothingMesh);
+            return true;
+        }
+
+        private static bool TryCreateSeparatedMeshes(
+            Renderer sourceRenderer,
+            Mesh sourceMesh,
+            Material clothingMaterial,
+            Material bodyMaterial,
+            ConversionReport report,
+            out Material[] sourceMaterials,
+            out int clothingIndex,
+            out int[] remainingIndices,
+            out Mesh remainingMesh,
+            out Mesh clothingMesh)
+        {
+            var materials = sourceRenderer.sharedMaterials ?? Array.Empty<Material>();
+            sourceMaterials = materials;
+            clothingIndex = -1;
+            remainingIndices = null;
+            remainingMesh = null;
+            clothingMesh = null;
+            if (materials.Length != sourceMesh.subMeshCount)
+            {
+                Warn(report, $"Silhouette transparency: {sourceRenderer.name} already has {materials.Length} materials for {sourceMesh.subMeshCount} submeshes. Clothing separation was skipped.");
+                return false;
+            }
+
+            var clothingIndices = Enumerable.Range(0, materials.Length)
+                .Where(index => materials[index] == clothingMaterial)
                 .ToArray();
-            var bodyIndices = Enumerable.Range(0, sourceMaterials.Length)
-                .Where(index => sourceMaterials[index] == bodyMaterial)
+            var bodyIndices = Enumerable.Range(0, materials.Length)
+                .Where(index => materials[index] == bodyMaterial)
                 .ToArray();
             if (clothingIndices.Length != 1 || bodyIndices.Length != 1 || sourceMesh.subMeshCount <= 1)
             {
@@ -225,57 +492,21 @@ namespace YoridoriModifiers.MToonToLilToon
                 return false;
             }
 
-            var clothingIndex = clothingIndices[0];
+            var selectedClothingIndex = clothingIndices[0];
+            clothingIndex = selectedClothingIndex;
             var bodyIndex = bodyIndices[0];
-            var remainingIndices = Enumerable.Range(0, sourceMesh.subMeshCount)
-                .Where(index => index != clothingIndex && index != bodyIndex)
+            remainingIndices = Enumerable.Range(0, sourceMesh.subMeshCount)
+                .Where(index => index != selectedClothingIndex && index != bodyIndex)
                 .Concat(new[] { bodyIndex })
                 .ToArray();
-            var remainingMesh = CreateSubMeshSelection(
+            remainingMesh = CreateSubMeshSelection(
                 sourceMesh,
                 remainingIndices,
                 $"{sourceMesh.name}_WithoutSilhouetteClothing");
-            var clothingMesh = CreateSubMeshSelection(
+            clothingMesh = CreateSubMeshSelection(
                 sourceMesh,
-                new[] { clothingIndex },
+                new[] { selectedClothingIndex },
                 $"{sourceMesh.name}_SilhouetteClothing");
-
-            var clothingObject = new GameObject($"{sourceRenderer.name}_SilhouetteClothing")
-            {
-                layer = sourceRenderer.gameObject.layer
-            };
-            clothingObject.transform.SetParent(sourceRenderer.transform, false);
-            clothingRenderer = clothingObject.AddComponent<SkinnedMeshRenderer>();
-            EditorUtility.CopySerialized(sourceRenderer, clothingRenderer);
-            clothingRenderer.sharedMesh = clothingMesh;
-            clothingRenderer.sharedMaterials = new[] { clothingMaterial };
-
-            if (sourceRenderer.HasPropertyBlock())
-            {
-                var propertyBlock = new MaterialPropertyBlock();
-                sourceRenderer.GetPropertyBlock(propertyBlock);
-                clothingRenderer.SetPropertyBlock(propertyBlock);
-            }
-
-            sourceRenderer.sharedMesh = remainingMesh;
-            sourceRenderer.sharedMaterials = remainingIndices.Select(index => sourceMaterials[index]).ToArray();
-
-            AddSeparatedRendererToLodGroups(processingRoot, sourceRenderer, clothingRenderer);
-            var hasAnimatedClothingMaterial = RemapSeparatedRendererAnimationCurves(
-                sourceRenderer,
-                clothingRenderer,
-                clothingIndex,
-                remainingIndices,
-                animatorServices);
-            if (hasAnimatedClothingMaterial)
-            {
-                var generatedMaterialDescription = useRefractionBlur
-                    ? "stencil and refraction materials"
-                    : "stencil and dithered silhouette materials";
-                Warn(report, $"Silhouette transparency: {sourceRenderer.name} animates the separated clothing material. The base-material animation was retargeted, but the generated {generatedMaterialDescription} remain based on the configured clothing material.");
-            }
-            SaveAsset(buildContext, remainingMesh);
-            SaveAsset(buildContext, clothingMesh);
             return true;
         }
 
@@ -332,8 +563,8 @@ namespace YoridoriModifiers.MToonToLilToon
         }
 
         private static bool RemapSeparatedRendererAnimationCurves(
-            SkinnedMeshRenderer source,
-            SkinnedMeshRenderer destination,
+            Renderer source,
+            Renderer destination,
             int clothingMaterialIndex,
             IReadOnlyList<int> remainingMaterialIndices,
             AnimatorServicesContext animatorServices)
@@ -344,14 +575,17 @@ namespace YoridoriModifiers.MToonToLilToon
             var sourcePath = paths.GetVirtualPathForObject(source.gameObject);
             var destinationPath = paths.GetVirtualPathForObject(destination.gameObject);
             var clips = animatorServices.AnimationIndex.GetClipsForObjectPath(sourcePath).ToArray();
+            var rendererType = source.GetType();
+            var supportsBlendShapes = source is SkinnedMeshRenderer;
             var hasAnimatedClothingMaterial = false;
             foreach (var clip in clips)
             {
                 var floatBindings = clip.GetFloatCurveBindings()
                     .Where(binding => binding.path == sourcePath
-                        && binding.type == typeof(SkinnedMeshRenderer)
+                        && binding.type == rendererType
                         && (binding.propertyName == "m_Enabled"
-                            || binding.propertyName.StartsWith("blendShape.", StringComparison.Ordinal)))
+                            || (supportsBlendShapes
+                                && binding.propertyName.StartsWith("blendShape.", StringComparison.Ordinal))))
                     .ToArray();
                 foreach (var binding in floatBindings)
                 {
@@ -363,7 +597,7 @@ namespace YoridoriModifiers.MToonToLilToon
                 var materialBindings = clip.GetObjectCurveBindings()
                     .Select(binding => (binding, index: ParseMaterialArrayIndex(binding.propertyName)))
                     .Where(item => item.binding.path == sourcePath
-                        && item.binding.type == typeof(SkinnedMeshRenderer)
+                        && item.binding.type == rendererType
                         && item.index >= 0)
                     .Select(item => (item.binding, item.index, curve: clip.GetObjectCurve(item.binding)))
                     .ToArray();
@@ -428,15 +662,14 @@ namespace YoridoriModifiers.MToonToLilToon
             Renderer renderer,
             Material targetMaterial,
             ConversionReport report,
-            BuildContext buildContext)
+            BuildContext buildContext,
+            AnimatorServicesContext animatorServices)
         {
-            if (!CanPrepareTargetSubMesh(renderer, targetMaterial, null)) return false;
+            if (renderer == null || targetMaterial == null) return false;
             var mesh = GetSharedMesh(renderer);
             var materials = renderer.sharedMaterials ?? Array.Empty<Material>();
-            var targetIndices = Enumerable.Range(0, materials.Length)
-                .Where(index => materials[index] == targetMaterial)
-                .ToList();
-            var targetIndex = targetIndices[0];
+            var targetIndex = Array.IndexOf(materials, targetMaterial);
+            if (mesh == null || targetIndex < 0 || targetIndex >= mesh.subMeshCount) return false;
             if (targetIndex == mesh.subMeshCount - 1) return true;
 
             var order = Enumerable.Range(0, mesh.subMeshCount)
@@ -470,10 +703,42 @@ namespace YoridoriModifiers.MToonToLilToon
             reorderedMesh.bounds = mesh.bounds;
 
             var reorderedMaterials = order.Select(index => materials[index]).ToArray();
+            RemapReorderedRendererMaterialAnimationCurves(renderer, order, animatorServices);
             SetSharedMesh(renderer, reorderedMesh);
             renderer.sharedMaterials = reorderedMaterials;
             SaveAsset(buildContext, reorderedMesh);
             return true;
+        }
+
+        private static void RemapReorderedRendererMaterialAnimationCurves(
+            Renderer renderer,
+            IReadOnlyList<int> sourceIndicesByDestination,
+            AnimatorServicesContext animatorServices)
+        {
+            if (renderer == null || sourceIndicesByDestination == null || animatorServices == null) return;
+
+            var path = animatorServices.ObjectPathRemapper.GetVirtualPathForObject(renderer.gameObject);
+            var rendererType = renderer.GetType();
+            foreach (var clip in animatorServices.AnimationIndex.GetClipsForObjectPath(path).ToArray())
+            {
+                var bindings = clip.GetObjectCurveBindings()
+                    .Select(binding => (binding, sourceIndex: ParseMaterialArrayIndex(binding.propertyName)))
+                    .Where(item => item.binding.path == path
+                        && item.binding.type == rendererType
+                        && item.sourceIndex >= 0)
+                    .Select(item => (item.binding, item.sourceIndex, curve: clip.GetObjectCurve(item.binding)))
+                    .ToArray();
+
+                foreach (var item in bindings) clip.SetObjectCurve(item.binding, null);
+                foreach (var item in bindings)
+                {
+                    var destinationIndex = IndexOf(sourceIndicesByDestination, item.sourceIndex);
+                    if (destinationIndex < 0) continue;
+                    var destinationBinding = item.binding;
+                    destinationBinding.propertyName = BuildMaterialArrayProperty(destinationIndex);
+                    clip.SetObjectCurve(destinationBinding, item.curve);
+                }
+            }
         }
 
         private static bool CanPrepareTargetSubMesh(

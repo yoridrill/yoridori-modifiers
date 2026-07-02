@@ -684,13 +684,26 @@ namespace YoridoriModifiers.MToonToLilToon
                             "The same material is selected for clothing and body, so silhouette transparency cannot be applied."),
                         MessageType.Error);
                 }
-                else if (AreMaterialsOnSameRenderer(component, clothing, body))
+                else if (FindRendererUsingBothMaterials(component, clothing, body) is { } sharedRenderer)
                 {
-                    EditorGUILayout.HelpBox(
-                        T(
-                            "服と体が同じ SkinnedMeshRenderer にあるため、 ビルド時に服のサブメッシュを専用 Renderer へ分離します。",
-                            "Clothing and body are on the same SkinnedMeshRenderer. The clothing submesh will be separated into a dedicated Renderer during the build."),
-                        MessageType.Info);
+                    var requiresSeparation = !IsBodyStencilIntegrationExpected(body, clothing);
+                    if (requiresSeparation
+                        && sharedRenderer is SkinnedMeshRenderer or MeshRenderer)
+                    {
+                        EditorGUILayout.HelpBox(
+                            T(
+                                "体と服それぞれにマテリアルを追加する必要があるため、ビルド時に服のサブメッシュを専用 Rendererへ分離します。",
+                                "Because materials must be added to both the body and clothing, the clothing submesh will be separated into a dedicated Renderer during the build."),
+                            MessageType.Info);
+                    }
+                    else if (requiresSeparation)
+                    {
+                        EditorGUILayout.HelpBox(
+                            T(
+                                "服と体が同じ未対応の Renderer にあるため適用できません。 SkinnedMeshRenderer または MeshRenderer を使用してください。",
+                                "Clothing and body share an unsupported Renderer. Use a SkinnedMeshRenderer or MeshRenderer."),
+                            MessageType.Error);
+                    }
                 }
             }
 
@@ -709,19 +722,50 @@ namespace YoridoriModifiers.MToonToLilToon
             property.objectReferenceValue = nextIndex <= 0 ? null : available[nextIndex - 1];
         }
 
-        private static bool AreMaterialsOnSameRenderer(
+        private static Renderer FindRendererUsingBothMaterials(
             MToonToLilToonComponent component,
             Material clothing,
             Material body)
         {
-            if (component == null || clothing == null || body == null) return false;
+            if (component == null || clothing == null || body == null) return null;
             var avatarRoot = PreviewCoordinator.FindAvatarRoot(component.gameObject);
             var searchRoot = avatarRoot != null ? avatarRoot : component.gameObject;
-            return searchRoot.GetComponentsInChildren<Renderer>(true).Any(renderer =>
+            return searchRoot.GetComponentsInChildren<Renderer>(true).FirstOrDefault(renderer =>
+                renderer.sharedMaterials.Contains(clothing) && renderer.sharedMaterials.Contains(body));
+        }
+
+        private static bool IsBodyStencilIntegrationExpected(Material body, Material clothing)
+        {
+            if (!MToonDetector.IsMToonLike(body) || clothing == null) return false;
+
+            var bodyType = RenderTypeResolver.ResolveFromMaterial(body);
+            var clothingType = RenderTypeResolver.ResolveFromMaterial(clothing);
+            if (bodyType == RenderType.Transparent || !IsDepthWritingMaterial(body)) return false;
+
+            var bodyQueue = ExpectedConvertedRenderQueue(bodyType);
+            var clothingQueue = ExpectedConvertedRenderQueue(clothingType);
+            return bodyQueue < clothingQueue
+                || (bodyQueue == clothingQueue
+                    && bodyType == RenderType.Cutout
+                    && clothingType == RenderType.Cutout);
+        }
+
+        private static bool IsDepthWritingMaterial(Material material)
+        {
+            if (material == null) return false;
+            if (material.HasProperty("_M_ZWrite")) return material.GetFloat("_M_ZWrite") >= 0.5f;
+            if (material.HasProperty("_ZWrite")) return material.GetFloat("_ZWrite") >= 0.5f;
+            return RenderTypeResolver.ResolveFromMaterial(material) != RenderType.Transparent;
+        }
+
+        private static int ExpectedConvertedRenderQueue(RenderType renderType)
+        {
+            return renderType switch
             {
-                var materials = renderer.sharedMaterials;
-                return materials.Contains(clothing) && materials.Contains(body);
-            });
+                RenderType.Opaque => (int)UnityEngine.Rendering.RenderQueue.Geometry,
+                RenderType.Cutout => (int)UnityEngine.Rendering.RenderQueue.AlphaTest,
+                _ => 2460
+            };
         }
 
         private bool DrawAdvancedSection(MToonToLilToonComponent component)

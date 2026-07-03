@@ -52,8 +52,9 @@ namespace YoridoriModifiers.MToonToLilToon
 
             if (!disableShadowReceiveForFace && !disableRimShadeForFace && !disableBacklightStrengthForFace) return;
 
+            var faceMaterial = ResolveCurrentMaterialReference(component.faceShadowFaceMaterial, materials);
             ApplyFaceGlobalExclusionSettings(
-                component.faceShadowFaceMaterial,
+                faceMaterial,
                 disableShadowReceiveForFace,
                 disableRimShadeForFace,
                 disableBacklightStrengthForFace);

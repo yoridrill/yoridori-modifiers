@@ -20,6 +20,12 @@ namespace YoridoriModifiers.MToonToLilToon
         Custom,
     }
 
+    public enum RimShadeColorMode
+    {
+        ShadowColor,
+        Custom,
+    }
+
     [Serializable]
     public sealed class LilToonGlobalOverrides
     {
@@ -37,6 +43,7 @@ namespace YoridoriModifiers.MToonToLilToon
         [Range(0f, 1f)] public float backlightBorder = 0.35f;
         [Range(0f, 1f)] public float backlightBlur = 0.05f;
         public bool enableRimShade;
+        public RimShadeColorMode rimShadeColorMode = RimShadeColorMode.ShadowColor;
         public Color rimShadeColor = new(0.5f, 0.5f, 0.5f, 1f);
         [Range(0f, 1f)] public float rimShadeBorder = 0.5f;
         [Range(0f, 1f)] public float rimShadeBlur = 1f;
@@ -491,7 +498,7 @@ namespace YoridoriModifiers.MToonToLilToon
             SetIfExists(material, "_UseRimShade", useRimShade ? 1f : 0f);
             if (useRimShade)
             {
-                SetIfExists(material, "_RimShadeColor", overrides.rimShadeColor);
+                SetIfExists(material, "_RimShadeColor", ResolveRimShadeColor(material, overrides));
                 SetIfExists(material, "_RimShadeBorder", overrides.rimShadeBorder);
                 SetIfExists(material, "_RimShadeBlur", overrides.rimShadeBlur);
             }
@@ -522,6 +529,23 @@ namespace YoridoriModifiers.MToonToLilToon
             var backlightColor = material.GetColor(shadowColorProperty).linear * 2f;
             backlightColor.a = 1f;
             return backlightColor;
+        }
+
+        private static Color ResolveRimShadeColor(Material material, LilToonGlobalOverrides overrides)
+        {
+            if (overrides.rimShadeColorMode == RimShadeColorMode.Custom)
+            {
+                return overrides.rimShadeColor;
+            }
+
+            if (!TryFindExistingProperty(material, new[] { "_ShadowColor", "_Shadow1stColor" }, out var shadowColorProperty))
+            {
+                return overrides.rimShadeColor;
+            }
+
+            var rimShadeColor = material.GetColor(shadowColorProperty);
+            rimShadeColor.a = 1f;
+            return rimShadeColor;
         }
 
         private static void ApplyShadowState(Material source, Material destination)

@@ -146,6 +146,7 @@ namespace YoridoriModifiers.MToonToLilToon
             builder.Append('|').Append(overrides.backlightBorder);
             builder.Append('|').Append(overrides.backlightBlur);
             builder.Append('|').Append(overrides.enableRimShade);
+            builder.Append('|').Append((int)overrides.rimShadeColorMode);
             AppendColor(builder, overrides.rimShadeColor);
             builder.Append('|').Append(overrides.rimShadeBorder);
             builder.Append('|').Append(overrides.rimShadeBlur);
@@ -222,24 +223,25 @@ namespace YoridoriModifiers.MToonToLilToon
                 overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.shadowBorderColor)),
                 T("幅", "Width"),
                 overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.shadowBorderStrength)));
-            DrawOverrideGroupRows(
+            DrawColorModeOverrideGroup(
                 overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.enableRimShade)),
                 new GUIContent(T("リムシェード", "Rim Shade")),
+                overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.rimShadeColorMode)),
+                overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.rimShadeColor)),
+                T("影色", "Shade Color"),
                 new[]
                 {
-                    T("色", "Color"),
                     T("範囲", "Range"),
                     T("ぼかし", "Blur"),
                     T("顔だけ除外する", "Exclude Face Only")
                 },
                 new[]
                 {
-                    overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.rimShadeColor)),
                     overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.rimShadeBorder)),
                     overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.rimShadeBlur)),
                     serializedObject.FindProperty(nameof(MToonToLilToonComponent.disableRimShadeForFace))
                 });
-            DrawBacklightOverrideGroup(
+            DrawColorModeOverrideGroup(
                 overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.enableBacklight)),
                 TT(
                     "逆光ライト",
@@ -248,6 +250,7 @@ namespace YoridoriModifiers.MToonToLilToon
                     "Increasing blur enables an SSS-like appearance. To make edges glow strongly with Bloom, use a custom color and raise Intensity to around 3."),
                 overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.backlightColorMode)),
                 overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.backlightColor)),
+                T("影色+Intensity 1", "Shade Color + Intensity 1"),
                 new[]
                 {
                     T("メインカラーの強度", "Main Color Strength"),
@@ -384,11 +387,12 @@ namespace YoridoriModifiers.MToonToLilToon
             EditorGUILayout.Space(OverrideGroupSpacing);
         }
 
-        private void DrawBacklightOverrideGroup(
+        private void DrawColorModeOverrideGroup(
             SerializedProperty enabledProp,
             GUIContent groupLabel,
             SerializedProperty colorModeProp,
             SerializedProperty customColorProp,
+            string automaticColorLabel,
             string[] labels,
             SerializedProperty[] valueProps)
         {
@@ -398,27 +402,27 @@ namespace YoridoriModifiers.MToonToLilToon
             if (enabledProp.boolValue)
             {
                 EditorGUI.LabelField(itemLabelRect, T("色", "Color"));
-                var mode = (BacklightColorMode)colorModeProp.intValue;
                 var options = new[]
                 {
-                    T("影色+Intensity 1", "Shade Color + Intensity 1"),
+                    automaticColorLabel,
                     T("指定色", "Custom Color")
                 };
 
-                if (mode == BacklightColorMode.Custom)
+                var mode = colorModeProp.intValue;
+                if (mode == 1)
                 {
                     var halfWidth = (valueRect.width - 4f) * 0.5f;
                     var modeRect = new Rect(valueRect.x, valueRect.y, halfWidth, valueRect.height);
                     var colorRect = new Rect(valueRect.x + halfWidth + 4f, valueRect.y, halfWidth, valueRect.height);
-                    mode = (BacklightColorMode)EditorGUI.Popup(modeRect, (int)mode, options);
+                    mode = EditorGUI.Popup(modeRect, mode, options);
                     EditorGUI.PropertyField(colorRect, customColorProp, GUIContent.none);
                 }
                 else
                 {
-                    mode = (BacklightColorMode)EditorGUI.Popup(valueRect, (int)mode, options);
+                    mode = EditorGUI.Popup(valueRect, mode, options);
                 }
 
-                colorModeProp.intValue = (int)mode;
+                colorModeProp.intValue = mode;
             }
 
             if (enabledProp.boolValue)

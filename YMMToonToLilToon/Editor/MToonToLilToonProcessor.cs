@@ -266,9 +266,25 @@ namespace YoridoriModifiers.MToonToLilToon
                     continue;
                 }
 
+                if (convertedBySource != null && convertedBySource.TryGetValue(source, out var cached))
+                {
+                    result.Add(cached);
+                    resultSourceIndices.Add(i);
+                    if (cached != source)
+                    {
+                        report.ConvertedMaterialCount++;
+                    }
+                    else
+                    {
+                        report.SkippedMaterialCount++;
+                    }
+                    continue;
+                }
+
                 if (MToonToLilToonMapper.TryConvert(source, lilToonShader, globalOverrides, useToonStandardFallback, out var converted, report))
                 {
                     NdmfObjectRegistry.RegisterReplacement(source, converted);
+                    buildContext?.AssetSaver.SaveAsset(converted);
                     ApplyMToon10ShadingShiftStrengthMask(source, converted, report);
                     result.Add(converted);
                     resultSourceIndices.Add(i);
@@ -292,13 +308,6 @@ namespace YoridoriModifiers.MToonToLilToon
             }
             ReindexTransparentQueues(result, resultSourceIndices, transparentRanks);
             renderer.sharedMaterials = result.ToArray();
-            if (buildContext != null)
-            {
-                foreach (var material in result.Where(m => m != null).Distinct())
-                {
-                    buildContext.AssetSaver.SaveAsset(material);
-                }
-            }
         }
 
         private static Shader ResolveLilToonShader(MToonToLilToonComponent component)

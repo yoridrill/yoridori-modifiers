@@ -59,6 +59,8 @@ jobs:
             YMEyeFreeze.meta
             YMFacialMapper
             YMFacialMapper.meta
+            YMHairLookKit
+            YMHairLookKit.meta
             YMMToonToLilToon
             YMMToonToLilToon.meta
             YMMeshTrimmer
@@ -96,12 +98,21 @@ jobs:
           grep -Fxq "YMArmPatch/" dist/zip-list.txt
           grep -Fxq "YMEyeFreeze/" dist/zip-list.txt
           grep -Fxq "YMFacialMapper/" dist/zip-list.txt
+          grep -Fxq "YMHairLookKit/" dist/zip-list.txt
           grep -Fxq "YMMToonToLilToon/" dist/zip-list.txt
           grep -Fxq "YMMeshTrimmer/" dist/zip-list.txt
           grep -Fxq "YMVRoidSkirtRefine/" dist/zip-list.txt
           ! grep -q ".DS_Store" dist/zip-list.txt
 
+      - name: Upload release archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.name }}-${{ steps.package.outputs.version }}
+          path: dist/${{ steps.package.outputs.zip }}
+          if-no-files-found: error
+
       - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: dist/${{ steps.package.outputs.zip }}

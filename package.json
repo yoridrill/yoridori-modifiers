@@ -7,7 +7,7 @@
     },
     "unity": "2022.3",
     "vpmDependencies": {
-        "com.vrchat.avatars": ">=3.10.0",
+        "com.vrchat.avatars": ">=3.10.3",
         "nadena.dev.ndmf": ">=1.11.0",
         "jp.lilxyzw.liltoon": ">=2.3.2"
     }

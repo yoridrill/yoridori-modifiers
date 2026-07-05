@@ -6,6 +6,8 @@ using Unity.Collections;
 using UnityEditor;
 using UnityEngine;
 using VRC.Dynamics;
+using VRC.SDK3.Avatars.Components;
+using VRC.SDK3.Dynamics.Constraint.Components;
 using VRC.SDK3.Dynamics.PhysBone;
 using VRC.SDK3.Dynamics.PhysBone.Components;
 using YoridoriModifiers.Core.Editor;
@@ -21,6 +23,9 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         private const string QualifiedPluginName = "jp.yoridrill.ym-vroid-skirt-refine";
         private const string OnePieceUnifiedRootName = "YM_VRoidSkirtRefine_OnePieceRoot";
         private const string LongCoatUnifiedRootName = "YM_VRoidSkirtRefine_LongCoatRoot";
+        private const string FloorRayOriginName = "YM_VRoidSkirtRefine_FloorRayOrigin";
+        private const string FloorSurfaceName = "YM_VRoidSkirtRefine_FloorSurface";
+        private const float FloorRayOriginHeightOffset = 0.1f;
         private const float LongCoatFrontOutwardOffset = 0.04f;
         private const float LongCoatFrontBackwardOffset = 0.015f;
         private const float LongCoatRootLiftLastRootFactor = 0.35f;
@@ -145,6 +150,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 Debug.LogWarning($"[{ToolName}] Match target is missing. Skirt refine matching skipped.");
                 return refineResults;
             }
+
+            CreateSharedFloorSystemIfNeeded(avatarRoot, component);
 
             if (onePieceMatchesLongCoat)
             {
@@ -456,12 +463,12 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 component.verboseLog,
                 vqtSettings,
                 removedPhysBoneColliders);
-            AddFloorCollider(
-                hips.parent,
+            AddSharedFloorCollider(
+                avatarRoot,
                 onePieceColliders,
-                "YM_VRoidSkirtRefine_OnePieceFloorCollider",
                 "one-piece",
-                component.onePieceUseFloorCollider,
+                component.onePieceUseFloorCollider
+                || (component.longCoatMatchOnePiece && component.longCoatUseFloorCollider),
                 component.verboseLog);
 
             RebindDeletedManagementBones(avatarRoot, oldToNewBoneMap, component.verboseLog);
@@ -997,12 +1004,12 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 component.verboseLog,
                 vqtSettings,
                 removedPhysBoneColliders);
-            AddFloorCollider(
-                hips.parent,
+            AddSharedFloorCollider(
+                avatarRoot,
                 longCoatColliders,
-                "YM_VRoidSkirtRefine_LongCoatFloorCollider",
                 "long coat",
-                component.longCoatUseFloorCollider,
+                component.longCoatUseFloorCollider
+                || (component.onePieceMatchLongCoat && component.onePieceUseFloorCollider),
                 component.verboseLog);
 
             if (!useUpperStageRotationConstraints)
@@ -2091,45 +2098,121 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             return colliders;
         }
 
-        private static void AddFloorCollider(
-            Transform armature,
+        private static void AddSharedFloorCollider(
+            GameObject avatarRoot,
             List<VRCPhysBoneColliderBase> colliders,
-            string colliderName,
             string logLabel,
             bool enabled,
             bool verboseLog)
         {
-            if (!enabled || armature == null || colliders == null) return;
+            if (!enabled || avatarRoot == null || colliders == null) return;
 
-            var colliderTransform = armature.Find(colliderName);
-            if (colliderTransform == null)
+            var surface = avatarRoot.transform.Find(FloorSurfaceName);
+            var collider = surface != null ? surface.GetComponent<VRCPhysBoneCollider>() : null;
+            if (collider == null) return;
+            if (!colliders.Contains(collider)) colliders.Add(collider);
+
+            if (verboseLog)
             {
-                var colliderObject = new GameObject(colliderName);
-                colliderTransform = colliderObject.transform;
-                colliderTransform.SetParent(armature, false);
+                Debug.Log($"[{ToolName}] Assigned shared floor PhysBone collider to {logLabel}: {GetPath(surface)}");
+            }
+        }
+
+        private static void CreateSharedFloorSystemIfNeeded(GameObject avatarRoot, YMVRoidSkirtRefine component)
+        {
+            if (avatarRoot == null || component == null) return;
+            var enabled = (component.enableOnePieceRefine && component.onePieceUseFloorCollider)
+                          || (component.enableLongCoatRefine && component.longCoatUseFloorCollider);
+            if (!enabled) return;
+
+            var animator = avatarRoot.GetComponentInChildren<Animator>(true);
+            var leftLowerLeg = animator != null ? animator.GetBoneTransform(HumanBodyBones.LeftLowerLeg) : null;
+            var rightLowerLeg = animator != null ? animator.GetBoneTransform(HumanBodyBones.RightLowerLeg) : null;
+            if (leftLowerLeg == null || rightLowerLeg == null)
+            {
+                Debug.LogWarning($"[{ToolName}] LowerLeg_L/R were not found. Shared floor system was not generated.");
+                return;
             }
 
-            colliderTransform.localPosition = Vector3.zero;
-            colliderTransform.localRotation = Quaternion.identity;
+            var root = avatarRoot.transform;
+            var rayOrigin = GetOrCreateDirectChild(root, FloorRayOriginName);
+            rayOrigin.localPosition = root.InverseTransformPoint((leftLowerLeg.position + rightLowerLeg.position) * 0.5f)
+                                      + Vector3.up * FloorRayOriginHeightOffset;
+            rayOrigin.localRotation = Quaternion.identity;
+            rayOrigin.localScale = Vector3.one;
 
-            var collider = colliderTransform.GetComponent<VRCPhysBoneCollider>();
-            if (collider == null)
-            {
-                collider = colliderTransform.gameObject.AddComponent<VRCPhysBoneCollider>();
-            }
+            var constraint = rayOrigin.GetComponent<VRCPositionConstraint>();
+            if (constraint == null) constraint = rayOrigin.gameObject.AddComponent<VRCPositionConstraint>();
+            constraint.IsActive = true;
+            constraint.GlobalWeight = 1.0f;
+            constraint.Locked = true;
+            constraint.TargetTransform = rayOrigin;
+            constraint.SolveInLocalSpace = false;
+            constraint.FreezeToWorld = false;
+            constraint.RebakeOffsetsWhenUnfrozen = false;
+            constraint.PositionAtRest = rayOrigin.localPosition;
+            constraint.PositionOffset = Vector3.up * FloorRayOriginHeightOffset;
+            constraint.AffectsPositionX = true;
+            constraint.AffectsPositionY = true;
+            constraint.AffectsPositionZ = true;
+            constraint.Sources.Clear();
+            constraint.Sources.Add(new VRCConstraintSource(leftLowerLeg, 0.5f));
+            constraint.Sources.Add(new VRCConstraintSource(rightLowerLeg, 0.5f));
+            constraint.ApplyConfigurationChanges();
 
-            collider.rootTransform = armature;
+            var surface = GetOrCreateDirectChild(root, FloorSurfaceName);
+            var rayDistance = CalculateFloorRayDistance(avatarRoot, animator);
+            surface.localPosition = rayOrigin.localPosition + Vector3.down * rayDistance;
+            surface.localRotation = Quaternion.identity;
+            surface.localScale = Vector3.one;
+
+            var collider = surface.GetComponent<VRCPhysBoneCollider>();
+            if (collider == null) collider = surface.gameObject.AddComponent<VRCPhysBoneCollider>();
+            collider.rootTransform = surface;
             collider.shapeType = VRCPhysBoneColliderBase.ShapeType.Plane;
             collider.insideBounds = false;
             collider.bonesAsSpheres = false;
             collider.position = Vector3.zero;
             collider.rotation = Quaternion.identity;
-            colliders.Add(collider);
 
-            if (verboseLog)
+            var raycast = rayOrigin.GetComponent<VRCRaycast>();
+            if (raycast == null) raycast = rayOrigin.gameObject.AddComponent<VRCRaycast>();
+            raycast.RaycastDirection = Vector3.down;
+            raycast.Distance = rayDistance;
+            raycast.ApplyTransformScale = true;
+            raycast.RaycastCollisionMode = VRCRaycast.CollisionMode.HitWorlds;
+            raycast.ResultTransform = surface;
+            raycast.ApplyRotation = true;
+            raycast.AlignmentAxis = Vector3.up;
+            raycast.BehaviorOnMiss = VRCRaycast.MissBehavior.SnapToEnd;
+            raycast.Parameter = string.Empty;
+
+            if (component.verboseLog)
             {
-                Debug.Log($"[{ToolName}] Added {logLabel} floor PhysBone collider: {GetPath(colliderTransform)}");
+                Debug.Log($"[{ToolName}] Added shared raycast floor system under avatar root.");
             }
+        }
+
+        private static Transform GetOrCreateDirectChild(Transform parent, string name)
+        {
+            var child = parent.Find(name);
+            if (child != null) return child;
+            var childObject = new GameObject(name);
+            child = childObject.transform;
+            child.SetParent(parent, false);
+            return child;
+        }
+
+        private static float CalculateFloorRayDistance(GameObject avatarRoot, Animator animator)
+        {
+            var head = animator != null ? animator.GetBoneTransform(HumanBodyBones.Head) : null;
+            var leftFoot = animator != null ? animator.GetBoneTransform(HumanBodyBones.LeftFoot) : null;
+            var rightFoot = animator != null ? animator.GetBoneTransform(HumanBodyBones.RightFoot) : null;
+            var footY = leftFoot != null && rightFoot != null
+                ? Mathf.Min(leftFoot.position.y, rightFoot.position.y)
+                : avatarRoot.transform.position.y;
+            var height = head != null ? Mathf.Abs(head.position.y - footY) : 0.0f;
+            return Mathf.Max(2.0f, height * 1.5f);
         }
 
         private static void AddLegCapsuleCollider(

@@ -424,6 +424,12 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 if (component.enableLongCoatRefine) AddLongCoatGeneratedDynamics(component, estimate);
             }
 
+            if ((component.enableOnePieceRefine && component.onePieceUseFloorCollider)
+                || (component.enableLongCoatRefine && component.longCoatUseFloorCollider))
+            {
+                estimate.GeneratedPhysBoneColliders += 1;
+            }
+
             return estimate;
         }
 
@@ -487,7 +493,6 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             estimate.GeneratedPhysBoneColliders += CountGeneratedLegColliders(
                 component.onePieceUseUpperLegColliders,
                 component.onePieceUseLowerLegColliders);
-            if (component.onePieceUseFloorCollider) estimate.GeneratedPhysBoneColliders += 1;
         }
 
         private static void AddLongCoatGeneratedDynamics(YMVRoidSkirtRefine component, DynamicsUsageEstimate estimate)
@@ -510,7 +515,6 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             estimate.GeneratedPhysBoneColliders += CountGeneratedLegColliders(
                 component.longCoatUseUpperLegColliders,
                 component.longCoatUseLowerLegColliders);
-            if (component.longCoatUseFloorCollider) estimate.GeneratedPhysBoneColliders += 1;
         }
 
         private static int CountGeneratedLegColliders(bool upperLeg, bool lowerLeg)
@@ -1099,7 +1103,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                             "床を追加",
                             "Hipsと同階層（Armature直下）にPlane形状の床コライダーを追加し、対象の揺れボーンに設定します。",
                             "Add Floor",
-                            "Adds a Plane floor collider alongside Hips under the Armature and assigns it to the target swing PhysBones."));
+                            "Adds a shared raycast-driven Plane floor collider and assigns it to the target swing PhysBones."));
                 }
             }
         }

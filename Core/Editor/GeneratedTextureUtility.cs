@@ -10,16 +10,14 @@ namespace YoridoriModifiers.Core.Editor
         {
             if (texture == null) throw new InvalidOperationException($"CompressGeneratedTexture: texture is null ({context}).");
 
-            var target = buildTarget ?? EditorUserBuildSettings.activeBuildTarget;
-
             if (isNormalMap)
             {
-                return GenerateNormalMapTexture(texture, context, target);
+                return GenerateNormalMapTexture(texture, context, buildTarget ?? EditorUserBuildSettings.activeBuildTarget);
             }
 
             ConfigureRuntimeGeneratedTexture(texture);
             texture.Apply(true, false);
-            EditorUtility.CompressTexture(texture, ResolveRuntimeTextureFormat(target), TextureCompressionQuality.Normal);
+            EditorUtility.CompressTexture(texture, TextureFormat.DXT5, TextureCompressionQuality.Normal);
             ConfigureRuntimeGeneratedTexture(texture);
             if (texture.format == TextureFormat.RGBA32)
             {
@@ -42,7 +40,7 @@ namespace YoridoriModifiers.Core.Editor
 
             output.SetPixels32(PackRgbNormalPixelsForUnity(texture.GetPixels32(0)));
             output.Apply(true, false);
-            EditorUtility.CompressTexture(output, ResolveRuntimeTextureFormat(buildTarget), TextureCompressionQuality.Normal);
+            EditorUtility.CompressTexture(output, TextureFormat.DXT5, TextureCompressionQuality.Normal);
             ConfigureRuntimeGeneratedTexture(output);
             if (output.format == TextureFormat.RGBA32)
             {
@@ -50,18 +48,6 @@ namespace YoridoriModifiers.Core.Editor
             }
 
             return output;
-        }
-
-        private static TextureFormat ResolveRuntimeTextureFormat(BuildTarget buildTarget)
-        {
-            switch (buildTarget)
-            {
-                case BuildTarget.Android:
-                case BuildTarget.iOS:
-                    return TextureFormat.ASTC_6x6;
-                default:
-                    return TextureFormat.DXT5;
-            }
         }
 
         public static void ConfigureRuntimeGeneratedTexture(Texture2D texture, bool streamingMipmaps = true, int streamingMipmapsPriority = 0)

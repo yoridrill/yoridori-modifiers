@@ -511,7 +511,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             public BoneExtensionMode onePieceBoneExtensionMode;
             public int onePieceTargetBoneCount;
             public float onePieceRootHeightOffsetMultiplier;
-            public float onePieceHipWeightReduction;
+            public float onePieceSpineWeightReduction;
             public bool onePieceMatchLongCoat;
             public bool onePieceUseUpperLegColliders;
             public bool onePieceUseLowerLegColliders;
@@ -559,7 +559,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     onePieceBoneExtensionMode = source.onePieceBoneExtensionMode,
                     onePieceTargetBoneCount = source.onePieceTargetBoneCount,
                     onePieceRootHeightOffsetMultiplier = source.onePieceRootHeightOffsetMultiplier,
-                    onePieceHipWeightReduction = source.onePieceHipWeightReduction,
+                    onePieceSpineWeightReduction = source.onePieceSpineWeightReduction,
                     onePieceMatchLongCoat = source.onePieceMatchLongCoat,
                     onePieceUseUpperLegColliders = source.onePieceUseUpperLegColliders,
                     onePieceUseLowerLegColliders = source.onePieceUseLowerLegColliders,
@@ -605,7 +605,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 target.onePieceBoneExtensionMode = onePieceBoneExtensionMode;
                 target.onePieceTargetBoneCount = onePieceTargetBoneCount;
                 target.onePieceRootHeightOffsetMultiplier = onePieceRootHeightOffsetMultiplier;
-                target.onePieceHipWeightReduction = onePieceHipWeightReduction;
+                target.onePieceSpineWeightReduction = onePieceSpineWeightReduction;
                 target.onePieceMatchLongCoat = onePieceMatchLongCoat;
                 target.onePieceUseUpperLegColliders = onePieceUseUpperLegColliders;
                 target.onePieceUseLowerLegColliders = onePieceUseLowerLegColliders;

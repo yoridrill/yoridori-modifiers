@@ -156,7 +156,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
     public sealed class YMVRoidSkirtRefine : MonoBehaviour, IEditorOnly
     {
         public const float OnePieceSlimFrontRootRotationConstraintWeightDefault = 0.7f;
-        public const float OnePieceFrontRootRotationConstraintWeightDefault = 0.6f;
+        public const float OnePieceFrontRootRotationConstraintWeightDefault = 0.7f;
         public const float LongCoatFrontRootRotationConstraintWeightDefault = 0.8f;
         public const float LongCoatFrontUpperRotationConstraintWeightDefault = 0.8f;
         public const float LongCoatSideUpperRotationConstraintWeightDefault = 0.6f;
@@ -181,14 +181,15 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
         [Tooltip("Raise one-piece root bones along the root-side extension direction. 0 keeps original positions, 1 approaches the estimated convergence point.")]
         [Range(0.0f, 1.0f)]
-        public float onePieceRootHeightOffsetMultiplier = 0.0f;
+        public float onePieceRootHeightOffsetMultiplier = 0.35f;
 
         [Tooltip("Auto-detected or manually assigned one-piece skirt bones.")]
         public SkirtRefineBoneTargets onePieceBones = new SkirtRefineBoneTargets();
 
-        [Tooltip("Reduce Hip weight on vertices affected by one-piece skirt reweighting.")]
+        [Tooltip("Reduce Spine weight on vertices affected by one-piece skirt reweighting.")]
         [Range(0.0f, 1.0f)]
-        public float onePieceHipWeightReduction = 0.5f;
+        [FormerlySerializedAs("onePieceHipWeightReduction")]
+        public float onePieceSpineWeightReduction = 0.7f;
 
         [Tooltip("Bind one-piece skirt vertices to the refined long coat swing bones and remove the original one-piece swing bones.")]
         public bool onePieceMatchLongCoat = false;
@@ -378,8 +379,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             enableOnePieceRefine = false;
             onePiecePreset = OnePiecePreset.ShortSkirtLight;
             enableOnePieceBoneExtension = false;
-            onePieceRootHeightOffsetMultiplier = 0.4f;
-            onePieceHipWeightReduction = 0.5f;
+            onePieceRootHeightOffsetMultiplier = 0.35f;
+            onePieceSpineWeightReduction = 0.7f;
             onePieceMatchLongCoat = false;
             onePieceUseUpperLegColliders = true;
             onePieceUseLowerLegColliders = false;

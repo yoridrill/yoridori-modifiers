@@ -86,7 +86,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         private SerializedProperty onePieceTargetBoneCountProp;
         private SerializedProperty onePieceRootHeightOffsetMultiplierProp;
         private SerializedProperty onePieceBonesProp;
-        private SerializedProperty onePieceHipWeightReductionProp;
+        private SerializedProperty onePieceSpineWeightReductionProp;
         private SerializedProperty onePieceMatchLongCoatProp;
         private SerializedProperty onePieceUseUpperLegCollidersProp;
         private SerializedProperty onePieceUseLowerLegCollidersProp;
@@ -140,7 +140,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             onePieceTargetBoneCountProp = serializedObject.FindProperty("onePieceTargetBoneCount");
             onePieceRootHeightOffsetMultiplierProp = serializedObject.FindProperty("onePieceRootHeightOffsetMultiplier");
             onePieceBonesProp = serializedObject.FindProperty("onePieceBones");
-            onePieceHipWeightReductionProp = serializedObject.FindProperty("onePieceHipWeightReduction");
+            onePieceSpineWeightReductionProp = serializedObject.FindProperty("onePieceSpineWeightReduction");
             onePieceMatchLongCoatProp = serializedObject.FindProperty("onePieceMatchLongCoat");
             onePieceUseUpperLegCollidersProp = serializedObject.FindProperty("onePieceUseUpperLegColliders");
             onePieceUseLowerLegCollidersProp = serializedObject.FindProperty("onePieceUseLowerLegColliders");
@@ -698,8 +698,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                             onePieceUseFrontRootRotationConstraintsProp.boolValue = preset != OnePiecePreset.MatchLongCoat;
                             ApplyRotationConstraintWeightDefaults(preset);
                             onePieceMoveFrontRootsTowardUpperLegProp.floatValue = 0.0f;
-                            onePieceRootHeightOffsetMultiplierProp.floatValue = preset == OnePiecePreset.MatchLongCoat ? 0.0f : 0.4f;
-                            onePieceHipWeightReductionProp.floatValue = 0.5f;
+                            onePieceRootHeightOffsetMultiplierProp.floatValue = 0.35f;
+                            onePieceSpineWeightReductionProp.floatValue = 0.7f;
                         });
                 }
 
@@ -739,7 +739,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                                     enableOnePieceBoneExtensionProp,
                                     onePieceBoneExtensionModeProp,
                                     onePieceTargetBoneCountProp,
-                                    onePieceHipWeightReductionProp,
+                                    onePieceSpineWeightReductionProp,
                                     onePieceRootHeightOffsetMultiplierProp,
                                     null,
                                     null,
@@ -1031,10 +1031,14 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                         0.0f,
                         1.0f,
                         TT(
-                            "Hipのウェイトを弱める",
-                            "揺れボーン/脚ボーンを置き換える頂点で、Hipウェイトをこの割合だけ揺れボーン側へ移します。1でHipウェイトを完全に移します。",
-                            "Reduce Hip Weight",
-                            "Moves this fraction of Hip weight to swing bones on vertices affected by skirt/leg reweighting. 1 fully removes Hip weight there."));
+                            useOnePieceRootHeightOffset ? "Spineのウェイトを弱める" : "Hipのウェイトを弱める",
+                            useOnePieceRootHeightOffset
+                                ? "1段目より上では元ウェイトを維持し、遷移領域ではSpineウェイトをこの割合だけ揺れボーン側へ移します。1でSpineウェイトを完全に移します。"
+                                : "揺れボーン/脚ボーンを置き換える頂点で、Hipウェイトをこの割合だけ揺れボーン側へ移します。1でHipウェイトを完全に移します。",
+                            useOnePieceRootHeightOffset ? "Reduce Spine Weight" : "Reduce Hip Weight",
+                            useOnePieceRootHeightOffset
+                                ? "Preserves source weights above the first bone and moves this fraction of Spine weight to swing bones in the transition region. 1 fully removes Spine weight there."
+                                : "Moves this fraction of Hip weight to swing bones on vertices affected by skirt/leg reweighting. 1 fully removes Hip weight there."));
                 }
 
                 if (spineWeightReductionProp != null)
@@ -1848,8 +1852,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             serialized.FindProperty("onePieceUseFrontRootRotationConstraints").boolValue = preset != OnePiecePreset.MatchLongCoat;
             ApplySerializedRotationConstraintWeightDefaults(serialized, preset);
             serialized.FindProperty("onePieceMoveFrontRootsTowardUpperLeg").floatValue = 0.0f;
-            serialized.FindProperty("onePieceRootHeightOffsetMultiplier").floatValue = preset == OnePiecePreset.MatchLongCoat ? 0.0f : 0.4f;
-            serialized.FindProperty("onePieceHipWeightReduction").floatValue = 0.5f;
+            serialized.FindProperty("onePieceRootHeightOffsetMultiplier").floatValue = 0.35f;
+            serialized.FindProperty("onePieceSpineWeightReduction").floatValue = 0.7f;
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 

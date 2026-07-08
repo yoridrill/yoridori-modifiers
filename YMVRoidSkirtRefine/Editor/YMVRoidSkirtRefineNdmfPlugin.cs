@@ -475,9 +475,9 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             ReweightSkirtVertices(
                 avatarRoot,
                 chainReweightInfos,
-                hips,
-                component.onePieceHipWeightReduction,
                 animator != null ? animator.GetBoneTransform(HumanBodyBones.Spine) : null,
+                component.onePieceSpineWeightReduction,
+                null,
                 0.0f,
                 component,
                 false,
@@ -566,7 +566,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 .Where(c => c != null && c.SwingBones.Count > 0)
                 .ToList();
             var animator = avatarRoot.GetComponentInChildren<Animator>(true);
-            var hips = animator != null ? animator.GetBoneTransform(HumanBodyBones.Hips) : null;
+            var spine = animator != null ? animator.GetBoneTransform(HumanBodyBones.Spine) : null;
             MatchChainsToTarget(
                 avatarRoot,
                 chains,
@@ -574,9 +574,9 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 false,
                 null,
                 false,
-                hips,
-                component.onePieceHipWeightReduction,
-                animator != null ? animator.GetBoneTransform(HumanBodyBones.Spine) : null,
+                spine,
+                component.onePieceSpineWeightReduction,
+                null,
                 0.0f,
                 component,
                 false,
@@ -3020,11 +3020,13 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                         originalWeights[vi],
                         generated,
                         replacedSourceIndices,
+                        hipIndex,
                         hipWeightIndices,
                         spineWeightIndices,
                         earlyLegWeightIndices,
                         GetSkirtCoverage(hipCoverages, vi),
                         GetSkirtCoverage(spineCoverages, vi),
+                        !allowCoverageAboveFirstBone,
                         settings);
                     changedWeights = true;
                 }
@@ -3704,6 +3706,51 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             return adjacency;
         }
 
+        private static Dictionary<int, HashSet<int>> BuildMeshAdjacencyWithWeldedVertices(
+            Mesh mesh,
+            bool[] affectedVertices)
+        {
+            var adjacency = BuildMeshAdjacency(mesh, affectedVertices);
+            if (mesh == null || affectedVertices == null) return adjacency;
+
+            var vertices = mesh.vertices;
+            if (vertices == null || vertices.Length == 0) return adjacency;
+            var weldTolerance = Mathf.Max(1e-6f, mesh.bounds.size.magnitude * 1e-6f);
+            var buckets = new Dictionary<Vector3Int, List<int>>();
+            var count = Mathf.Min(vertices.Length, affectedVertices.Length);
+            for (var vi = 0; vi < count; vi++)
+            {
+                if (!affectedVertices[vi]) continue;
+                var vertex = vertices[vi];
+                var key = new Vector3Int(
+                    Mathf.RoundToInt(vertex.x / weldTolerance),
+                    Mathf.RoundToInt(vertex.y / weldTolerance),
+                    Mathf.RoundToInt(vertex.z / weldTolerance));
+                if (!buckets.TryGetValue(key, out var bucket))
+                {
+                    bucket = new List<int>();
+                    buckets[key] = bucket;
+                }
+                bucket.Add(vi);
+            }
+
+            foreach (var bucket in buckets.Values)
+            {
+                if (bucket.Count < 2) continue;
+                for (var i = 0; i < bucket.Count; i++)
+                {
+                    for (var j = i + 1; j < bucket.Count; j++)
+                    {
+                        if ((vertices[bucket[i]] - vertices[bucket[j]]).sqrMagnitude
+                            > weldTolerance * weldTolerance) continue;
+                        AddAdjacencyEdge(adjacency, affectedVertices, bucket[i], bucket[j]);
+                    }
+                }
+            }
+
+            return adjacency;
+        }
+
         private static void AddAdjacencyTriangle(Dictionary<int, HashSet<int>> adjacency, bool[] affectedVertices, int a, int b, int c)
         {
             AddAdjacencyEdge(adjacency, affectedVertices, a, b);
@@ -3838,15 +3885,27 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             List<(int idx, float w)> originalPairs,
             Dictionary<int, float> generatedWeights,
             HashSet<int> replacedSourceIndices,
+            int hipIndex,
             HashSet<int> hipWeightIndices,
             HashSet<int> spineWeightIndices,
             HashSet<int> earlyLegWeightIndices,
             float hipCoverage,
             float spineCoverage,
+            bool rebuildFullyFromGeometry,
             GeometricSkirtWeightSettings settings)
         {
             hipCoverage = Mathf.Clamp01(hipCoverage);
             spineCoverage = Mathf.Clamp01(spineCoverage);
+            var forceCoverage = Mathf.Max(hipCoverage, spineCoverage);
+            // One-piece vertices above the first generated bone retain their source weights.
+            // As soon as the transition begins, blend only the configured body anchor (Spine for
+            // one-piece) and geometric skirt weights so
+            // malformed source weights cannot leak back into the transition region.
+            if (rebuildFullyFromGeometry && hipIndex >= 0 && forceCoverage > 1e-6f)
+            {
+                return BuildFullyGeometricOutputWeights(generatedWeights, hipIndex, forceCoverage, settings);
+            }
+
             var pairs = originalPairs != null
                 ? new List<(int idx, float w)>(originalPairs)
                 : new List<(int idx, float w)>();
@@ -3860,7 +3919,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             MoveBodyWeightsToSkirtByCoverage(pairs, hipWeightIndices, hipCoverage, ref targetWeight);
             MoveBodyWeightsToSkirtByCoverage(pairs, spineWeightIndices, spineCoverage, ref targetWeight);
 
-            var forceCoverage = Mathf.Max(hipCoverage, spineCoverage);
+            MoveRemainingWeightsToSkirtByCoverage(pairs, forceCoverage, ref targetWeight);
             if (settings.ForceGeneratedWeightsForTargetVertices && targetWeight <= 1e-6f && forceCoverage > 1e-6f)
             {
                 targetWeight = forceCoverage;
@@ -3888,6 +3947,31 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             return pairs;
         }
 
+        private static List<(int idx, float w)> BuildFullyGeometricOutputWeights(
+            Dictionary<int, float> generatedWeights,
+            int hipIndex,
+            float skirtCoverage,
+            GeometricSkirtWeightSettings settings)
+        {
+            skirtCoverage = Mathf.Clamp01(skirtCoverage);
+            var pairs = new List<(int idx, float w)>();
+            if (hipIndex >= 0 && skirtCoverage < 1.0f - 1e-6f)
+            {
+                pairs.Add((hipIndex, 1.0f - skirtCoverage));
+            }
+
+            if (generatedWeights != null && skirtCoverage > 1e-6f)
+            {
+                foreach (var pair in generatedWeights)
+                {
+                    AddOrAccumulate(pairs, pair.Key, pair.Value * skirtCoverage);
+                }
+            }
+
+            PruneListWeights(pairs, settings.MaxInfluencesAfterPrune, settings.MinimumWeight);
+            return pairs;
+        }
+
         private static void MoveBodyWeightsToSkirtByCoverage(
             List<(int idx, float w)> pairs,
             HashSet<int> boneIndices,
@@ -3909,6 +3993,38 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 }
 
                 targetWeight += transfer;
+            }
+        }
+
+        private static void MoveRemainingWeightsToSkirtByCoverage(
+            List<(int idx, float w)> pairs,
+            float coverage,
+            ref float targetWeight)
+        {
+            if (pairs == null || pairs.Count == 0) return;
+            coverage = Mathf.Clamp01(coverage);
+            if (coverage <= 1e-6f) return;
+
+            for (var i = pairs.Count - 1; i >= 0; i--)
+            {
+                var pair = pairs[i];
+                if (pair.w <= 1e-6f)
+                {
+                    pairs.RemoveAt(i);
+                    continue;
+                }
+
+                var transfer = pair.w * coverage;
+                var retained = pair.w - transfer;
+                targetWeight += transfer;
+                if (retained > 1e-6f)
+                {
+                    pairs[i] = (pair.idx, retained);
+                }
+                else
+                {
+                    pairs.RemoveAt(i);
+                }
             }
         }
 
@@ -4039,11 +4155,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             var lowerY = minY - yPadding;
             var upperY = maxY + yPadding;
             var upperRadius = maxRadius + radiusPadding;
-            var allVertices = Enumerable
-                .Range(0, targetVertices.Length)
-                .Select(_ => true)
-                .ToArray();
-            var connectedToSeeds = BuildVerticesConnectedToSeeds(mesh, allVertices, seedVertices);
+            var connectedToSeeds = BuildVerticesConnectedToSeeds(mesh, verticesInCoatWeightedSubmesh, seedVertices);
 
             for (var vi = 0; vi < count; vi++)
             {
@@ -4067,9 +4179,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         {
             if (mesh == null || allowedVertices == null || seedVertices == null) return null;
 
-            var adjacency = BuildMeshAdjacency(mesh, allowedVertices);
-            if (adjacency.Count == 0) return null;
-
+            var adjacency = BuildMeshAdjacencyWithWeldedVertices(mesh, allowedVertices);
             var result = new bool[Mathf.Min(allowedVertices.Length, seedVertices.Length)];
             var queue = new Queue<int>();
             for (var i = 0; i < result.Length; i++)
@@ -4078,6 +4188,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 result[i] = true;
                 queue.Enqueue(i);
             }
+
+            if (adjacency.Count == 0) return result;
 
             while (queue.Count > 0)
             {
@@ -4105,11 +4217,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         {
             if (mesh == null || allowedVertices == null || targetVertices == null) return;
 
-            var allVertices = Enumerable
-                .Range(0, targetVertices.Length)
-                .Select(_ => true)
-                .ToArray();
-            var adjacency = BuildMeshAdjacency(mesh, allVertices);
+            var adjacency = BuildMeshAdjacencyWithWeldedVertices(mesh, allowedVertices);
             if (adjacency.Count == 0) return;
             FillTargetHolesWithoutProtectedWeights(adjacency, targetVertices, originalWeights, protectedWeightIndices);
 

@@ -406,6 +406,7 @@ public class MeshTrimmerComponentEditor : Editor
 
     private void DrawTargets(SerializedProperty targetsProp, PreviewState state)
     {
+        DrawTextureCompressionWarning(targetsProp);
         _targetsFoldout = EditorGUILayout.Foldout(_targetsFoldout, T("トリミング対象", "Trimming Targets"), true);
         if (!_targetsFoldout) return;
 
@@ -487,6 +488,42 @@ public class MeshTrimmerComponentEditor : Editor
             EditorGUILayout.EndHorizontal();
             EditorGUILayout.EndVertical();
         }
+    }
+
+    private void DrawTextureCompressionWarning(SerializedProperty targetsProp)
+    {
+        var textureNames = new List<string>();
+        var seen = new HashSet<Texture2D>();
+
+        for (int i = 0; i < targetsProp.arraySize; i++)
+        {
+            var targetProp = targetsProp.GetArrayElementAtIndex(i);
+            if (!targetProp.FindPropertyRelative("enabled").boolValue ||
+                !targetProp.FindPropertyRelative("enableTextureFill").boolValue ||
+                targetProp.FindPropertyRelative("texturePostProcessMode").enumValueIndex ==
+                (int)MeshTrimmerComponent.TexturePostProcessMode.None)
+            {
+                continue;
+            }
+
+            var texture = targetProp.FindPropertyRelative("mainTexture").objectReferenceValue as Texture2D;
+            if (texture == null || (texture.width % 4 == 0 && texture.height % 4 == 0) || !seen.Add(texture))
+            {
+                continue;
+            }
+
+            var assetPath = AssetDatabase.GetAssetPath(texture);
+            textureNames.Add(string.IsNullOrEmpty(assetPath) ? texture.name : System.IO.Path.GetFileName(assetPath));
+        }
+
+        if (textureNames.Count == 0) return;
+
+        EditorGUILayout.HelpBox(
+            T(
+                "テクスチャの幅や高さが4の倍数でないものが含まれています。 下記のテクスチャは圧縮をスキップします。",
+                "Some textures have a width or height that is not a multiple of 4. Compression will be skipped for the textures below.") +
+            "\n" + string.Join("\n", textureNames),
+            MessageType.Warning);
     }
 
     private static string BuildMaterialNamesText(SerializedProperty usagesProp)
@@ -1234,6 +1271,7 @@ public class MeshTrimmerNdmfPlugin : Plugin<MeshTrimmerNdmfPlugin>
     {
         var sequence = InPhase(BuildPhase.Transforming)
             .AfterPlugin("jp.yoridrill.ym-arm-patch")
+            .BeforePlugin("net.rs64.tex-trans-tool")
             .BeforePlugin("jp.yoridrill.ym-mtoon-to-liltoon")
             .BeforePlugin("com.github.kurotu.vrc-quest-tools");
 

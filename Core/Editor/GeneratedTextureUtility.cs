@@ -17,11 +17,23 @@ namespace YoridoriModifiers.Core.Editor
 
             ConfigureRuntimeGeneratedTexture(texture);
             texture.Apply(true, false);
+            if (texture.width % 4 != 0 || texture.height % 4 != 0)
+            {
+                LogUtility.Warning(
+                    "Yoridori Modifiers",
+                    "TextureCompression",
+                    $"Generated texture compression skipped for {context}; width and height must be multiples of 4. Keeping RGBA32.");
+                return texture;
+            }
+
             EditorUtility.CompressTexture(texture, TextureFormat.DXT5, TextureCompressionQuality.Normal);
             ConfigureRuntimeGeneratedTexture(texture);
             if (texture.format == TextureFormat.RGBA32)
             {
-                throw new InvalidOperationException($"Generated texture compression failed for {context}; format is still RGBA32.");
+                LogUtility.Warning(
+                    "Yoridori Modifiers",
+                    "TextureCompression",
+                    $"Generated texture compression failed for {context}; keeping RGBA32.");
             }
 
             return texture;
@@ -40,11 +52,23 @@ namespace YoridoriModifiers.Core.Editor
 
             output.SetPixels32(PackRgbNormalPixelsForUnity(texture.GetPixels32(0)));
             output.Apply(true, false);
+            if (output.width % 4 != 0 || output.height % 4 != 0)
+            {
+                LogUtility.Warning(
+                    "Yoridori Modifiers",
+                    "TextureCompression",
+                    $"Generated normal map compression skipped for {context}; width and height must be multiples of 4. Keeping RGBA32.");
+                return output;
+            }
+
             EditorUtility.CompressTexture(output, TextureFormat.DXT5, TextureCompressionQuality.Normal);
             ConfigureRuntimeGeneratedTexture(output);
             if (output.format == TextureFormat.RGBA32)
             {
-                throw new InvalidOperationException($"Generated normal map compression failed for {context}; format is still RGBA32.");
+                LogUtility.Warning(
+                    "Yoridori Modifiers",
+                    "TextureCompression",
+                    $"Generated normal map compression failed for {context}; keeping RGBA32.");
             }
 
             return output;

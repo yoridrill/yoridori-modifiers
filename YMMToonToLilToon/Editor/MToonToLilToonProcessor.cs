@@ -100,7 +100,7 @@ namespace YoridoriModifiers.MToonToLilToon
                 return;
             }
 
-            var convertedBySource = new Dictionary<Material, Material>();
+            var materialState = new MaterialConversionState(processingRoot, buildContext);
             onProgress?.Invoke("Converting materials...");
             foreach (var renderer in processingRoot.GetComponentsInChildren<Renderer>(true))
             {
@@ -109,17 +109,21 @@ namespace YoridoriModifiers.MToonToLilToon
                     lilToonShader,
                     component.globalOverrides,
                     component.useToonStandardFallback,
-                    convertedBySource,
-                    component.verboseLog,
-                    report,
-                    buildContext);
+                    materialState,
+                    report);
             }
 
-            var resolvedFaceShadowMaterial = faceShadowFaceMaterial != null
-                ? (convertedBySource.TryGetValue(faceShadowFaceMaterial, out var convertedFaceShadow)
-                    ? convertedFaceShadow
-                    : faceShadowFaceMaterial)
-                : null;
+            var resolvedFaceShadowMaterial = materialState.Resolve(faceShadowFaceMaterial);
+
+            var shouldMutateFaceMaterial = resolvedFaceShadowMaterial != null
+                && (component.enableFaceShadowTuning
+                    || component.disableShadowReceiveForFace
+                    || component.disableRimShadeForFace
+                    || component.disableBacklightStrengthForFace);
+            if (shouldMutateFaceMaterial)
+            {
+                resolvedFaceShadowMaterial = materialState.EnsureMutable(resolvedFaceShadowMaterial, "FaceShadow");
+            }
 
             if (resolvedFaceShadowMaterial != null && component.enableFaceShadowTuning)
             {
@@ -141,18 +145,18 @@ namespace YoridoriModifiers.MToonToLilToon
 
             if (component.useToonStandardFallback)
             {
-                ApplyToonStandardFallbackRampToMaterials(convertedBySource.Values);
+                ApplyToonStandardFallbackRampToMaterials(materialState.OwnedMaterials);
             }
 
-            ApplyBacklightExclusionToMouthMaterials(convertedBySource.Values);
+            ApplyBacklightExclusionToMouthMaterials(materialState.OwnedMaterials);
 
             var shouldApplySilhouetteTransparency = component.enableSilhouetteTransparency
                 && (route == ConversionRoute.Preview
                     || MToonToLilToonBuildTargetUtility.IsPcBuildTarget(processingRoot));
             if (shouldApplySilhouetteTransparency)
             {
-                var resolvedClothingMaterial = ResolveConvertedMaterial(silhouetteClothingMaterial, convertedBySource);
-                var resolvedBodyMaterial = ResolveConvertedMaterial(silhouetteBodyMaterial, convertedBySource);
+                var resolvedClothingMaterial = materialState.Resolve(silhouetteClothingMaterial);
+                var resolvedBodyMaterial = materialState.Resolve(silhouetteBodyMaterial);
                 var canModifyBodyMaterial = resolvedBodyMaterial != null
                     && resolvedBodyMaterial != silhouetteBodyMaterial;
                 onProgress?.Invoke("Creating silhouette transparency materials...");
@@ -202,14 +206,6 @@ namespace YoridoriModifiers.MToonToLilToon
                 ?? configuredMaterial;
         }
 
-        private static Material ResolveConvertedMaterial(
-            Material source,
-            IReadOnlyDictionary<Material, Material> convertedBySource)
-        {
-            if (source == null || convertedBySource == null) return source;
-            return convertedBySource.TryGetValue(source, out var converted) ? converted : source;
-        }
-
         private static bool IsCurrentVersionOfConfiguredMaterial(Material candidate, string sourceName)
         {
             if (candidate == null || string.IsNullOrEmpty(sourceName)) return false;
@@ -237,15 +233,121 @@ namespace YoridoriModifiers.MToonToLilToon
                 component);
         }
 
+        private sealed class MaterialConversionState
+        {
+            private readonly GameObject _root;
+            private readonly BuildContext _buildContext;
+            private readonly Dictionary<Material, Material> _currentBySource = new Dictionary<Material, Material>();
+            private readonly HashSet<Material> _ownedMaterials = new HashSet<Material>();
+
+            public MaterialConversionState(GameObject root, BuildContext buildContext)
+            {
+                _root = root;
+                _buildContext = buildContext;
+            }
+
+            public IEnumerable<Material> OwnedMaterials => _ownedMaterials;
+
+            public Material Resolve(Material source)
+            {
+                if (source == null) return null;
+                return _currentBySource.TryGetValue(source, out var current) ? current : source;
+            }
+
+            public bool IsOwned(Material material)
+            {
+                return material != null && _ownedMaterials.Contains(material);
+            }
+
+            public bool TryGetCurrent(Material source, out Material current)
+            {
+                if (source == null)
+                {
+                    current = null;
+                    return false;
+                }
+
+                return _currentBySource.TryGetValue(source, out current);
+            }
+
+            public void RegisterConverted(Material source, Material converted)
+            {
+                if (source == null || converted == null) return;
+                _currentBySource[source] = converted;
+                RegisterOwned(converted);
+            }
+
+            public void RegisterSkipped(Material source)
+            {
+                if (source == null || _currentBySource.ContainsKey(source)) return;
+                _currentBySource[source] = source;
+            }
+
+            public Material EnsureMutable(Material material, string suffix)
+            {
+                if (material == null || IsOwned(material)) return material;
+
+                // Some source materials are already lilToon and are not converted above.
+                // Clone them only at the point where a later option needs to mutate them.
+                var replacement = NdmfObjectRegistry.CreateReplacement(
+                    material,
+                    () => new Material(material) { name = $"{material.name}_{suffix}" });
+                RegisterOwned(replacement);
+                ReplaceRendererReferences(material, replacement);
+                RebindCurrentMaterials(material, replacement);
+                return replacement;
+            }
+
+            private void RegisterOwned(Material material)
+            {
+                if (material == null || !_ownedMaterials.Add(material)) return;
+                _buildContext?.AssetSaver.SaveAsset(material);
+            }
+
+            private void RebindCurrentMaterials(Material previous, Material replacement)
+            {
+                var keys = _currentBySource
+                    .Where(pair => pair.Value == previous)
+                    .Select(pair => pair.Key)
+                    .ToArray();
+                foreach (var key in keys)
+                {
+                    _currentBySource[key] = replacement;
+                }
+
+                if (!_currentBySource.ContainsKey(previous))
+                {
+                    _currentBySource[previous] = replacement;
+                }
+            }
+
+            private void ReplaceRendererReferences(Material previous, Material replacement)
+            {
+                if (_root == null || previous == null || replacement == null) return;
+                foreach (var renderer in _root.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (renderer == null) continue;
+                    var materials = renderer.sharedMaterials;
+                    var changed = false;
+                    for (var i = 0; i < materials.Length; i++)
+                    {
+                        if (materials[i] != previous) continue;
+                        materials[i] = replacement;
+                        changed = true;
+                    }
+
+                    if (changed) renderer.sharedMaterials = materials;
+                }
+            }
+        }
+
         private static void ProcessRenderer(
             Renderer renderer,
             Shader lilToonShader,
             LilToonGlobalOverrides globalOverrides,
             bool useToonStandardFallback,
-            IDictionary<Material, Material> convertedBySource,
-            bool verboseLog,
-            ConversionReport report,
-            BuildContext buildContext)
+            MaterialConversionState materialState,
+            ConversionReport report)
         {
             if (renderer == null) return;
 
@@ -266,7 +368,7 @@ namespace YoridoriModifiers.MToonToLilToon
                     continue;
                 }
 
-                if (convertedBySource != null && convertedBySource.TryGetValue(source, out var cached))
+                if (materialState != null && materialState.TryGetCurrent(source, out var cached))
                 {
                     result.Add(cached);
                     resultSourceIndices.Add(i);
@@ -284,15 +386,11 @@ namespace YoridoriModifiers.MToonToLilToon
                 if (MToonToLilToonMapper.TryConvert(source, lilToonShader, globalOverrides, useToonStandardFallback, out var converted, report))
                 {
                     NdmfObjectRegistry.RegisterReplacement(source, converted);
-                    buildContext?.AssetSaver.SaveAsset(converted);
+                    materialState?.RegisterConverted(source, converted);
                     ApplyMToon10ShadingShiftStrengthMask(source, converted, report);
                     result.Add(converted);
                     resultSourceIndices.Add(i);
                     report.ConvertedMaterialCount++;
-                    if (convertedBySource != null && source != null && !convertedBySource.ContainsKey(source))
-                    {
-                        convertedBySource[source] = converted;
-                    }
                 }
                 else
                 {
@@ -300,13 +398,10 @@ namespace YoridoriModifiers.MToonToLilToon
                     resultSourceIndices.Add(i);
                     report.SkippedMaterialCount++;
                     report.Warnings.Add(new ConversionWarning($"{source.name}: skipped (not convertible)"));
-                    if (convertedBySource != null && source != null && !convertedBySource.ContainsKey(source))
-                    {
-                        convertedBySource[source] = source;
-                    }
+                    materialState?.RegisterSkipped(source);
                 }
             }
-            ReindexTransparentQueues(result, resultSourceIndices, transparentRanks);
+            ReindexTransparentQueues(result, resultSourceIndices, transparentRanks, materialState);
             renderer.sharedMaterials = result.ToArray();
         }
 
@@ -352,12 +447,17 @@ namespace YoridoriModifiers.MToonToLilToon
             return result;
         }
 
-        private static void ReindexTransparentQueues(IReadOnlyList<Material> materials, IReadOnlyList<int> sourceIndices, IReadOnlyDictionary<int, int> transparentRanks)
+        private static void ReindexTransparentQueues(
+            IReadOnlyList<Material> materials,
+            IReadOnlyList<int> sourceIndices,
+            IReadOnlyDictionary<int, int> transparentRanks,
+            MaterialConversionState materialState)
         {
             for (var i = 0; i < materials.Count; i++)
             {
                 var material = materials[i];
                 if (material == null) continue;
+                if (materialState != null && !materialState.IsOwned(material)) continue;
                 if (i >= sourceIndices.Count) continue;
                 var sourceIndex = sourceIndices[i];
                 if (sourceIndex < 0) continue;

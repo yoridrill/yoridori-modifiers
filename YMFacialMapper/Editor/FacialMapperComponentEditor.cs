@@ -35,6 +35,8 @@ namespace YoridoriModifiers.FacialMapper
         private SerializedProperty _conflictPriorityProp;
         private SerializedProperty _writeDefaultsProp;
         private SerializedProperty _verboseLogProp;
+        private string _pendingShapeKeyPickerPath;
+        private int _pendingShapeKeyPickerIndex = -1;
 
         private void OnEnable()
         {
@@ -165,7 +167,7 @@ namespace YoridoriModifiers.FacialMapper
                 EditorGUILayout.LabelField(T("Neutral", "Neutral"), EditorStyles.boldLabel);
                 using (new EditorGUI.IndentLevelScope())
                 {
-                    DrawSlot("Shape Key", _neutralProp, true);
+                    DrawSlot("Shape Key", _neutralProp, true, "Neutral");
                 }
 
                 for (var i = 0; i < _handSignsProp.arraySize; i++)
@@ -177,8 +179,8 @@ namespace YoridoriModifiers.FacialMapper
                     EditorGUILayout.LabelField(sign.ToString(), EditorStyles.boldLabel);
                     using (new EditorGUI.IndentLevelScope())
                     {
-                        DrawSlot("Shape Key L", settingProp.FindPropertyRelative("left"), true);
-                        DrawSlot("Shape Key R", settingProp.FindPropertyRelative("right"), true);
+                        DrawSlot("Shape Key L", settingProp.FindPropertyRelative("left"), true, sign.ToString());
+                        DrawSlot("Shape Key R", settingProp.FindPropertyRelative("right"), true, sign.ToString());
                     }
                 }
 
@@ -186,7 +188,7 @@ namespace YoridoriModifiers.FacialMapper
             }
         }
 
-        private void DrawSlot(string label, SerializedProperty slotProp, bool compact)
+        private void DrawSlot(string label, SerializedProperty slotProp, bool compact, string pickerTitle)
         {
             var eyelidLeftProp = slotProp.FindPropertyRelative("stopEyelidLeft");
             var eyelidRightProp = slotProp.FindPropertyRelative("stopEyelidRight");
@@ -204,10 +206,10 @@ namespace YoridoriModifiers.FacialMapper
             eyelidRightProp.boolValue = GUI.Toggle(eyelidRightRect, eyelidRightProp.boolValue, "Eyelid-R", EditorStyles.miniButtonMid);
             visemeProp.boolValue = GUI.Toggle(visemeRect, visemeProp.boolValue, "Viseme", EditorStyles.miniButtonRight);
 
-            DrawShapeKeyList(shapeKeysProp, compact);
+            DrawShapeKeyList(shapeKeysProp, compact, pickerTitle);
         }
 
-        private void DrawShapeKeyList(SerializedProperty shapeKeysProp, bool compact)
+        private void DrawShapeKeyList(SerializedProperty shapeKeysProp, bool compact, string pickerTitle)
         {
             using (new EditorGUI.IndentLevelScope(compact ? 0 : 1))
             {
@@ -217,10 +219,32 @@ namespace YoridoriModifiers.FacialMapper
                     using (new EditorGUILayout.HorizontalScope())
                     {
                         itemProp.stringValue = EditorGUILayout.TextField(itemProp.stringValue);
+                        var inputRect = GUILayoutUtility.GetLastRect();
                         if (GUILayout.Button("-", EditorStyles.miniButton, GUILayout.Width(22f)))
                         {
                             shapeKeysProp.DeleteArrayElementAtIndex(i);
                             break;
+                        }
+
+                        if (_pendingShapeKeyPickerPath == shapeKeysProp.propertyPath
+                            && _pendingShapeKeyPickerIndex == i
+                            && Event.current.type == EventType.Repaint)
+                        {
+                            var propertyPath = _pendingShapeKeyPickerPath;
+                            var propertyIndex = _pendingShapeKeyPickerIndex;
+                            var popupAnchor = GUIUtility.GUIToScreenRect(inputRect);
+                            var component = (YMFacialMapper)target;
+                            var enteredNames = ReadShapeKeyNames(shapeKeysProp);
+                            var english = _language == Language.English;
+                            _pendingShapeKeyPickerPath = null;
+                            _pendingShapeKeyPickerIndex = -1;
+                            EditorApplication.delayCall += () => ShapeKeyPickerWindow.Show(
+                                popupAnchor,
+                                component,
+                                enteredNames,
+                                shapeKey => SetShapeKey(propertyPath, propertyIndex, shapeKey),
+                                english,
+                                pickerTitle);
                         }
                     }
                 }
@@ -233,9 +257,47 @@ namespace YoridoriModifiers.FacialMapper
                         var index = shapeKeysProp.arraySize;
                         shapeKeysProp.InsertArrayElementAtIndex(index);
                         shapeKeysProp.GetArrayElementAtIndex(index).stringValue = string.Empty;
+                        _pendingShapeKeyPickerPath = shapeKeysProp.propertyPath;
+                        _pendingShapeKeyPickerIndex = index;
                     }
                 }
             }
+        }
+
+        private void SetShapeKey(string propertyPath, int index, string shapeKey)
+        {
+            if (target == null
+                || string.IsNullOrWhiteSpace(propertyPath)
+                || index < 0
+                || string.IsNullOrWhiteSpace(shapeKey)) return;
+
+            var component = (YMFacialMapper)target;
+            Undo.RecordObject(component, "Set YM Facial Mapper Shape Key");
+            var current = new SerializedObject(component);
+            var list = current.FindProperty(propertyPath);
+            if (list == null || !list.isArray || index >= list.arraySize) return;
+
+            list.GetArrayElementAtIndex(index).stringValue = shapeKey;
+            current.ApplyModifiedProperties();
+            EditorUtility.SetDirty(component);
+            Repaint();
+        }
+
+        private static string[] ReadShapeKeyNames(SerializedProperty shapeKeysProp)
+        {
+            if (shapeKeysProp == null || !shapeKeysProp.isArray) return Array.Empty<string>();
+
+            var result = new List<string>();
+            for (var i = 0; i < shapeKeysProp.arraySize; i++)
+            {
+                var text = shapeKeysProp.GetArrayElementAtIndex(i).stringValue?.Trim();
+                if (string.IsNullOrEmpty(text)) continue;
+                var separator = Math.Max(text.LastIndexOf('='), text.LastIndexOf(':'));
+                var name = separator > 0 ? text.Substring(0, separator).Trim() : text;
+                if (!string.IsNullOrEmpty(name)) result.Add(name);
+            }
+
+            return result.Distinct(StringComparer.Ordinal).ToArray();
         }
 
         private void DrawConflictPriority()
@@ -424,6 +486,149 @@ namespace YoridoriModifiers.FacialMapper
         }
 
         private string T(string ja, string en) => _language == Language.Japanese ? ja : en;
+
+        private sealed class ShapeKeyPickerWindow : EditorWindow
+        {
+            private static readonly Vector2 WindowSize = new Vector2(320f, 360f);
+            private SkinnedMeshRenderer[] _renderers;
+            private string[] _enteredNames;
+            private Action<string> _onSelect;
+            private bool _english;
+            private string _title;
+            private int _rendererIndex;
+            private Vector2 _scroll;
+
+            private void Initialize(
+                SkinnedMeshRenderer[] renderers,
+                int rendererIndex,
+                string[] enteredNames,
+                Action<string> onSelect,
+                bool english,
+                string title)
+            {
+                _renderers = renderers ?? Array.Empty<SkinnedMeshRenderer>();
+                _rendererIndex = Mathf.Clamp(rendererIndex, 0, Math.Max(0, _renderers.Length - 1));
+                _enteredNames = enteredNames ?? Array.Empty<string>();
+                _onSelect = onSelect;
+                _english = english;
+                _title = title ?? string.Empty;
+            }
+
+            internal static void Show(
+                Rect activatorRect,
+                YMFacialMapper component,
+                string[] enteredNames,
+                Action<string> onSelect,
+                bool english,
+                string title)
+            {
+                if (component == null) return;
+                var descriptor = component.GetComponentInParent<VRCAvatarDescriptor>(true);
+                var root = descriptor != null ? descriptor.gameObject : component.gameObject;
+                var renderers = root.GetComponentsInChildren<SkinnedMeshRenderer>(true)
+                    .Where(renderer => renderer != null && renderer.sharedMesh != null && renderer.sharedMesh.blendShapeCount > 0)
+                    .ToArray();
+                if (renderers.Length == 0) return;
+
+                var preferred = ResolvePreferredRenderer(renderers, descriptor, enteredNames);
+                var preferredIndex = Math.Max(0, Array.IndexOf(renderers, preferred));
+                var window = CreateInstance<ShapeKeyPickerWindow>();
+                window.Initialize(renderers, preferredIndex, enteredNames, onSelect, english, title);
+                window.ShowAsDropDown(activatorRect, WindowSize);
+            }
+
+            private void OnGUI()
+            {
+                var labels = _renderers.Select(RendererLabel).ToArray();
+                var headerRect = EditorGUILayout.GetControlRect(false, EditorGUIUtility.singleLineHeight);
+                const float rendererLabelWidth = 56f;
+                const float rendererPopupWidth = 150f;
+                const float gap = 4f;
+                var popupRect = new Rect(
+                    headerRect.xMax - rendererPopupWidth,
+                    headerRect.y,
+                    rendererPopupWidth,
+                    headerRect.height);
+                var rendererLabelRect = new Rect(
+                    popupRect.x - gap - rendererLabelWidth,
+                    headerRect.y,
+                    rendererLabelWidth,
+                    headerRect.height);
+                var titleRect = new Rect(
+                    headerRect.x,
+                    headerRect.y,
+                    Mathf.Max(0f, rendererLabelRect.x - gap - headerRect.x),
+                    headerRect.height);
+                EditorGUI.LabelField(titleRect, _title, EditorStyles.boldLabel);
+                EditorGUI.LabelField(rendererLabelRect, "Renderer");
+                _rendererIndex = EditorGUI.Popup(popupRect, _rendererIndex, labels);
+
+                var renderer = CurrentRenderer;
+                if (renderer == null || renderer.sharedMesh == null) return;
+
+                var available = GetShapeKeyNames(renderer).ToArray();
+                var missing = _enteredNames.Where(name => !available.Contains(name, StringComparer.Ordinal)).ToArray();
+                if (missing.Length > 0)
+                {
+                    EditorGUILayout.HelpBox(
+                        (_english ? "Not found in this Renderer: " : "このRendererにない入力済みShape Key: ")
+                        + string.Join(", ", missing),
+                        MessageType.Warning);
+                }
+
+                EditorGUILayout.Space(2f);
+                _scroll = EditorGUILayout.BeginScrollView(_scroll);
+                foreach (var shapeKey in available)
+                {
+                    if (!GUILayout.Button(shapeKey, EditorStyles.miniButton)) continue;
+                    _onSelect?.Invoke(shapeKey);
+                    Close();
+                    GUIUtility.ExitGUI();
+                }
+                EditorGUILayout.EndScrollView();
+            }
+
+            private SkinnedMeshRenderer CurrentRenderer =>
+                _rendererIndex >= 0 && _rendererIndex < _renderers.Length ? _renderers[_rendererIndex] : null;
+
+            private static SkinnedMeshRenderer ResolvePreferredRenderer(
+                IReadOnlyList<SkinnedMeshRenderer> renderers,
+                VRCAvatarDescriptor descriptor,
+                IReadOnlyCollection<string> enteredNames)
+            {
+                if (descriptor != null && descriptor.VisemeSkinnedMesh != null && renderers.Contains(descriptor.VisemeSkinnedMesh))
+                {
+                    return descriptor.VisemeSkinnedMesh;
+                }
+
+                return renderers
+                    .OrderByDescending(renderer => enteredNames?.Count(name => HasShapeKey(renderer, name)) ?? 0)
+                    .ThenBy(RendererNameScore)
+                    .ThenByDescending(renderer => renderer.sharedMesh.blendShapeCount)
+                    .FirstOrDefault();
+            }
+
+            private static int RendererNameScore(SkinnedMeshRenderer renderer)
+            {
+                var name = renderer != null ? renderer.name.ToLowerInvariant() : string.Empty;
+                if (name.Contains("face")) return 0;
+                if (name.Contains("body")) return 1;
+                return 2;
+            }
+
+            private static bool HasShapeKey(SkinnedMeshRenderer renderer, string shapeKey) =>
+                renderer != null && renderer.sharedMesh != null && renderer.sharedMesh.GetBlendShapeIndex(shapeKey) >= 0;
+
+            private static IEnumerable<string> GetShapeKeyNames(SkinnedMeshRenderer renderer)
+            {
+                var mesh = renderer != null ? renderer.sharedMesh : null;
+                if (mesh == null) yield break;
+                for (var i = 0; i < mesh.blendShapeCount; i++) yield return mesh.GetBlendShapeName(i);
+            }
+
+            private static string RendererLabel(SkinnedMeshRenderer renderer) =>
+                renderer != null ? renderer.name : "(Missing)";
+        }
 
         private sealed class PresetNamePopup : EditorWindow
         {

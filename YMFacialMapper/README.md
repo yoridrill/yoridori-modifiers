@@ -12,6 +12,8 @@ VRoid、MMD など、決まった名前の Shape Key を持つアバターへ設
 
 Shape Key は1行に1つ入力します。通常は `Joy` のように名前だけで指定し、必要な場合は `Joy=50` のように 0-100 のウェイトも指定できます。
 
+ビルド時は、既存の Gesture Controller と Gesture パラメータで動く FX レイヤーに含まれる BlendShape カーブをビルド結果上で取り除き、YM Facial Mapper の表情へ置き換えます。元の Animator Controller と AnimationClip アセットは変更しません。
+
 ## Eyelid / Viseme
 
 `Eyelid-L` / `Eyelid-R` / `Viseme` は、表情エントリ全体の排他タグ兼トラッキング停止タグです。

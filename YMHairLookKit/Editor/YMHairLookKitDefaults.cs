@@ -63,6 +63,44 @@ namespace YoridoriModifiers.HairLookKit
             EditorUtility.SetDirty(component);
         }
 
+        internal static bool EnsureFaceAndEyebrowMaterialsDetected(
+            SerializedObject serializedComponent,
+            IReadOnlyList<Material> scannedMaterials)
+        {
+            if (serializedComponent == null || scannedMaterials == null || scannedMaterials.Count == 0) return false;
+
+            var changed = false;
+            var defaultFace = DetectDefaultFaceMaterial(scannedMaterials);
+            changed |= EnsureMaterialDetected(
+                serializedComponent.FindProperty(nameof(YMHairLookKitComponent.eyebrowFaceMaterial)),
+                scannedMaterials,
+                defaultFace);
+            changed |= EnsureMaterialDetected(
+                serializedComponent.FindProperty(nameof(YMHairLookKitComponent.fakeShadowFaceMaterial)),
+                scannedMaterials,
+                defaultFace);
+            changed |= EnsureMaterialDetected(
+                serializedComponent.FindProperty(nameof(YMHairLookKitComponent.eyebrowMaterial)),
+                scannedMaterials,
+                DetectDefaultEyebrowMaterial(scannedMaterials));
+            return changed;
+        }
+
+        private static bool EnsureMaterialDetected(
+            SerializedProperty materialProperty,
+            IReadOnlyList<Material> scannedMaterials,
+            Material detectedMaterial)
+        {
+            if (materialProperty == null) return false;
+
+            var currentMaterial = materialProperty.objectReferenceValue as Material;
+            if (currentMaterial != null && scannedMaterials.Contains(currentMaterial)) return false;
+            if (currentMaterial == detectedMaterial) return false;
+
+            materialProperty.objectReferenceValue = detectedMaterial;
+            return true;
+        }
+
         internal static Material DetectDefaultHairMaterial(IReadOnlyList<Material> materials)
         {
             if (materials == null) return null;

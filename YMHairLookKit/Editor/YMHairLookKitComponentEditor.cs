@@ -34,6 +34,13 @@ namespace YoridoriModifiers.HairLookKit
             _language = (Language)EditorPrefs.GetInt(PrefKeyLanguage, 0);
             var component = (YMHairLookKitComponent)target;
             _materials = YMHairLookKitDefaults.GetRendererMaterials(component);
+            var undoGroup = Undo.GetCurrentGroup();
+            serializedObject.Update();
+            YMHairLookKitDefaults.EnsureFaceAndEyebrowMaterialsDetected(serializedObject, _materials);
+            if (serializedObject.ApplyModifiedProperties())
+            {
+                Undo.CollapseUndoOperations(undoGroup);
+            }
         }
 
         public override void OnInspectorGUI()

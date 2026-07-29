@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -22,6 +23,9 @@ namespace YoridoriModifiers.FacialMapper
         private const string PrefKeyLanguage = "FacialMapperComponentEditor.Language";
         private const string PrefKeySettingsFoldout = "FacialMapperComponentEditor.SettingsFoldout";
         private const string PrefKeyAdvancedFoldout = "FacialMapperComponentEditor.AdvancedFoldout";
+        private const float ShapeKeyControlSpacing = 2f;
+        private const float ShapeKeyRemoveButtonWidth = 22f;
+        private const float ShapeKeyWeightFieldWidth = 48f;
 
         private Language _language;
         private bool _settingsFoldout;
@@ -167,7 +171,7 @@ namespace YoridoriModifiers.FacialMapper
                 EditorGUILayout.LabelField(T("Neutral", "Neutral"), EditorStyles.boldLabel);
                 using (new EditorGUI.IndentLevelScope())
                 {
-                    DrawSlot("Shape Key", _neutralProp, true, "Neutral");
+                    DrawSlot("Shape Key", _neutralProp, "Neutral");
                 }
 
                 for (var i = 0; i < _handSignsProp.arraySize; i++)
@@ -179,8 +183,8 @@ namespace YoridoriModifiers.FacialMapper
                     EditorGUILayout.LabelField(sign.ToString(), EditorStyles.boldLabel);
                     using (new EditorGUI.IndentLevelScope())
                     {
-                        DrawSlot("Shape Key L", settingProp.FindPropertyRelative("left"), true, sign.ToString());
-                        DrawSlot("Shape Key R", settingProp.FindPropertyRelative("right"), true, sign.ToString());
+                        DrawSlot("Shape Key L", settingProp.FindPropertyRelative("left"), sign.ToString());
+                        DrawSlot("Shape Key R", settingProp.FindPropertyRelative("right"), sign.ToString());
                     }
                 }
 
@@ -188,7 +192,7 @@ namespace YoridoriModifiers.FacialMapper
             }
         }
 
-        private void DrawSlot(string label, SerializedProperty slotProp, bool compact, string pickerTitle)
+        private void DrawSlot(string label, SerializedProperty slotProp, string pickerTitle)
         {
             var eyelidLeftProp = slotProp.FindPropertyRelative("stopEyelidLeft");
             var eyelidRightProp = slotProp.FindPropertyRelative("stopEyelidRight");
@@ -206,62 +210,125 @@ namespace YoridoriModifiers.FacialMapper
             eyelidRightProp.boolValue = GUI.Toggle(eyelidRightRect, eyelidRightProp.boolValue, "Eyelid-R", EditorStyles.miniButtonMid);
             visemeProp.boolValue = GUI.Toggle(visemeRect, visemeProp.boolValue, "Viseme", EditorStyles.miniButtonRight);
 
-            DrawShapeKeyList(shapeKeysProp, compact, pickerTitle);
+            DrawShapeKeyList(shapeKeysProp, pickerTitle);
         }
 
-        private void DrawShapeKeyList(SerializedProperty shapeKeysProp, bool compact, string pickerTitle)
+        private void DrawShapeKeyList(SerializedProperty shapeKeysProp, string pickerTitle)
         {
-            using (new EditorGUI.IndentLevelScope(compact ? 0 : 1))
+            for (var i = 0; i < shapeKeysProp.arraySize; i++)
             {
-                for (var i = 0; i < shapeKeysProp.arraySize; i++)
-                {
-                    var itemProp = shapeKeysProp.GetArrayElementAtIndex(i);
-                    using (new EditorGUILayout.HorizontalScope())
-                    {
-                        itemProp.stringValue = EditorGUILayout.TextField(itemProp.stringValue);
-                        var inputRect = GUILayoutUtility.GetLastRect();
-                        if (GUILayout.Button("-", EditorStyles.miniButton, GUILayout.Width(22f)))
-                        {
-                            shapeKeysProp.DeleteArrayElementAtIndex(i);
-                            break;
-                        }
+                var itemProp = shapeKeysProp.GetArrayElementAtIndex(i);
+                ParseShapeKey(itemProp.stringValue, out var shapeKeyName, out var shapeKeyWeight);
+                var rowRect = EditorGUI.IndentedRect(EditorGUILayout.GetControlRect(false));
+                var removeRect = new Rect(
+                    rowRect.x,
+                    rowRect.y,
+                    ShapeKeyRemoveButtonWidth,
+                    rowRect.height);
+                var weightRect = new Rect(
+                    rowRect.xMax - ShapeKeyWeightFieldWidth,
+                    rowRect.y,
+                    ShapeKeyWeightFieldWidth,
+                    rowRect.height);
+                var nameX = removeRect.xMax + ShapeKeyControlSpacing;
+                var nameRect = new Rect(
+                    nameX,
+                    rowRect.y,
+                    Mathf.Max(0f, weightRect.x - ShapeKeyControlSpacing - nameX),
+                    rowRect.height);
 
-                        if (_pendingShapeKeyPickerPath == shapeKeysProp.propertyPath
-                            && _pendingShapeKeyPickerIndex == i
-                            && Event.current.type == EventType.Repaint)
-                        {
-                            var propertyPath = _pendingShapeKeyPickerPath;
-                            var propertyIndex = _pendingShapeKeyPickerIndex;
-                            var popupAnchor = GUIUtility.GUIToScreenRect(inputRect);
-                            var component = (YMFacialMapper)target;
-                            var enteredNames = ReadShapeKeyNames(shapeKeysProp);
-                            var english = _language == Language.English;
-                            _pendingShapeKeyPickerPath = null;
-                            _pendingShapeKeyPickerIndex = -1;
-                            EditorApplication.delayCall += () => ShapeKeyPickerWindow.Show(
-                                popupAnchor,
-                                component,
-                                enteredNames,
-                                shapeKey => SetShapeKey(propertyPath, propertyIndex, shapeKey),
-                                english,
-                                pickerTitle);
-                        }
-                    }
+                if (GUI.Button(removeRect, "-", EditorStyles.miniButton))
+                {
+                    shapeKeysProp.DeleteArrayElementAtIndex(i);
+                    break;
                 }
 
-                using (new EditorGUILayout.HorizontalScope())
+                string nextShapeKeyName;
+                float nextShapeKeyWeight;
+                bool nameChanged;
+                bool weightChanged;
+                using (new EditorGUI.IndentLevelScope(-EditorGUI.indentLevel))
                 {
-                    GUILayout.FlexibleSpace();
-                    if (GUILayout.Button("+", EditorStyles.miniButton, GUILayout.Width(44f)))
-                    {
-                        var index = shapeKeysProp.arraySize;
-                        shapeKeysProp.InsertArrayElementAtIndex(index);
-                        shapeKeysProp.GetArrayElementAtIndex(index).stringValue = string.Empty;
-                        _pendingShapeKeyPickerPath = shapeKeysProp.propertyPath;
-                        _pendingShapeKeyPickerIndex = index;
-                    }
+                    EditorGUI.BeginChangeCheck();
+                    nextShapeKeyName = EditorGUI.TextField(nameRect, shapeKeyName);
+                    nameChanged = EditorGUI.EndChangeCheck();
+
+                    EditorGUI.BeginChangeCheck();
+                    nextShapeKeyWeight = EditorGUI.DelayedFloatField(weightRect, shapeKeyWeight);
+                    weightChanged = EditorGUI.EndChangeCheck();
+                }
+
+                GUI.Label(
+                    weightRect,
+                    new GUIContent(string.Empty, T("ウェイト (0～100)", "Weight (0–100)")),
+                    GUIStyle.none);
+
+                if (nameChanged || weightChanged)
+                {
+                    itemProp.stringValue = FormatShapeKey(nextShapeKeyName, nextShapeKeyWeight);
+                }
+
+                if (_pendingShapeKeyPickerPath == shapeKeysProp.propertyPath
+                    && _pendingShapeKeyPickerIndex == i
+                    && Event.current.type == EventType.Repaint)
+                {
+                    var propertyPath = _pendingShapeKeyPickerPath;
+                    var propertyIndex = _pendingShapeKeyPickerIndex;
+                    var popupAnchor = GUIUtility.GUIToScreenRect(nameRect);
+                    var component = (YMFacialMapper)target;
+                    var enteredNames = ReadShapeKeyNames(shapeKeysProp);
+                    var english = _language == Language.English;
+                    _pendingShapeKeyPickerPath = null;
+                    _pendingShapeKeyPickerIndex = -1;
+                    EditorApplication.delayCall += () => ShapeKeyPickerWindow.Show(
+                        popupAnchor,
+                        component,
+                        enteredNames,
+                        shapeKey => SetShapeKey(propertyPath, propertyIndex, shapeKey),
+                        english,
+                        pickerTitle);
                 }
             }
+
+            var addRowRect = EditorGUI.IndentedRect(EditorGUILayout.GetControlRect(false));
+            var addButtonRect = new Rect(addRowRect.x, addRowRect.y, 44f, addRowRect.height);
+            if (GUI.Button(addButtonRect, "+", EditorStyles.miniButton))
+            {
+                var index = shapeKeysProp.arraySize;
+                shapeKeysProp.InsertArrayElementAtIndex(index);
+                shapeKeysProp.GetArrayElementAtIndex(index).stringValue = string.Empty;
+                _pendingShapeKeyPickerPath = shapeKeysProp.propertyPath;
+                _pendingShapeKeyPickerIndex = index;
+            }
+        }
+
+        private static void ParseShapeKey(string raw, out string name, out float weight)
+        {
+            var text = raw?.Trim() ?? string.Empty;
+            var separator = Math.Max(text.LastIndexOf('='), text.LastIndexOf(':'));
+
+            name = text;
+            weight = 100f;
+            if (separator <= 0 || separator >= text.Length - 1) return;
+
+            name = text.Substring(0, separator).Trim();
+            var valueText = text.Substring(separator + 1).Trim();
+            if (!float.TryParse(valueText, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+                || float.IsNaN(parsed)
+                || float.IsInfinity(parsed)) return;
+
+            weight = Mathf.Clamp(parsed, 0f, 100f);
+        }
+
+        private static string FormatShapeKey(string name, float weight)
+        {
+            var trimmedName = name?.Trim() ?? string.Empty;
+            if (float.IsNaN(weight) || float.IsInfinity(weight)) weight = 100f;
+            weight = Mathf.Clamp(weight, 0f, 100f);
+
+            return Mathf.Approximately(weight, 100f)
+                ? trimmedName
+                : $"{trimmedName}={weight.ToString("0.###", CultureInfo.InvariantCulture)}";
         }
 
         private void SetShapeKey(string propertyPath, int index, string shapeKey)

@@ -10,7 +10,7 @@ VRoid、MMD など、決まった名前の Shape Key を持つアバターへ設
 3. 必要に応じて `Eyelid-L` / `Eyelid-R` / `Viseme` をONにします。
 4. ビルド時に NDMF が FX Animator に YM Facial Mapper 用レイヤーを追加します。
 
-Shape Key は1行に1つ入力します。通常は `Joy` のように名前だけで指定し、必要な場合は `Joy=50` のように 0-100 のウェイトも指定できます。
+Shape Key は1行に1つ指定します。名前の隣にある数値欄で 0～100 のウェイトを調整できます。ウェイトの初期値は100です。以前のバージョンで保存した設定やプリセットもそのまま使用できます。
 
 ビルド時は、既存の Gesture Controller と Gesture パラメータで動く FX レイヤーに含まれる BlendShape カーブをビルド結果上で取り除き、YM Facial Mapper の表情へ置き換えます。元の Animator Controller と AnimationClip アセットは変更しません。
 

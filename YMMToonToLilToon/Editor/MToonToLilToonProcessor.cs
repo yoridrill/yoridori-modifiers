@@ -74,6 +74,7 @@ namespace YoridoriModifiers.MToonToLilToon
             var faceShadowFaceMaterial = ResolveCurrentMaterialReference(component.faceShadowFaceMaterial, currentMaterials);
             var silhouetteClothingMaterial = ResolveCurrentMaterialReference(component.silhouetteClothingMaterial, currentMaterials);
             var silhouetteBodyMaterial = ResolveCurrentMaterialReference(component.silhouetteBodyMaterial, currentMaterials);
+            var meshSettingsTargets = CollectMToonRenderers(processingRoot);
 
             if (component.isPreviewing)
             {
@@ -112,6 +113,8 @@ namespace YoridoriModifiers.MToonToLilToon
                     materialState,
                     report);
             }
+
+            ApplyMeshSettingsOverrides(component, processingRoot, meshSettingsTargets, report);
 
             var resolvedFaceShadowMaterial = materialState.Resolve(faceShadowFaceMaterial);
 
@@ -192,6 +195,115 @@ namespace YoridoriModifiers.MToonToLilToon
                 .Where(material => material != null)
                 .Distinct()
                 .ToList();
+        }
+
+        private static IReadOnlyList<Renderer> CollectMToonRenderers(GameObject processingRoot)
+        {
+            if (processingRoot == null) return System.Array.Empty<Renderer>();
+
+            return processingRoot.GetComponentsInChildren<Renderer>(true)
+                .Where(renderer => renderer != null
+                    && renderer.sharedMaterials.Any(MToonDetector.IsMToonLike))
+                .ToList();
+        }
+
+        private static void ApplyMeshSettingsOverrides(
+            MToonToLilToonComponent component,
+            GameObject processingRoot,
+            IReadOnlyList<Renderer> targets,
+            ConversionReport report)
+        {
+            if (component == null
+                || processingRoot == null
+                || targets == null
+                || targets.Count == 0
+                || (!component.overrideBounds && !component.overrideAnchor))
+            {
+                return;
+            }
+
+            Transform boundsRootBone = null;
+            if (component.overrideBounds)
+            {
+                boundsRootBone = ResolveMeshSettingTransform(
+                    component.boundsRootBone,
+                    component.ResolveAutomaticBoundsRootBone(),
+                    processingRoot.transform,
+                    "Bounds root bone",
+                    report);
+            }
+
+            Transform anchorOverride = null;
+            if (component.overrideAnchor)
+            {
+                anchorOverride = ResolveMeshSettingTransform(
+                    component.anchorOverride,
+                    component.ResolveAutomaticAnchorOverride(),
+                    processingRoot.transform,
+                    "Anchor Override",
+                    report);
+            }
+
+            var extents = new Vector3(
+                Mathf.Max(0f, component.boundsExtents.x),
+                Mathf.Max(0f, component.boundsExtents.y),
+                Mathf.Max(0f, component.boundsExtents.z));
+            var bounds = new Bounds(Vector3.zero, extents * 2f);
+
+            for (var i = 0; i < targets.Count; i++)
+            {
+                var renderer = targets[i];
+                if (renderer == null) continue;
+
+                if (component.overrideAnchor && anchorOverride != null)
+                {
+                    renderer.probeAnchor = anchorOverride;
+                }
+
+                if (component.overrideBounds
+                    && boundsRootBone != null
+                    && renderer is SkinnedMeshRenderer skinnedMeshRenderer)
+                {
+                    skinnedMeshRenderer.rootBone = boundsRootBone;
+                    skinnedMeshRenderer.localBounds = bounds;
+                }
+            }
+        }
+
+        private static Transform ResolveMeshSettingTransform(
+            Transform configured,
+            Transform automatic,
+            Transform processingRoot,
+            string settingName,
+            ConversionReport report)
+        {
+            var resolved = configured != null ? configured : automatic;
+            if (resolved == null)
+            {
+                report?.Warnings.Add(new ConversionWarning(
+                    $"Mesh settings: {settingName} could not be resolved from the Humanoid avatar; this override was skipped."));
+                return null;
+            }
+
+            if (!IsDescendantOrSelf(resolved, processingRoot))
+            {
+                report?.Warnings.Add(new ConversionWarning(
+                    $"Mesh settings: {settingName} points outside the avatar; this override was skipped."));
+                return null;
+            }
+
+            return resolved;
+        }
+
+        private static bool IsDescendantOrSelf(Transform target, Transform root)
+        {
+            if (target == null || root == null) return false;
+            for (var current = target; current != null; current = current.parent)
+            {
+                if (current == root) return true;
+            }
+
+            return false;
         }
 
         private static Material ResolveCurrentMaterialReference(Material configuredMaterial, IReadOnlyList<Material> currentMaterials)

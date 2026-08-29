@@ -15,7 +15,7 @@ Unity 2022.3 / VCC / ALCOM で作成した VRChat Avatars Project での利用�
   - テクスチャの透明余白の塗り足しにも対応します。
 - `YM MToon to lilToon`
   - MToon 1.0 / 互換 MToon マテリアルを lilToon へ変換します。
-  - lilToon 固有機能の一括設定や顔影調整を必要に応じて有効化できます。
+  - lilToon 固有機能、変換対象RendererのBounds / Anchor Override一括上書き、顔影調整を必要に応じて有効化できます。
 - `YM Hair Look Kit`
   - 髪マテリアルの結合、眉ステンシル、FakeShadow、輪郭線補正を非破壊で適用します。
   - `YM MToon to lilToon` と同じアバターにある場合は、変換後の lilToon マテリアルに対して処理できます。

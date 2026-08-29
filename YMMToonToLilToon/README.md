@@ -9,6 +9,7 @@ MToon 1.0 / 互換 MToon マテリアルを lilToon へ変換するための Uni
 - Build 時に NDMF フェーズで自動変換
 - Editor 上での非破壊 Preview
 - lilToon 固有機能の一括設定
+- 変換対象 Renderer の Bounds / Anchor Override 一括上書き
 - 服越しに体の影を見せるシルエット透け（ステンシル + 屈折ぼかし）
 - 顔影調整
 - Advanced での詳細ログと Preview 復旧機能
@@ -22,8 +23,16 @@ MToon 1.0 / 互換 MToon マテリアルを lilToon へ変換するための Uni
 ## 使い方
 
 1. 対象アバター配下に `Yoridori Modifiers/YM MToon to lilToon` を追加
-2. 必要に応じて lilToon 固有機能の一括設定や顔影調整を有効化
+2. 必要に応じて lilToon 固有機能、メッシュ設定の一括上書き、顔影調整を有効化
 3. シルエット透けを使う場合は、服と体のマテリアル、影の色、不透明度を指定。必要に応じて屈折ぼかしを有効化
+
+## メッシュ設定の一括上書き
+
+- 変換前に MToon マテリアルを1つ以上使用している Renderer だけを対象にします。
+- `Bounds` は対象の SkinnedMeshRenderer に適用します。有効化時に Root Boneへ Humanoid の `Hips` を自動設定します。範囲（Extents）の初期値は `(1, 1, 1)`、Center は常に `(0, 0, 0)` です。
+- `Anchor Override` は対象のすべての Renderer に適用するため、MeshRenderer も対象になります。有効化時に Humanoid の `Chest` を自動設定し、Chest が存在しない場合は `Head` を使用します。
+- 自動設定後の Root Bone と Anchor Override は、手動で任意の Transform に変更できます。
+- 通常追加時は両設定とも無効です。`Add Component with VRoid Defaults` では有効化した状態で追加します。
 
 ## シルエット透け
 
@@ -79,6 +88,9 @@ MToon 1.0 / 互換 MToon マテリアルを lilToon へ変換するための Uni
   - 逆光ライト（影色からの自動色設定 / 指定色）
   - 距離フェード
   - 輪郭線の Z Bias
+- `メッシュ設定の一括上書き`
+  - Bounds（Root Bone / 範囲）
+  - Anchor Override
 - `特定部位への調整`
   - `顔の影を整える`
     - マスクタイプ

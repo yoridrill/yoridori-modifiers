@@ -66,6 +66,8 @@ namespace YoridoriModifiers.MToonToLilToon
             DrawSilhouetteTransparencySection(component);
             var silhouetteSettingsChanged = EditorGUI.EndChangeCheck();
 
+            var meshSettingsChanged = DrawMeshSettingsOverrides(component);
+
             EditorGUI.BeginChangeCheck();
             directValueChanged |= DrawAdvancedSection(component);
             var advancedSettingsChanged = EditorGUI.EndChangeCheck();
@@ -82,6 +84,7 @@ namespace YoridoriModifiers.MToonToLilToon
                 && previewRelevantChanged
                 && !directValueChanged
                 && globalOverridesChanged
+                && !meshSettingsChanged
                 && !hairSettingsChanged
                 && !faceShadowSettingsChanged
                 && !silhouetteSettingsChanged
@@ -118,6 +121,11 @@ namespace YoridoriModifiers.MToonToLilToon
             builder.Append('|').Append(component.disableShadowReceiveForFace);
             builder.Append('|').Append(component.disableRimShadeForFace);
             builder.Append('|').Append(component.disableBacklightStrengthForFace);
+            builder.Append('|').Append(component.overrideBounds);
+            AppendObject(builder, component.boundsRootBone);
+            AppendVector(builder, component.boundsExtents);
+            builder.Append('|').Append(component.overrideAnchor);
+            AppendObject(builder, component.anchorOverride);
             builder.Append('|').Append(component.useToonStandardFallback);
             builder.Append('|').Append(component.verboseLog);
             AppendGlobalOverrides(builder, component.globalOverrides);
@@ -286,6 +294,101 @@ namespace YoridoriModifiers.MToonToLilToon
             return EditorGUI.EndChangeCheck();
         }
 
+        private bool DrawMeshSettingsOverrides(MToonToLilToonComponent component)
+        {
+            EditorGUI.BeginChangeCheck();
+            EditorGUILayout.Space(SectionTopSpacing);
+            DrawUnderlinedSectionTitle(
+                TT(
+                    "メッシュ設定の一括上書き",
+                    "変換前にMToonマテリアルを使用しているRendererだけを対象に、BoundsとAnchor Overrideを上書きします。",
+                    "Bulk Mesh Settings Overrides",
+                    "Overrides Bounds and Anchor Override only for Renderers using an MToon material before conversion."));
+            EditorGUILayout.Space(2f);
+
+            var overrideBoundsProp = serializedObject.FindProperty(nameof(MToonToLilToonComponent.overrideBounds));
+            var boundsRootBoneProp = serializedObject.FindProperty(nameof(MToonToLilToonComponent.boundsRootBone));
+            var boundsExtentsProp = serializedObject.FindProperty(nameof(MToonToLilToonComponent.boundsExtents));
+
+            var boundsRootRow = EditorGUILayout.GetControlRect();
+            GetOverrideColumnRects(boundsRootRow, out var categoryRect, out var itemLabelRect, out var valueRect);
+            var boundsWasEnabled = overrideBoundsProp.boolValue;
+            DrawCategoryColumn(
+                categoryRect,
+                overrideBoundsProp,
+                TT(
+                    "Bounds",
+                    "MToonを使用しているSkinned Mesh RendererのRoot BoneとBoundsを上書きします。Centerは常に0です。",
+                    "Bounds",
+                    "Overrides Root Bone and Bounds on Skinned Mesh Renderers using MToon. Center is always zero."),
+                showToggle: true);
+            if (!boundsWasEnabled && overrideBoundsProp.boolValue)
+            {
+                boundsRootBoneProp.objectReferenceValue = component.ResolveAutomaticBoundsRootBone();
+            }
+            if (overrideBoundsProp.boolValue)
+            {
+                EditorGUI.LabelField(
+                    itemLabelRect,
+                    TT(
+                        "ルートボーン",
+                        "有効化時にHumanoidのHipsを自動設定します。必要に応じて任意のTransformへ変更できます。",
+                        "Root Bone",
+                        "Automatically set to Humanoid Hips when enabled. You can select any Transform afterward."));
+                EditorGUI.PropertyField(valueRect, boundsRootBoneProp, GUIContent.none);
+
+                var extentsRow = EditorGUILayout.GetControlRect();
+                GetOverrideColumnRects(extentsRow, out categoryRect, out itemLabelRect, out valueRect);
+                DrawCategoryColumn(categoryRect, overrideBoundsProp, string.Empty, showToggle: false);
+                EditorGUI.LabelField(
+                    itemLabelRect,
+                    TT(
+                        "範囲",
+                        "BoundsのExtentsです。初期値1は、中心から各方向へ1mの範囲を表します。",
+                        "Extents",
+                        "Bounds extents. The default value 1 represents one meter from the center in each direction."));
+                var extents = EditorGUI.Vector3Field(valueRect, GUIContent.none, boundsExtentsProp.vector3Value);
+                boundsExtentsProp.vector3Value = new Vector3(
+                    Mathf.Max(0f, extents.x),
+                    Mathf.Max(0f, extents.y),
+                    Mathf.Max(0f, extents.z));
+            }
+            EditorGUILayout.Space(OverrideGroupSpacing);
+
+            var overrideAnchorProp = serializedObject.FindProperty(nameof(MToonToLilToonComponent.overrideAnchor));
+            var anchorOverrideProp = serializedObject.FindProperty(nameof(MToonToLilToonComponent.anchorOverride));
+            var anchorRow = EditorGUILayout.GetControlRect();
+            GetOverrideColumnRects(anchorRow, out categoryRect, out itemLabelRect, out valueRect);
+            var anchorWasEnabled = overrideAnchorProp.boolValue;
+            DrawCategoryColumn(
+                categoryRect,
+                overrideAnchorProp,
+                TT(
+                    "Anchor Override",
+                    "MToonを使用しているすべてのRendererへAnchor Overrideを設定します。Mesh Rendererも対象です。",
+                    "Anchor Override",
+                    "Sets Anchor Override on all Renderers using MToon, including Mesh Renderers."),
+                showToggle: true);
+            if (!anchorWasEnabled && overrideAnchorProp.boolValue)
+            {
+                anchorOverrideProp.objectReferenceValue = component.ResolveAutomaticAnchorOverride();
+            }
+            if (overrideAnchorProp.boolValue)
+            {
+                EditorGUI.LabelField(
+                    itemLabelRect,
+                    TT(
+                        "ボーン",
+                        "有効化時にHumanoidのChestを自動設定し、Chestがない場合はHeadを設定します。必要に応じて任意のTransformへ変更できます。",
+                        "Bone",
+                        "Automatically set to Humanoid Chest when enabled, or Head when Chest is unavailable. You can select any Transform afterward."));
+                EditorGUI.PropertyField(valueRect, anchorOverrideProp, GUIContent.none);
+            }
+            EditorGUILayout.Space(OverrideGroupSpacing);
+
+            return EditorGUI.EndChangeCheck();
+        }
+
         private static void DrawSingleOverrideToggle(SerializedProperty valueProp, string label)
         {
             var rowRect = EditorGUILayout.GetControlRect();
@@ -301,6 +404,11 @@ namespace YoridoriModifiers.MToonToLilToon
         }
 
         private static void DrawUnderlinedSectionTitle(string title)
+        {
+            DrawUnderlinedSectionTitle(new GUIContent(title));
+        }
+
+        private static void DrawUnderlinedSectionTitle(GUIContent title)
         {
             EditorGUILayout.LabelField(title, EditorStyles.boldLabel);
             var lineRect = EditorGUILayout.GetControlRect(false, 1f);

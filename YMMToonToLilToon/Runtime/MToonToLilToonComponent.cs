@@ -34,6 +34,11 @@ namespace YoridoriModifiers.MToonToLilToon
         public bool disableShadowReceiveForFace;
         public bool disableRimShadeForFace;
         public bool disableBacklightStrengthForFace;
+        public bool overrideBounds;
+        public Transform boundsRootBone;
+        public Vector3 boundsExtents = Vector3.one;
+        public bool overrideAnchor;
+        public Transform anchorOverride;
         public bool useToonStandardFallback;
         public LilToonGlobalOverrides globalOverrides = new();
         public bool verboseLog;
@@ -45,5 +50,61 @@ namespace YoridoriModifiers.MToonToLilToon
         [HideInInspector] public int skippedMaterialCount;
         [HideInInspector] public List<string> warnings = new();
         [HideInInspector] public List<string> unsupportedProperties = new();
+
+        public void AutoAssignMeshSettingBones()
+        {
+            var animator = FindHumanoidAnimator();
+            if (animator == null) return;
+
+            boundsRootBone = animator.GetBoneTransform(HumanBodyBones.Hips);
+            anchorOverride = animator.GetBoneTransform(HumanBodyBones.Chest)
+                ?? animator.GetBoneTransform(HumanBodyBones.Head);
+        }
+
+        public Transform ResolveAutomaticBoundsRootBone()
+        {
+            return FindHumanoidAnimator()?.GetBoneTransform(HumanBodyBones.Hips);
+        }
+
+        public Transform ResolveAutomaticAnchorOverride()
+        {
+            var animator = FindHumanoidAnimator();
+            if (animator == null) return null;
+            return animator.GetBoneTransform(HumanBodyBones.Chest)
+                ?? animator.GetBoneTransform(HumanBodyBones.Head);
+        }
+
+        private Animator FindHumanoidAnimator()
+        {
+            var parentAnimators = GetComponentsInParent<Animator>(true);
+            for (var i = 0; i < parentAnimators.Length; i++)
+            {
+                if (parentAnimators[i] != null
+                    && parentAnimators[i].avatar != null
+                    && parentAnimators[i].avatar.isHuman)
+                {
+                    return parentAnimators[i];
+                }
+            }
+
+            var root = transform;
+            while (root.parent != null)
+            {
+                root = root.parent;
+            }
+
+            var childAnimators = root.GetComponentsInChildren<Animator>(true);
+            for (var i = 0; i < childAnimators.Length; i++)
+            {
+                if (childAnimators[i] != null
+                    && childAnimators[i].avatar != null
+                    && childAnimators[i].avatar.isHuman)
+                {
+                    return childAnimators[i];
+                }
+            }
+
+            return null;
+        }
     }
 }

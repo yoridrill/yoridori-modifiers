@@ -238,6 +238,9 @@ namespace YoridoriModifiers.Core.Editor
             component.faceShadowFaceMaterial = faceMaterial;
             component.faceShadowSdfTexture = LoadDefaultFaceShadowMaskTexture();
             component.silhouetteBlur = MToonToLilToonComponent.DefaultSilhouetteBlur;
+            component.overrideBounds = true;
+            component.overrideAnchor = true;
+            component.AutoAssignMeshSettingBones();
             EditorUtility.SetDirty(component);
         }
 

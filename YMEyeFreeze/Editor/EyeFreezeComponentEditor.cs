@@ -1,4 +1,5 @@
 using System.Linq;
+using nadena.dev.ndmf;
 using UnityEditor;
 using UnityEngine;
 using VRC.SDK3.Avatars.Components;
@@ -122,10 +123,15 @@ namespace YoridoriModifiers.EyeFreeze
         {
             if (descriptor == null || component == null) return;
 
-            var parameterName = string.IsNullOrWhiteSpace(component.parameterName)
-                ? "YM/EyeFreeze"
-                : component.parameterName.Trim();
+            var parameterName = EyeFreezeParameterProvider.NormalizeParameterName(component.parameterName);
             if (string.IsNullOrWhiteSpace(parameterName)) return;
+
+            var remappings = ParameterInfo.ForUI.GetParameterRemappingsAt(component, false);
+            if (remappings.TryGetValue((ParameterNamespace.Animator, parameterName), out var remapping) &&
+                !string.IsNullOrWhiteSpace(remapping.ParameterName))
+            {
+                parameterName = remapping.ParameterName;
+            }
 
             var parameters = descriptor.expressionParameters;
             var list = parameters != null && parameters.parameters != null
@@ -133,30 +139,50 @@ namespace YoridoriModifiers.EyeFreeze
                 : System.Array.Empty<VRC.SDK3.Avatars.ScriptableObjects.VRCExpressionParameters.Parameter>();
 
             var existing = list.FirstOrDefault(parameter => parameter != null && parameter.name == parameterName);
-            if (existing != null)
+            if (existing != null && existing.valueType !=
+                VRC.SDK3.Avatars.ScriptableObjects.VRCExpressionParameters.ValueType.Bool)
             {
                 EditorGUILayout.HelpBox(
                     T(
-                        $"Expression Parameters に `{parameterName}` が既に存在します。別の設定と名前が衝突している可能性があるため、YM Eye Freeze のパラメータ名を変更してください。",
-                        $"`{parameterName}` already exists in Expression Parameters. It may conflict with another setup, so change the YM Eye Freeze parameter name."),
-                    MessageType.Warning);
+                        $"`{parameterName}` はExpression Parametersで{existing.valueType}ですが、YM Eye FreezeにはBoolが必要です。",
+                        $"`{parameterName}` is {existing.valueType} in Expression Parameters, but YM Eye Freeze requires Bool."),
+                    MessageType.Error);
                 return;
             }
 
-            var usedCost = list.Sum(parameter => parameter == null
-                ? 0
-                : VRC.SDK3.Avatars.ScriptableObjects.VRCExpressionParameters.TypeCost(parameter.valueType));
-            var requiredCost = VRC.SDK3.Avatars.ScriptableObjects.VRCExpressionParameters.TypeCost(
-                VRC.SDK3.Avatars.ScriptableObjects.VRCExpressionParameters.ValueType.Bool);
+            var typeConflict = false;
+            var providedParameters = ParameterInfo.ForUI.GetParametersForObject(
+                    descriptor.gameObject,
+                    (type, first, second) =>
+                    {
+                        if (type != ParameterInfo.ConflictType.TypeMismatch) return;
+                        if (first.EffectiveName == parameterName || second.EffectiveName == parameterName)
+                        {
+                            typeConflict = true;
+                        }
+                    })
+                .ToArray();
+            var usedCost = providedParameters.Sum(parameter => parameter.BitUsage);
             var maxCost = VRC.SDK3.Avatars.ScriptableObjects.VRCExpressionParameters.MAX_PARAMETER_COST;
 
-            if (usedCost + requiredCost <= maxCost) return;
+            if (typeConflict)
+            {
+                EditorGUILayout.HelpBox(
+                    T(
+                        $"`{parameterName}` の型が別のNDMFコンポーネントと競合しています。YM Eye FreezeにはBoolが必要です。",
+                        $"The type of `{parameterName}` conflicts with another NDMF component. YM Eye Freeze requires Bool."),
+                    MessageType.Error);
+                return;
+            }
 
-            EditorGUILayout.HelpBox(
-                T(
-                    $"Expression Parameters の容量が不足しています。`{parameterName}` を追加できないため、ビルド時に YM Eye Freeze のExメニュー項目は追加されません。現在 {usedCost}/{maxCost}、必要 {requiredCost} です。",
-                    $"Expression Parameters are full. `{parameterName}` cannot be added, so the YM Eye Freeze Ex Menu control will not be added at build time. Current {usedCost}/{maxCost}, required {requiredCost}."),
-                MessageType.Warning);
+            if (usedCost > maxCost)
+            {
+                EditorGUILayout.HelpBox(
+                    T(
+                        $"NDMFコンポーネントのビルド時追加分を含むExpression Parameters容量が超過しています。推定 {usedCost}/{maxCost} です。`{parameterName}` を追加できない可能性があります。",
+                        $"Expression Parameters exceed capacity after including build-time NDMF parameters. Estimated usage is {usedCost}/{maxCost}. `{parameterName}` may not be added."),
+                    MessageType.Warning);
+            }
         }
 
         private static YMEyeFreeze SelectPreferredComponentForBuild(YMEyeFreeze[] components, GameObject avatarRoot)

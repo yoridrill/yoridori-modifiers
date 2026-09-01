@@ -131,6 +131,17 @@ namespace YoridoriModifiers.FacialMapper
 
             controller.Name = "YM Facial Mapper FX";
 
+            if (!EnsureParameterType(controller, GestureLeft, AnimatorControllerParameterType.Int, component) ||
+                !EnsureParameterType(controller, GestureRight, AnimatorControllerParameterType.Int, component) ||
+                !ValidateExistingParameterType(
+                    controller,
+                    JerryInternalFacialExpressionsDisabled,
+                    AnimatorControllerParameterType.Bool,
+                    component))
+            {
+                return false;
+            }
+
             RemoveExistingLayers(controller);
             StripGestureDrivenFxFaceCurves(controller, component.verboseLog);
             EnsureBlendTreeParameters(controller, component.verboseLog);
@@ -143,8 +154,6 @@ namespace YoridoriModifiers.FacialMapper
                 JerryDisableFacialExpressions,
                 component.verboseLog,
                 "Jerry's Templates Disable Facial Expressions");
-            AddIntParameterIfMissing(controller, GestureLeft);
-            AddIntParameterIfMissing(controller, GestureRight);
             if (externalFaceBlockers.Count > 0)
             {
                 LogUtility.Verbose(ToolName, component.verboseLog, "FX", $"Detected {externalFaceBlockers.Count} external face expression conditions.");
@@ -684,15 +693,43 @@ namespace YoridoriModifiers.FacialMapper
             return new AnimationCurve(new Keyframe(0f, value));
         }
 
-        private static void AddIntParameterIfMissing(VirtualAnimatorController controller, string parameterName)
+        private static bool EnsureParameterType(
+            VirtualAnimatorController controller,
+            string parameterName,
+            AnimatorControllerParameterType requiredType,
+            YMFacialMapper component)
         {
-            if (controller.Parameters.ContainsKey(parameterName)) return;
+            if (!ValidateExistingParameterType(controller, parameterName, requiredType, component)) return false;
+            if (controller.Parameters.ContainsKey(parameterName)) return true;
+
             controller.Parameters = controller.Parameters.Add(parameterName, new AnimatorControllerParameter
             {
                 name = parameterName,
-                type = AnimatorControllerParameterType.Int,
-                defaultInt = 0
+                type = requiredType
             });
+            return true;
+        }
+
+        private static bool ValidateExistingParameterType(
+            VirtualAnimatorController controller,
+            string parameterName,
+            AnimatorControllerParameterType requiredType,
+            YMFacialMapper component)
+        {
+            if (!controller.Parameters.TryGetValue(parameterName, out var parameter) || parameter.type == requiredType)
+            {
+                return true;
+            }
+
+            ErrorReport.ReportError(new NdmfBuildError(
+                $"[YM Facial Mapper] Parameter `{parameterName}` is {parameter.type} in the FX Animator, " +
+                $"but {requiredType} is required. Change the conflicting parameter name or type."));
+            LogUtility.Error(
+                ToolName,
+                "FX",
+                $"Parameter type mismatch for `{parameterName}`: expected {requiredType}, found {parameter.type}.",
+                component);
+            return false;
         }
 
         private static void AddBoolParameterIfMissing(VirtualAnimatorController controller, string parameterName)

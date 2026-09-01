@@ -44,6 +44,8 @@ Jerry's Templates 側のアセットやコンポーネントは変更しませ�
 
 YM Facial Mapper の `Viseme` がONのハンドサイン中は、Jerry's Templates の `Visemes Enabled` がONでも口パク/口トラッキングを止めます。
 
+MA Merge Animatorなどで統合されたFX Animatorにある`GestureLeft` / `GestureRight`がInt以外の場合は、条件式の不整合を防ぐためNDMF Build Reportへエラーを表示し、YM Facial Mapperレイヤーを追加しません。
+
 ## Preset JSON
 
 同梱の `Presets.json` に加えて、ユーザー設定として `Assets/YM-Facial-Mapper-Presets.json` を読み込みます。

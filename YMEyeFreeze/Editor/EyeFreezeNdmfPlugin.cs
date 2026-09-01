@@ -37,6 +37,10 @@ namespace YoridoriModifiers.EyeFreeze
 
         protected override void Configure()
         {
+            InPhase(BuildPhase.Resolving)
+                .AfterPlugin("nadena.dev.modular-avatar")
+                .Run("Resolve YM Eye Freeze parameter remapping", ResolveParameterRemapping);
+
             var sequence = InPhase(BuildPhase.Transforming)
                 .AfterPlugin("jp.yoridrill.ym-arm-patch")
                 .AfterPlugin("jp.yoridrill.ym-mesh-trimmer")
@@ -49,6 +53,31 @@ namespace YoridoriModifiers.EyeFreeze
             {
                 scoped.Run("Build YM Eye Freeze", Execute);
             });
+        }
+
+        private static void ResolveParameterRemapping(BuildContext context)
+        {
+            if (context?.AvatarRootObject == null) return;
+
+            var parameterInfo = ParameterInfo.ForContext(context);
+            foreach (var component in context.AvatarRootObject.GetComponentsInChildren<YMEyeFreeze>(true))
+            {
+                if (component == null) continue;
+
+                var parameterName = EyeFreezeParameterProvider.NormalizeParameterName(component.parameterName);
+                var remappings = parameterInfo.GetParameterRemappingsAt(component, false);
+                if (remappings.TryGetValue(
+                        (ParameterNamespace.Animator, parameterName),
+                        out var remapping) &&
+                    !string.IsNullOrWhiteSpace(remapping.ParameterName))
+                {
+                    component.parameterName = remapping.ParameterName;
+                }
+                else
+                {
+                    component.parameterName = parameterName;
+                }
+            }
         }
 
         private static void PrepareFxLayer(BuildContext context)
@@ -109,9 +138,7 @@ namespace YoridoriModifiers.EyeFreeze
                 return;
             }
 
-            var parameterName = string.IsNullOrWhiteSpace(component.parameterName)
-                ? "YM/EyeFreeze"
-                : component.parameterName.Trim();
+            var parameterName = EyeFreezeParameterProvider.NormalizeParameterName(component.parameterName);
             var menuName = string.IsNullOrWhiteSpace(component.menuName)
                 ? "Eye Freeze"
                 : component.menuName.Trim();
@@ -124,10 +151,12 @@ namespace YoridoriModifiers.EyeFreeze
                 return;
             }
 
+            var animatorServices = context.Extension<AnimatorServicesContext>();
+            if (!ValidateParameterTypes(animatorServices, descriptor, parameterName)) return;
+
             var leftConstraint = BuildEyeRotationConstraint(leftEye, CreateFreezeTarget(head, leftEye, LeftEyeTargetName));
             var rightConstraint = BuildEyeRotationConstraint(rightEye, CreateFreezeTarget(head, rightEye, RightEyeTargetName));
 
-            var animatorServices = context.Extension<AnimatorServicesContext>();
             var offClip = CreateEyeFreezeClip(animatorServices, leftConstraint, rightConstraint, false, "YM Eye Freeze Off");
             var onClip = CreateEyeFreezeClip(animatorServices, leftConstraint, rightConstraint, true, "YM Eye Freeze On");
 
@@ -141,6 +170,55 @@ namespace YoridoriModifiers.EyeFreeze
             {
                 RemoveExpressionMenuControl(context, descriptor, parameterName);
             }
+        }
+
+        private static bool ValidateParameterTypes(
+            AnimatorServicesContext animatorServices,
+            VRCAvatarDescriptor descriptor,
+            string parameterName)
+        {
+            if (descriptor?.expressionParameters?.parameters != null)
+            {
+                var expressionParameter = descriptor.expressionParameters.parameters
+                    .FirstOrDefault(parameter => parameter != null && parameter.name == parameterName);
+                if (expressionParameter != null &&
+                    expressionParameter.valueType != VRCExpressionParameters.ValueType.Bool)
+                {
+                    ReportParameterTypeError(
+                        parameterName,
+                        "Expression Parameters",
+                        expressionParameter.valueType.ToString(),
+                        "Bool");
+                    return false;
+                }
+            }
+
+            if (animatorServices.ControllerContext.Controllers.TryGetValue(
+                    VRCAvatarDescriptor.AnimLayerType.FX,
+                    out var controller) &&
+                controller.Parameters.TryGetValue(parameterName, out var animatorParameter) &&
+                animatorParameter.type != AnimatorControllerParameterType.Bool)
+            {
+                ReportParameterTypeError(
+                    parameterName,
+                    "FX Animator",
+                    animatorParameter.type.ToString(),
+                    AnimatorControllerParameterType.Bool.ToString());
+                return false;
+            }
+
+            return true;
+        }
+
+        private static void ReportParameterTypeError(
+            string parameterName,
+            string location,
+            string actualType,
+            string requiredType)
+        {
+            ErrorReport.ReportError(new NdmfBuildError(
+                $"[YM Eye Freeze] Parameter `{parameterName}` is {actualType} in {location}, but {requiredType} is required. " +
+                "Change the conflicting parameter name or type."));
         }
 
         private static Transform CreateFreezeTarget(Transform head, Transform eye, string targetName)
@@ -443,7 +521,9 @@ namespace YoridoriModifiers.EyeFreeze
             {
                 list[existingIndex] = parameter;
             }
-            else if (list.Sum(p => p == null ? 0 : VRCExpressionParameters.TypeCost(p.valueType)) + VRCExpressionParameters.TypeCost(parameter.valueType) <= VRCExpressionParameters.MAX_PARAMETER_COST)
+            else if (list.Sum(p => p == null || !p.networkSynced ? 0 : VRCExpressionParameters.TypeCost(p.valueType)) +
+                     (parameter.networkSynced ? VRCExpressionParameters.TypeCost(parameter.valueType) : 0) <=
+                     VRCExpressionParameters.MAX_PARAMETER_COST)
             {
                 list.Add(parameter);
             }
@@ -476,28 +556,48 @@ namespace YoridoriModifiers.EyeFreeze
                 .Where(control => control == null || control.parameter == null || control.parameter.name != parameterName)
                 .ToList();
 
-            if (menu.controls.Count >= VRCExpressionsMenu.MAX_CONTROLS)
+            menu.controls.Add(new VRCExpressionsMenu.Control
             {
-                Debug.LogWarning("[YM Eye Freeze] Expression Menu is full. Toggle was not added.");
-            }
-            else
-            {
-                menu.controls.Add(new VRCExpressionsMenu.Control
+                type = VRCExpressionsMenu.Control.ControlType.Toggle,
+                name = menuName,
+                icon = AssetDatabase.LoadAssetAtPath<Texture2D>(IconPath),
+                parameter = new VRCExpressionsMenu.Control.Parameter
                 {
-                    type = VRCExpressionsMenu.Control.ControlType.Toggle,
-                    name = menuName,
-                    icon = AssetDatabase.LoadAssetAtPath<Texture2D>(IconPath),
-                    parameter = new VRCExpressionsMenu.Control.Parameter
-                    {
-                        name = parameterName
-                    },
-                    value = 1f
-                });
-            }
+                    name = parameterName
+                },
+                value = 1f
+            });
+
+            SplitOverflowMenus(context, menu);
 
             context.AssetSaver.SaveAsset(menu);
             descriptor.customExpressions = true;
             descriptor.expressionsMenu = menu;
+        }
+
+        private static void SplitOverflowMenus(BuildContext context, VRCExpressionsMenu menu)
+        {
+            var targetMenu = menu;
+            var overflowIndex = 1;
+            while (targetMenu.controls.Count > VRCExpressionsMenu.MAX_CONTROLS)
+            {
+                var overflowMenu = ScriptableObject.CreateInstance<VRCExpressionsMenu>();
+                overflowMenu.name = $"YM Eye Freeze Menu More {overflowIndex++}";
+                const int keepCount = VRCExpressionsMenu.MAX_CONTROLS - 1;
+                overflowMenu.controls.AddRange(targetMenu.controls.Skip(keepCount));
+                targetMenu.controls.RemoveRange(keepCount, targetMenu.controls.Count - keepCount);
+                targetMenu.controls.Add(new VRCExpressionsMenu.Control
+                {
+                    type = VRCExpressionsMenu.Control.ControlType.SubMenu,
+                    name = "More",
+                    parameter = new VRCExpressionsMenu.Control.Parameter { name = string.Empty },
+                    subParameters = Array.Empty<VRCExpressionsMenu.Control.Parameter>(),
+                    subMenu = overflowMenu
+                });
+
+                context.AssetSaver.SaveAsset(overflowMenu);
+                targetMenu = overflowMenu;
+            }
         }
 
         private static void RemoveExpressionMenuControl(

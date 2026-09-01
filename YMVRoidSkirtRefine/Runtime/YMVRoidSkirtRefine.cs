@@ -157,6 +157,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
     {
         public const float OnePieceSlimFrontRootRotationConstraintWeightDefault = 0.7f;
         public const float OnePieceFrontRootRotationConstraintWeightDefault = 0.7f;
+        public const float OnePieceMoveFrontRootsTowardUpperLegDefault = 0.8f;
+        public const float OnePieceShortSkirtRadiusDefault = 0.08f;
         public const float LongCoatFrontRootRotationConstraintWeightDefault = 0.8f;
         public const float LongCoatFrontUpperRotationConstraintWeightDefault = 0.8f;
         public const float LongCoatSideUpperRotationConstraintWeightDefault = 0.6f;
@@ -210,9 +212,9 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         [Range(0.0f, 1.0f)]
         public float onePieceFrontRootRotationConstraintWeight = OnePieceFrontRootRotationConstraintWeightDefault;
 
-        [Tooltip("Move front one-piece root bones toward UpperLeg when front root rotation constraints are used.")]
+        [Tooltip("Move front one-piece root bones toward UpperLeg while preserving their adjusted height. X uses the full amount and Z uses one quarter of the amount.")]
         [Range(0.0f, 1.0f)]
-        public float onePieceMoveFrontRootsTowardUpperLeg = 1.0f;
+        public float onePieceMoveFrontRootsTowardUpperLeg = OnePieceMoveFrontRootsTowardUpperLegDefault;
 
         [Tooltip("PhysBone settings applied to the generated one-piece unified root.")]
         public SkirtRefinePhysBoneSettings onePiecePhysBone = new SkirtRefinePhysBoneSettings();
@@ -387,8 +389,9 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             onePieceUseFloorCollider = false;
             onePieceUseFrontRootRotationConstraints = true;
             onePieceFrontRootRotationConstraintWeight = OnePieceFrontRootRotationConstraintWeightDefault;
-            onePieceMoveFrontRootsTowardUpperLeg = 0.0f;
+            onePieceMoveFrontRootsTowardUpperLeg = OnePieceMoveFrontRootsTowardUpperLegDefault;
             ApplyShortLightPhysBoneDefaults(onePiecePhysBone);
+            onePiecePhysBone.radius = OnePieceShortSkirtRadiusDefault;
             onePiecePhysBone.limitType = SkirtRefinePhysBoneLimitType.Polar;
             onePiecePhysBone.maxYaw = 30.0f;
 

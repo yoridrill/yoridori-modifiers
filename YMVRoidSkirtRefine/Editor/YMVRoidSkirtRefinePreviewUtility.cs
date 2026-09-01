@@ -28,15 +28,17 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         private const string PreviewSettingsObjectName = "__YMVRoidSkirtRefinePreviewSettings";
 
         private const string DanceLoopGuid = "6af08d7e879ca47638bab5230a34dd4f";
-        private const string SprintLoopGuid = "74fba2b6d8cac43dc965c5e43ce1b44a";
+        private const string WalkLoopGuid = "7a250b6395993410e96bbad16220f8a9";
         private const string SittingEnterGuid = "3d94cd0a724104454b9bb0fef0862f8d";
+        private const string SittingIdleLoopGuid = "248d041b4c48f4f55af0e7696505bac3";
         private const string SittingExitGuid = "34f67d009d4e0489ab383c0ce6641a94";
 
         private static readonly PreviewClipSpec[] PreviewClipSpecs =
         {
             new PreviewClipSpec(DanceLoopGuid, 2),
-            new PreviewClipSpec(SprintLoopGuid, 2),
+            new PreviewClipSpec(WalkLoopGuid, 2),
             new PreviewClipSpec(SittingEnterGuid, 1),
+            new PreviewClipSpec(SittingIdleLoopGuid, 1),
             new PreviewClipSpec(SittingExitGuid, 1)
         };
 

@@ -424,13 +424,6 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                         component.verboseLog);
                 }
 
-                if (component.onePieceUseFrontRootRotationConstraints
-                    && component.onePieceMoveFrontRootsTowardUpperLeg > 1e-6f
-                    && IsFrontChain(chain))
-                {
-                    AdjustConstrainedRoots(finalBones, ResolveUpperLegForChain(animator, chain), 1, component.onePieceMoveFrontRootsTowardUpperLeg);
-                }
-
                 EnsureLinearChainHierarchy(finalBones);
                 AddDistanceReweightInfos(
                     chainReweightInfos,
@@ -447,6 +440,19 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 component.verboseLog);
             foreach (var processed in processedChains)
             {
+                if (component.onePieceUseFrontRootRotationConstraints
+                    && component.onePieceMoveFrontRootsTowardUpperLeg > 1e-6f
+                    && IsFrontChain(processed.Chain))
+                {
+                    AdjustConstrainedRoots(
+                        processed.FinalBones,
+                        ResolveUpperLegForChain(animator, processed.Chain),
+                        1,
+                        component.onePieceMoveFrontRootsTowardUpperLeg,
+                        1.0f,
+                        0.25f);
+                }
+
                 NormalizeOnePieceChainRotations(
                     processed.FinalBones,
                     ResolveSkirtCenter(animator),
@@ -1898,10 +1904,14 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             IReadOnlyList<Transform> roots,
             Transform source,
             int adjustedCount,
-            float moveStrength)
+            float moveStrength,
+            float firstRootRatio = 0.8f,
+            float zMoveRatio = 1.0f)
         {
             if (roots == null || roots.Count == 0 || source == null || adjustedCount <= 0) return;
             moveStrength = Mathf.Clamp01(moveStrength);
+            firstRootRatio = Mathf.Clamp01(firstRootRatio);
+            zMoveRatio = Mathf.Clamp01(zMoveRatio);
             if (moveStrength <= 1e-6f) return;
 
             var constrainedCount = Mathf.Min(adjustedCount, roots.Count);
@@ -1911,9 +1921,12 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 if (root == null) continue;
 
                 var ratio = constrainedCount <= 1
-                    ? 0.8f
-                    : Mathf.Lerp(0.8f, 0.35f, i / (float)(constrainedCount - 1));
-                var sourceAligned = new Vector3(source.position.x, root.position.y, source.position.z);
+                    ? firstRootRatio
+                    : Mathf.Lerp(firstRootRatio, 0.35f, i / (float)(constrainedCount - 1));
+                var sourceAligned = new Vector3(
+                    source.position.x,
+                    root.position.y,
+                    Mathf.Lerp(root.position.z, source.position.z, zMoveRatio));
                 root.position = Vector3.Lerp(root.position, sourceAligned, ratio * moveStrength);
             }
         }
@@ -2518,7 +2531,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     physBone,
                     physBoneSettings,
                     colliders,
-                    Vector3.zero,
+                    EstimateEndpointPosition(processed.FinalBones),
                     SkirtRefinePhysBoneMultiChildType.First);
                 ApplyFrontLimitRotationOverride(physBone, processed.Chain, aimFrontLimitsForward);
                 generated.Add(physBone);

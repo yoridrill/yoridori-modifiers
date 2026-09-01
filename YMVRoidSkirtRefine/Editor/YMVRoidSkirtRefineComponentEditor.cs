@@ -697,7 +697,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                             onePieceUseFloorColliderProp.boolValue = UsesOnePieceFloorCollider(preset);
                             onePieceUseFrontRootRotationConstraintsProp.boolValue = preset != OnePiecePreset.MatchLongCoat;
                             ApplyRotationConstraintWeightDefaults(preset);
-                            onePieceMoveFrontRootsTowardUpperLegProp.floatValue = 0.0f;
+                            onePieceMoveFrontRootsTowardUpperLegProp.floatValue = YMVRoidSkirtRefine.OnePieceMoveFrontRootsTowardUpperLegDefault;
                             onePieceRootHeightOffsetMultiplierProp.floatValue = 0.35f;
                             onePieceSpineWeightReductionProp.floatValue = 0.7f;
                         });
@@ -1317,11 +1317,19 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         {
             if (preset == OnePiecePreset.ShortSkirtLight)
             {
-                ApplyShortLightPhysBonePreset(settingsProp, limitType: SkirtRefinePhysBoneLimitType.Polar, maxYaw: 30.0f);
+                ApplyShortLightPhysBonePreset(
+                    settingsProp,
+                    YMVRoidSkirtRefine.OnePieceShortSkirtRadiusDefault,
+                    limitType: SkirtRefinePhysBoneLimitType.Polar,
+                    maxYaw: 30.0f);
             }
             else if (preset == OnePiecePreset.ShortSkirtHeavy)
             {
-                ApplyShortHeavyPhysBonePreset(settingsProp, limitType: SkirtRefinePhysBoneLimitType.Polar, maxYaw: 30.0f);
+                ApplyShortHeavyPhysBonePreset(
+                    settingsProp,
+                    YMVRoidSkirtRefine.OnePieceShortSkirtRadiusDefault,
+                    limitType: SkirtRefinePhysBoneLimitType.Polar,
+                    maxYaw: 30.0f);
             }
             else if (preset == OnePiecePreset.SlimLongSkirtLight)
             {
@@ -1624,9 +1632,9 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                         onePieceMoveFrontRootsTowardUpperLegProp,
                         TT(
                             "FrontをUpperLegへ寄せる量",
-                            "Frontの1段目をUpperLeg寄りへ移動する強さです。0で移動なし、1で従来と同じ移動量になります。",
+                            "高さ補正後のY位置を維持したまま、Frontの1段目をUpperLegへ寄せる強さです。X方向は設定値どおり、Z方向は設定値の4分の1だけ移動します。1でX位置が一致します。",
                             "Move Roots Toward UpperLeg",
-                            "Controls how strongly front first-stage roots move toward UpperLeg. 0 disables movement, 1 matches the previous amount."));
+                            "Moves front first-stage roots toward UpperLeg while preserving their adjusted height. X uses the configured amount and Z uses one quarter of it. At 1, X matches the UpperLeg position."));
                 }
             }
         }
@@ -1851,7 +1859,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             serialized.FindProperty("onePieceUseFloorCollider").boolValue = UsesOnePieceFloorCollider(preset);
             serialized.FindProperty("onePieceUseFrontRootRotationConstraints").boolValue = preset != OnePiecePreset.MatchLongCoat;
             ApplySerializedRotationConstraintWeightDefaults(serialized, preset);
-            serialized.FindProperty("onePieceMoveFrontRootsTowardUpperLeg").floatValue = 0.0f;
+            serialized.FindProperty("onePieceMoveFrontRootsTowardUpperLeg").floatValue = YMVRoidSkirtRefine.OnePieceMoveFrontRootsTowardUpperLegDefault;
             serialized.FindProperty("onePieceRootHeightOffsetMultiplier").floatValue = 0.35f;
             serialized.FindProperty("onePieceSpineWeightReduction").floatValue = 0.7f;
             serialized.ApplyModifiedPropertiesWithoutUndo();

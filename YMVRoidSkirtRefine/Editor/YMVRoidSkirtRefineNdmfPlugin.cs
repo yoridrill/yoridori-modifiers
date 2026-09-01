@@ -4417,8 +4417,11 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     if (bone == null || info.FinalIndices[i] < 0) continue;
 
                     var local = CalculateVerticalJudgmentPosition(localPositions, i, settings.VerticalJudgmentOffset);
-                    var boneT = Mathf.Clamp01((maxY - local.y) / yRange);
-                    var positionT = Mathf.Clamp01((maxY - localPositions[i].y) / yRange);
+                    // Preserve distances below the garment instead of collapsing every appended
+                    // bone onto T=1. Otherwise the lowest vertex (also exactly T=1) jumps straight
+                    // to the last appended bone while its immediate neighbors use an earlier bone.
+                    var boneT = Mathf.Max(0.0f, (maxY - local.y) / yRange);
+                    var positionT = Mathf.Max(0.0f, (maxY - localPositions[i].y) / yRange);
                     samples.Add(new GeometricBoneSample(info.FinalIndices[i], boneT, positionT, i));
                 }
 

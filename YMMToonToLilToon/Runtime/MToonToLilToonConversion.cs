@@ -30,6 +30,7 @@ namespace YoridoriModifiers.MToonToLilToon
     public sealed class LilToonGlobalOverrides
     {
         public bool flipBackfaceNormal = true;
+        public bool useAdditiveForwardAddForNonTransparent = true;
         public bool enableShadowReceive = true;
         [Range(0f, 1f)] public float shadowReceive = 0.5f;
         public bool enableShadowBorder = true;
@@ -452,6 +453,20 @@ namespace YoridoriModifiers.MToonToLilToon
         {
             if (overrides == null) return;
             SetIfExists(material, "_FlipNormal", overrides.flipBackfaceNormal ? 1f : 0f);
+
+            var isTransparent = material.HasProperty("_TransparentMode")
+                && Mathf.RoundToInt(material.GetFloat("_TransparentMode")) == 2;
+            if (isTransparent)
+            {
+                SetIfExists(material, "_AlphaBoostFA", 1f);
+            }
+
+            SetIfExists(
+                material,
+                "_BlendOpFA",
+                isTransparent || overrides.useAdditiveForwardAddForNonTransparent
+                    ? (float)BlendOp.Add
+                    : (float)BlendOp.Max);
 
             if (overrides.enableShadowReceive)
             {

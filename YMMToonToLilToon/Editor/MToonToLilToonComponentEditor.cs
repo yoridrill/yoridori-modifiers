@@ -142,6 +142,7 @@ namespace YoridoriModifiers.MToonToLilToon
             }
 
             builder.Append(overrides.flipBackfaceNormal);
+            builder.Append('|').Append(overrides.useAdditiveForwardAddForNonTransparent);
             builder.Append('|').Append(overrides.enableShadowReceive);
             builder.Append('|').Append(overrides.shadowReceive);
             builder.Append('|').Append(overrides.enableShadowBorder);
@@ -217,6 +218,13 @@ namespace YoridoriModifiers.MToonToLilToon
             DrawSingleOverrideToggle(
                 overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.flipBackfaceNormal)),
                 T("裏面の法線を反転", "Flip Backface Normal"));
+            DrawSingleOverrideToggle(
+                overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.useAdditiveForwardAddForNonTransparent)),
+                TT(
+                    "半透明以外もライトの合成を加算にする",
+                    "半透明は黒ずみを避けるために加算にするため、 有効にすると全体の明るさが揃います。 加算だと多数の Point Light がある環境で 白飛びしやすくなりますが、 光学的に正しい見た目になります。",
+                    "Use Additive Light Blending for Non-Transparent Materials",
+                    "Transparent materials use additive blending to avoid darkening. Enabling this option makes the overall brightness consistent. Additive blending can cause overexposure in environments with many Point Lights, but produces an optically correct appearance."));
             DrawOverrideGroup(
                 overridesProp.FindPropertyRelative(nameof(LilToonGlobalOverrides.enableShadowReceive)),
                 T("影を受け取る", "Receive Shadow"),
@@ -390,6 +398,11 @@ namespace YoridoriModifiers.MToonToLilToon
         }
 
         private static void DrawSingleOverrideToggle(SerializedProperty valueProp, string label)
+        {
+            DrawSingleOverrideToggle(valueProp, new GUIContent(label));
+        }
+
+        private static void DrawSingleOverrideToggle(SerializedProperty valueProp, GUIContent label)
         {
             var rowRect = EditorGUILayout.GetControlRect();
             valueProp.boolValue = EditorGUI.ToggleLeft(rowRect, label, valueProp.boolValue);

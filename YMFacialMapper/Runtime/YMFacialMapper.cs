@@ -93,10 +93,10 @@ namespace YoridoriModifiers.FacialMapper
         public const string EyeMouthSplitForVRoidMemo =
             "◆ 左手に眉と目、右手に口  Left: Eyebrows+Eyes / Right: Mouth\n" +
             "　Fist: Angry\n" +
-            "　Victory: Joy\n" +
+            "　Victory: Fun\n" +
             "　RockNRoll: Sorrow\n" +
             "　HandGun: Surprised\n" +
-            "　ThumbsUp: Fun\n\n" +
+            "　ThumbsUp: Joy\n\n" +
             "◆ 左手に左目、右手に右目  Left: Left eye / Right: Right eye\n" +
             "　HandOpen: Joy\n" +
             "　FingerPoint: Close";
@@ -126,8 +126,8 @@ namespace YoridoriModifiers.FacialMapper
                         ConfigureSlot(setting.right, false, true, false, "Fcl_EYE_Close_R");
                         break;
                     case YMFacialMapper.HandSign.Victory:
-                        ConfigureSlot(setting.left, true, true, false, "Fcl_BRW_Joy", "Fcl_EYE_Joy");
-                        ConfigureSlot(setting.right, false, false, true, "Fcl_MTH_Joy");
+                        ConfigureSlot(setting.left, true, true, false, "Fcl_BRW_Fun", "Fcl_EYE_Fun");
+                        ConfigureSlot(setting.right, false, false, false, "Fcl_MTH_Fun");
                         break;
                     case YMFacialMapper.HandSign.RockNRoll:
                         ConfigureSlot(setting.left, true, true, false, "Fcl_BRW_Sorrow", "Fcl_EYE_Sorrow");
@@ -138,8 +138,8 @@ namespace YoridoriModifiers.FacialMapper
                         ConfigureSlot(setting.right, false, false, true, "Fcl_MTH_Surprised");
                         break;
                     case YMFacialMapper.HandSign.ThumbsUp:
-                        ConfigureSlot(setting.left, true, true, false, "Fcl_BRW_Fun", "Fcl_EYE_Fun");
-                        ConfigureSlot(setting.right, false, false, false, "Fcl_MTH_Fun");
+                        ConfigureSlot(setting.left, true, true, false, "Fcl_BRW_Joy", "Fcl_EYE_Joy");
+                        ConfigureSlot(setting.right, false, false, true, "Fcl_MTH_Joy");
                         break;
                 }
             }

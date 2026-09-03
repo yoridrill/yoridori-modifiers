@@ -22,7 +22,7 @@
     },
     {
       "name": "Eye-Mouth Split for VRoid",
-      "memo": "◆ 左手に眉と目、右手に口  Left: Eyebrows+Eyes / Right: Mouth\n　Fist: Angry\n　Victory: Joy\n　RockNRoll: Sorrow\n　HandGun: Surprised\n　ThumbsUp: Fun\n\n◆ 左手に左目、右手に右目  Left: Left eye / Right: Right eye\n　HandOpen: Joy\n　FingerPoint: Close",
+      "memo": "◆ 左手に眉と目、右手に口  Left: Eyebrows+Eyes / Right: Mouth\n　Fist: Angry\n　Victory: Fun\n　RockNRoll: Sorrow\n　HandGun: Surprised\n　ThumbsUp: Joy\n\n◆ 左手に左目、右手に右目  Left: Left eye / Right: Right eye\n　HandOpen: Joy\n　FingerPoint: Close",
       "neutral": {
         "eyelidLeft": false,
         "eyelidRight": false,
@@ -97,16 +97,16 @@
             "eyelidRight": true,
             "viseme": false,
             "shapeKeys": [
-              "Fcl_BRW_Joy",
-              "Fcl_EYE_Joy"
+              "Fcl_BRW_Fun",
+              "Fcl_EYE_Fun"
             ]
           },
           "right": {
             "eyelidLeft": false,
             "eyelidRight": false,
-            "viseme": true,
+            "viseme": false,
             "shapeKeys": [
-              "Fcl_MTH_Joy"
+              "Fcl_MTH_Fun"
             ]
           }
         },
@@ -157,16 +157,16 @@
             "eyelidRight": true,
             "viseme": false,
             "shapeKeys": [
-              "Fcl_BRW_Fun",
-              "Fcl_EYE_Fun"
+              "Fcl_BRW_Joy",
+              "Fcl_EYE_Joy"
             ]
           },
           "right": {
             "eyelidLeft": false,
             "eyelidRight": false,
-            "viseme": false,
+            "viseme": true,
             "shapeKeys": [
-              "Fcl_MTH_Fun"
+              "Fcl_MTH_Joy"
             ]
           }
         }

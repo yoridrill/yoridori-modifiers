@@ -131,9 +131,7 @@ namespace YoridoriModifiers.HairLookKit
                         var entry = hairSelectionsProp.GetArrayElementAtIndex(i);
                         var materialProp = entry.FindPropertyRelative(nameof(HairMaterialSelection.material));
                         var selectedProp = entry.FindPropertyRelative(nameof(HairMaterialSelection.selected));
-                        var row = EditorGUILayout.GetControlRect();
-                        selectedProp.boolValue = EditorGUI.Toggle(new Rect(row.x, row.y, ToggleWidth, row.height), selectedProp.boolValue);
-                        EditorGUI.ObjectField(new Rect(row.x + ToggleWidth + 4f, row.y, row.width - ToggleWidth - 4f, row.height), materialProp, typeof(Material), GUIContent.none);
+                        DrawHairMaterialSelectionRow(materialProp, selectedProp);
                     }
                 }
 
@@ -155,6 +153,29 @@ namespace YoridoriModifiers.HairLookKit
                         "Materials with different shaders/render modes/Cull settings are included in the same hair merge."),
                         MessageType.Warning);
                 }
+            }
+        }
+
+        private static void DrawHairMaterialSelectionRow(SerializedProperty materialProp, SerializedProperty selectedProp)
+        {
+            var row = EditorGUI.IndentedRect(EditorGUILayout.GetControlRect(false));
+            var toggleRect = new Rect(row.x, row.y, ToggleWidth, row.height);
+            var materialRect = new Rect(
+                toggleRect.xMax + 4f,
+                row.y,
+                Mathf.Max(0f, row.xMax - toggleRect.xMax - 4f),
+                row.height);
+
+            var previousIndent = EditorGUI.indentLevel;
+            EditorGUI.indentLevel = 0;
+            try
+            {
+                selectedProp.boolValue = EditorGUI.Toggle(toggleRect, selectedProp.boolValue);
+                EditorGUI.ObjectField(materialRect, materialProp, typeof(Material), GUIContent.none);
+            }
+            finally
+            {
+                EditorGUI.indentLevel = previousIndent;
             }
         }
 

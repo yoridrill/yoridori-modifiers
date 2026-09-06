@@ -303,6 +303,15 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         {
             if (avatarRoot == null) return;
 
+            // The SDK reads Animator.parameters for non-empty PhysBone parameter names during
+            // Start(). A controller-less VRM/VRoid Animator logs a warning there. Parameter output
+            // is not used by this direct-sampling preview, so suppress it only in the Play Mode
+            // scene copy. The authored values return unchanged when Play Mode exits.
+            foreach (var physBone in avatarRoot.GetComponentsInChildren<VRCPhysBoneBase>(true))
+            {
+                if (physBone != null) physBone.parameter = string.Empty;
+            }
+
             foreach (var animator in avatarRoot.GetComponentsInChildren<Animator>(true))
             {
                 if (animator != null) animator.enabled = false;

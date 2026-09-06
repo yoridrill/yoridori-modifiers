@@ -84,6 +84,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         private SerializedProperty enableOnePieceBoneExtensionProp;
         private SerializedProperty onePieceBoneExtensionModeProp;
         private SerializedProperty onePieceTargetBoneCountProp;
+        private SerializedProperty onePieceEnableTwoHandedGrabbingProp;
         private SerializedProperty onePieceRootHeightOffsetMultiplierProp;
         private SerializedProperty onePieceBonesProp;
         private SerializedProperty onePieceSpineWeightReductionProp;
@@ -138,6 +139,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             enableOnePieceBoneExtensionProp = serializedObject.FindProperty("enableOnePieceBoneExtension");
             onePieceBoneExtensionModeProp = serializedObject.FindProperty("onePieceBoneExtensionMode");
             onePieceTargetBoneCountProp = serializedObject.FindProperty("onePieceTargetBoneCount");
+            onePieceEnableTwoHandedGrabbingProp = serializedObject.FindProperty("onePieceEnableTwoHandedGrabbing");
             onePieceRootHeightOffsetMultiplierProp = serializedObject.FindProperty("onePieceRootHeightOffsetMultiplier");
             onePieceBonesProp = serializedObject.FindProperty("onePieceBones");
             onePieceSpineWeightReductionProp = serializedObject.FindProperty("onePieceSpineWeightReduction");
@@ -483,10 +485,15 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
         private static void AddOnePieceGeneratedDynamics(YMVRoidSkirtRefine component, DynamicsUsageEstimate estimate)
         {
-            estimate.GeneratedPhysBones += 1;
+            estimate.GeneratedPhysBones += component.onePieceEnableTwoHandedGrabbing
+                ? (component.onePieceUseFrontRootRotationConstraints ? 4 : 2)
+                : 1;
             if (component.onePieceUseFrontRootRotationConstraints)
             {
-                estimate.GeneratedPhysBones += 2;
+                if (!component.onePieceEnableTwoHandedGrabbing)
+                {
+                    estimate.GeneratedPhysBones += 2;
+                }
                 estimate.GeneratedRotationConstraints += 2;
             }
 
@@ -692,6 +699,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                             ApplyOnePiecePhysBonePreset(onePiecePhysBoneProp, preset);
                             onePieceMatchLongCoatProp.boolValue = preset == OnePiecePreset.MatchLongCoat;
                             enableOnePieceBoneExtensionProp.boolValue = !IsShortOnePiecePreset(preset);
+                            onePieceEnableTwoHandedGrabbingProp.boolValue = UsesOnePieceSplitRoots(preset);
                             onePieceUseUpperLegCollidersProp.boolValue = UsesOnePieceUpperLegColliders(preset);
                             onePieceUseLowerLegCollidersProp.boolValue = UsesOnePieceLowerLegColliders(preset);
                             onePieceUseFloorColliderProp.boolValue = UsesOnePieceFloorCollider(preset);
@@ -741,6 +749,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                                     onePieceTargetBoneCountProp,
                                     onePieceSpineWeightReductionProp,
                                     onePieceRootHeightOffsetMultiplierProp,
+                                    onePieceEnableTwoHandedGrabbingProp,
                                     null,
                                     null,
                                     null,
@@ -837,6 +846,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                                     longCoatTargetBoneCountProp,
                                     longCoatHipWeightReductionProp,
                                     longCoatRootHeightOffsetMultiplierProp,
+                                    null,
                                     longCoatSpineWeightReductionProp,
                                     longCoatShortSkirtUsePrependedRootsOnlyProp,
                                     longCoatMoveFrontBonesOutwardProp,
@@ -918,6 +928,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             SerializedProperty targetCountProp,
             SerializedProperty hipWeightReductionProp = null,
             SerializedProperty rootHeightOffsetMultiplierProp = null,
+            SerializedProperty twoHandedGrabbingProp = null,
             SerializedProperty spineWeightReductionProp = null,
             SerializedProperty rootsOnlyProp = null,
             SerializedProperty moveFrontBonesOutwardProp = null,
@@ -972,6 +983,17 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                             "揺れボーンチェーンをこの段数に揃えます。",
                             "Target Bone Count",
                             "Normalizes skirt chains to this bone count."));
+                }
+
+                if (twoHandedGrabbingProp != null)
+                {
+                    EditorGUILayout.PropertyField(
+                        twoHandedGrabbingProp,
+                        TT(
+                            "左右に分ける",
+                            "左右でPhysBoneを分け、両手で同時にスカートを掴めるようにします。",
+                            "Split Left and Right",
+                            "Splits the PhysBones into left and right sides, allowing the skirt to be grabbed with both hands at the same time."));
                 }
 
                 if (rootsOnlyProp != null)
@@ -1532,6 +1554,12 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 || preset == OnePiecePreset.SlimLongSkirtHeavy;
         }
 
+        private static bool UsesOnePieceSplitRoots(OnePiecePreset preset)
+        {
+            return preset == OnePiecePreset.LongSkirtLight
+                || preset == OnePiecePreset.LongSkirtHeavy;
+        }
+
         private static bool IsLongCoatLongSkirtPreset(LongCoatPreset preset)
         {
             return preset == LongCoatPreset.LongSkirtLight
@@ -1622,9 +1650,9 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     onePieceUseFrontRootRotationConstraintsProp,
                     TT(
                         "正面の付け根に使用",
-                        "ONの場合、Frontの1段目をUpperLegにRotation Constraintで連動させ、Frontの2段目以降は房ごとのPhysBoneで揺らします。統合RootのPhysBoneからFrontは除外されます。",
+                        "ONの場合、Frontの1段目をUpperLegにRotation Constraintで連動させ、Frontの2段目以降は房ごとのPhysBoneで揺らします。Frontは統合Root、または左右RootのPhysBoneから除外されます。",
                         "Use on Front Roots",
-                        "When enabled, front first-stage bones follow UpperLeg with Rotation Constraint, while front bones from the second stage use per-chain PhysBones. Front chains are ignored by the unified root PhysBone."),
+                        "When enabled, front first-stage bones follow UpperLeg with Rotation Constraint, while front bones from the second stage use per-chain PhysBones. Front chains are excluded from the unified or split root PhysBones."),
                     new[] { ("F", onePieceFrontRootRotationConstraintWeightProp) });
                 using (new EditorGUI.DisabledScope(!onePieceUseFrontRootRotationConstraintsProp.boolValue))
                 {
@@ -1854,6 +1882,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             ApplyOnePiecePhysBonePreset(serialized.FindProperty("onePiecePhysBone"), preset);
             serialized.FindProperty("onePieceMatchLongCoat").boolValue = preset == OnePiecePreset.MatchLongCoat;
             serialized.FindProperty("enableOnePieceBoneExtension").boolValue = !IsShortOnePiecePreset(preset);
+            serialized.FindProperty("onePieceEnableTwoHandedGrabbing").boolValue = UsesOnePieceSplitRoots(preset);
             serialized.FindProperty("onePieceUseUpperLegColliders").boolValue = UsesOnePieceUpperLegColliders(preset);
             serialized.FindProperty("onePieceUseLowerLegColliders").boolValue = UsesOnePieceLowerLegColliders(preset);
             serialized.FindProperty("onePieceUseFloorCollider").boolValue = UsesOnePieceFloorCollider(preset);

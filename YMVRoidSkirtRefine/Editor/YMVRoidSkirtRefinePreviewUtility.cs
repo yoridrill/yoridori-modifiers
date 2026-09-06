@@ -512,6 +512,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             public bool enableOnePieceBoneExtension;
             public BoneExtensionMode onePieceBoneExtensionMode;
             public int onePieceTargetBoneCount;
+            public bool onePieceEnableTwoHandedGrabbing;
             public float onePieceRootHeightOffsetMultiplier;
             public float onePieceSpineWeightReduction;
             public bool onePieceMatchLongCoat;
@@ -560,6 +561,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     enableOnePieceBoneExtension = source.enableOnePieceBoneExtension,
                     onePieceBoneExtensionMode = source.onePieceBoneExtensionMode,
                     onePieceTargetBoneCount = source.onePieceTargetBoneCount,
+                    onePieceEnableTwoHandedGrabbing = source.onePieceEnableTwoHandedGrabbing,
                     onePieceRootHeightOffsetMultiplier = source.onePieceRootHeightOffsetMultiplier,
                     onePieceSpineWeightReduction = source.onePieceSpineWeightReduction,
                     onePieceMatchLongCoat = source.onePieceMatchLongCoat,
@@ -606,6 +608,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 target.enableOnePieceBoneExtension = enableOnePieceBoneExtension;
                 target.onePieceBoneExtensionMode = onePieceBoneExtensionMode;
                 target.onePieceTargetBoneCount = onePieceTargetBoneCount;
+                target.onePieceEnableTwoHandedGrabbing = onePieceEnableTwoHandedGrabbing;
                 target.onePieceRootHeightOffsetMultiplier = onePieceRootHeightOffsetMultiplier;
                 target.onePieceSpineWeightReduction = onePieceSpineWeightReduction;
                 target.onePieceMatchLongCoat = onePieceMatchLongCoat;

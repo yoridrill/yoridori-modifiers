@@ -62,11 +62,13 @@ Front-Left、Front-Right、Side-Left、Side-Right、Back-Left、Back-Right の6�
 
 `ボーン追加` を無効にした場合も、PhysBoneの統合Root化とボーン軸の正規化は行います。
 
+`左右に分ける` を有効にすると、統合コンテナ `YM_VRoidSkirtRefine_OnePieceRoot` の下に `YM_OnePiece_Root_Left` と `YM_OnePiece_Root_Right` を生成し、それぞれにPhysBoneを設定してスカートを左右の手で同時に掴めるようにします。`正面の付け根に使用` が無効ならFrontも対応する左右Rootに含めて合計2個のPhysBoneを生成し、有効ならFront-LeftとFront-Rightを統合コンテナ直下へ分離して合計4個を生成します。初期値は無効です。
+
 `Hipのウェイトを弱める` では、対象頂点のHipウェイトを揺れボーン側へ移す割合を調整できます。
 
 ### Rotation Constraint
 
-`正面の付け根に使用` を有効にすると、Frontの1段目をUpperLegにRotation Constraintで連動させ、Frontの2段目以降は房ごとのPhysBoneで揺らします。Frontは統合RootのPhysBoneから除外されます。
+`正面の付け根に使用` を有効にすると、Frontの1段目をUpperLegにRotation Constraintで連動させ、Frontの2段目以降は房ごとのPhysBoneで揺らします。Frontは統合Root、または左右RootのPhysBoneから除外されます。
 次の行の `Weight` でFrontに使うWeightを調整できます。
 
 ### PhysBone Collider
@@ -77,7 +79,9 @@ Front-Left、Front-Right、Side-Left、Side-Right、Back-Left、Back-Right の6�
 
 ### PhysBone
 
-生成される統合Root、またはRotation Constraint下の房ごとのPhysBoneに適用するSimplified設定です。表示される数値やCurveを編集できます。
+生成される統合Root、左右Root、またはRotation Constraint下の房ごとのPhysBoneに適用するSimplified設定です。表示される数値やCurveを編集できます。
+
+ワンピースで`ボーン追加`が有効な場合は、追加した末端ボーンより先へPhysBoneを仮想的に延ばさないよう、統合Root、左右Root、Front個別PhysBoneのすべてでEndpoint Positionをゼロにします。`ボーン追加`が無効な場合は、既存チェーンの間隔からEndpoint Positionを推定します。
 
 ## Long Coat Refine
 

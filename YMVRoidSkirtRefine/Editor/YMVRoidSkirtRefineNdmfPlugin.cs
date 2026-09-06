@@ -22,6 +22,8 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         private const string ToolName = "YM VRoid Skirt Refine";
         private const string QualifiedPluginName = "jp.yoridrill.ym-vroid-skirt-refine";
         private const string OnePieceUnifiedRootName = "YM_VRoidSkirtRefine_OnePieceRoot";
+        private const string OnePieceLeftRootName = "YM_OnePiece_Root_Left";
+        private const string OnePieceRightRootName = "YM_OnePiece_Root_Right";
         private const string LongCoatUnifiedRootName = "YM_VRoidSkirtRefine_LongCoatRoot";
         private const string FloorRayOriginName = "YM_VRoidSkirtRefine_FloorRayOrigin";
         private const string FloorSurfaceName = "YM_VRoidSkirtRefine_FloorSurface";
@@ -73,7 +75,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             if (physBone == null) return;
 
             var multiChildType = physBone.transform != null
-                && (physBone.transform.name == OnePieceUnifiedRootName || physBone.transform.name == LongCoatUnifiedRootName)
+                && IsGeneratedUnifiedPhysBoneRoot(physBone.transform)
                     ? SkirtRefinePhysBoneMultiChildType.Ignore
                     : SkirtRefinePhysBoneMultiChildType.First;
             ApplyPhysBoneSettings(
@@ -85,6 +87,15 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 physBone.ignoreTransforms);
             physBone.configHasUpdated = true;
             physBone.collidersHaveUpdated = true;
+        }
+
+        private static bool IsGeneratedUnifiedPhysBoneRoot(Transform transform)
+        {
+            if (transform == null) return false;
+            return transform.name == OnePieceUnifiedRootName
+                || transform.name == OnePieceLeftRootName
+                || transform.name == OnePieceRightRootName
+                || transform.name == LongCoatUnifiedRootName;
         }
 
         protected override void Configure()
@@ -397,6 +408,12 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             }
 
             var unifiedRoot = CreateOrGetUnifiedRoot(hips);
+            var leftRoot = component.onePieceEnableTwoHandedGrabbing
+                ? CreateFreshNamedRoot(unifiedRoot, OnePieceLeftRootName)
+                : null;
+            var rightRoot = component.onePieceEnableTwoHandedGrabbing
+                ? CreateFreshNamedRoot(unifiedRoot, OnePieceRightRootName)
+                : null;
             var oldToNewBoneMap = new Dictionary<Transform, Transform>();
             var chainReweightInfos = new List<ChainReweightInfo>();
             var processedChains = new List<LongCoatProcessedChain>();
@@ -413,7 +430,13 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 var sourcePhysBones = FindSourcePhysBones(avatarRoot, group.AllChains);
                 removedPhysBones.AddRange(sourcePhysBones);
                 RemovePhysBones(sourcePhysBones);
-                ReparentSwingRootToUnifiedRoot(chain, unifiedRoot, oldToNewBoneMap, component.verboseLog);
+                var hierarchyParent = GetOnePieceHierarchyParent(
+                    chain,
+                    unifiedRoot,
+                    leftRoot,
+                    rightRoot,
+                    component.onePieceUseFrontRootRotationConstraints);
+                ReparentSwingRootToUnifiedRoot(chain, hierarchyParent, oldToNewBoneMap, component.verboseLog);
 
                 var finalBones = chain.SwingBones.ToList();
                 if (component.enableOnePieceBoneExtension)
@@ -490,25 +513,45 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 context);
             DeleteSourceChains(chainsToDelete);
 
-            var rootPhysBone = unifiedRoot.gameObject.GetComponent<VRCPhysBone>();
-            if (rootPhysBone == null)
+            if (component.onePieceEnableTwoHandedGrabbing)
             {
-                rootPhysBone = unifiedRoot.gameObject.AddComponent<VRCPhysBone>();
+                AddOnePieceSplitRootPhysBone(
+                    leftRoot,
+                    processedChains.Where(processed =>
+                        !IsRightChain(processed?.Chain)
+                        && (!component.onePieceUseFrontRootRotationConstraints || !IsFrontChain(processed?.Chain))).ToList(),
+                    component,
+                    onePieceColliders,
+                    generatedPhysBones);
+                AddOnePieceSplitRootPhysBone(
+                    rightRoot,
+                    processedChains.Where(processed =>
+                        IsRightChain(processed?.Chain)
+                        && (!component.onePieceUseFrontRootRotationConstraints || !IsFrontChain(processed?.Chain))).ToList(),
+                    component,
+                    onePieceColliders,
+                    generatedPhysBones);
             }
-            rootPhysBone.rootTransform = unifiedRoot;
-            var onePieceFrontIgnoreTransforms = component.onePieceUseFrontRootRotationConstraints
-                ? GetFrontRootIgnoreTransforms(processedChains)
-                : null;
-            ApplyPhysBoneSettings(
-                rootPhysBone,
-                component.onePiecePhysBone,
-                onePieceColliders,
-                component.enableOnePieceBoneExtension
-                    ? Vector3.zero
-                    : EstimateAverageEndpointPosition(processedChains),
-                SkirtRefinePhysBoneMultiChildType.Ignore,
-                onePieceFrontIgnoreTransforms);
-            generatedPhysBones.Add(rootPhysBone);
+            else
+            {
+                var rootPhysBone = unifiedRoot.gameObject.GetComponent<VRCPhysBone>();
+                if (rootPhysBone == null)
+                {
+                    rootPhysBone = unifiedRoot.gameObject.AddComponent<VRCPhysBone>();
+                }
+                rootPhysBone.rootTransform = unifiedRoot;
+                var onePieceFrontIgnoreTransforms = component.onePieceUseFrontRootRotationConstraints
+                    ? GetFrontRootIgnoreTransforms(processedChains)
+                    : null;
+                ApplyPhysBoneSettings(
+                    rootPhysBone,
+                    component.onePiecePhysBone,
+                    onePieceColliders,
+                    GetOnePieceRootEndpointPosition(component, processedChains),
+                    SkirtRefinePhysBoneMultiChildType.Ignore,
+                    onePieceFrontIgnoreTransforms);
+                generatedPhysBones.Add(rootPhysBone);
+            }
 
             if (component.onePieceUseFrontRootRotationConstraints)
             {
@@ -519,6 +562,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     onePieceColliders,
                     component.onePieceFrontRootRotationConstraintWeight,
                     ToConstraintImplementationMode(component.constraintMode),
+                    component.enableOnePieceBoneExtension ? Vector3.zero : (Vector3?)null,
                     false,
                     component.verboseLog));
             }
@@ -1088,6 +1132,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     longCoatColliders,
                     component.longCoatFrontRootRotationConstraintWeight,
                     ToConstraintImplementationMode(component.constraintMode),
+                    null,
                     component.longCoatAimFrontLimitsForward,
                     component.verboseLog));
             }
@@ -1233,6 +1278,21 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             root.localRotation = Quaternion.identity;
             root.localScale = Vector3.one;
             return root;
+        }
+
+        private static Transform GetOnePieceHierarchyParent(
+            OnePieceChain chain,
+            Transform unifiedRoot,
+            Transform leftRoot,
+            Transform rightRoot,
+            bool separateFront)
+        {
+            if (chain == null || leftRoot == null || rightRoot == null || (separateFront && IsFrontChain(chain)))
+            {
+                return unifiedRoot;
+            }
+
+            return IsRightChain(chain) ? rightRoot : leftRoot;
         }
 
         private static void ReparentSwingRootToUnifiedRoot(
@@ -1472,7 +1532,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
 
             if (verboseLog)
             {
-                Debug.Log($"[{ToolName}] [{chainLabel}] Normalized one-piece chain rotations for unified PhysBone.");
+                Debug.Log($"[{ToolName}] [{chainLabel}] Normalized one-piece chain rotations for generated PhysBones.");
             }
         }
 
@@ -2347,6 +2407,18 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             return count > 0 ? sum / count : Vector3.zero;
         }
 
+        // Appended one-piece chains already end at a generated bone near the hem. Adding a virtual
+        // endpoint would extend every PhysBone beyond that bone and can push it close to the floor.
+        // Keep this rule shared by unified, split, and front per-chain PhysBones.
+        private static Vector3 GetOnePieceRootEndpointPosition(
+            YMVRoidSkirtRefine component,
+            List<LongCoatProcessedChain> processedChains)
+        {
+            return component != null && component.enableOnePieceBoneExtension
+                ? Vector3.zero
+                : EstimateAverageEndpointPosition(processedChains);
+        }
+
         private static Vector3 EstimateEndpointPosition(IReadOnlyList<Transform> bones)
         {
             if (bones == null || bones.Count < 2) return Vector3.zero;
@@ -2497,6 +2569,31 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                 .ToList();
         }
 
+        private static void AddOnePieceSplitRootPhysBone(
+            Transform root,
+            List<LongCoatProcessedChain> processedChains,
+            YMVRoidSkirtRefine component,
+            List<VRCPhysBoneColliderBase> colliders,
+            List<VRCPhysBone> generatedPhysBones)
+        {
+            if (root == null || component == null || generatedPhysBones == null) return;
+
+            var physBone = root.gameObject.GetComponent<VRCPhysBone>();
+            if (physBone == null)
+            {
+                physBone = root.gameObject.AddComponent<VRCPhysBone>();
+            }
+
+            physBone.rootTransform = root;
+            ApplyPhysBoneSettings(
+                physBone,
+                component.onePiecePhysBone,
+                colliders,
+                GetOnePieceRootEndpointPosition(component, processedChains),
+                SkirtRefinePhysBoneMultiChildType.Ignore);
+            generatedPhysBones.Add(physBone);
+        }
+
         private static List<VRCPhysBone> BuildFrontRootRotationConstraintMode(
             Animator animator,
             List<LongCoatProcessedChain> processedChains,
@@ -2504,6 +2601,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             List<VRCPhysBoneColliderBase> colliders,
             float constraintWeight,
             ConstraintImplementationMode constraintMode,
+            Vector3? endpointPositionOverride,
             bool aimFrontLimitsForward,
             bool verboseLog)
         {
@@ -2531,7 +2629,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
                     physBone,
                     physBoneSettings,
                     colliders,
-                    EstimateEndpointPosition(processed.FinalBones),
+                    endpointPositionOverride ?? EstimateEndpointPosition(processed.FinalBones),
                     SkirtRefinePhysBoneMultiChildType.First);
                 ApplyFrontLimitRotationOverride(physBone, processed.Chain, aimFrontLimitsForward);
                 generated.Add(physBone);

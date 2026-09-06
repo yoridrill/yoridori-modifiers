@@ -181,6 +181,9 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         [Range(3, 12)]
         public int onePieceTargetBoneCount = 6;
 
+        [Tooltip("Split generated one-piece PhysBones into left and right roots.")]
+        public bool onePieceEnableTwoHandedGrabbing = false;
+
         [Tooltip("Raise one-piece root bones along the root-side extension direction. 0 keeps original positions, 1 approaches the estimated convergence point.")]
         [Range(0.0f, 1.0f)]
         public float onePieceRootHeightOffsetMultiplier = 0.35f;
@@ -216,7 +219,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
         [Range(0.0f, 1.0f)]
         public float onePieceMoveFrontRootsTowardUpperLeg = OnePieceMoveFrontRootsTowardUpperLegDefault;
 
-        [Tooltip("PhysBone settings applied to the generated one-piece unified root.")]
+        [Tooltip("PhysBone settings applied to generated one-piece roots and per-chain PhysBones.")]
         public SkirtRefinePhysBoneSettings onePiecePhysBone = new SkirtRefinePhysBoneSettings();
 
         [Tooltip("Enable long coat hem refinement.")]
@@ -381,6 +384,7 @@ namespace YoridoriModifiers.VRoidSkirtRefine
             enableOnePieceRefine = false;
             onePiecePreset = OnePiecePreset.ShortSkirtLight;
             enableOnePieceBoneExtension = false;
+            onePieceEnableTwoHandedGrabbing = false;
             onePieceRootHeightOffsetMultiplier = 0.35f;
             onePieceSpineWeightReduction = 0.7f;
             onePieceMatchLongCoat = false;

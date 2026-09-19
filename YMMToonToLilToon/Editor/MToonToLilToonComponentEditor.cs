@@ -33,6 +33,7 @@ namespace YoridoriModifiers.MToonToLilToon
             serializedObject.Update();
             EnsureFaceMaterialsDetected(serializedObject, _cachedRendererMaterials);
             EnsureSilhouetteMaterialsDetected(serializedObject, _cachedRendererMaterials);
+            EnsureMeshSettingBonesDetected(serializedObject, component);
             if (serializedObject.ApplyModifiedProperties())
             {
                 Undo.CollapseUndoOperations(undoGroup);
@@ -43,6 +44,7 @@ namespace YoridoriModifiers.MToonToLilToon
         {
             serializedObject.Update();
             var component = (MToonToLilToonComponent)target;
+            EnsureMeshSettingBonesDetected(serializedObject, component);
             var previousPreviewing = MToonToLilToonPreviewUtility.IsPreviewing(component);
             var previewRelevantStateBefore = BuildPreviewRelevantStateKey(component);
             _cachedRendererMaterials ??= GetRendererMaterials(component);
@@ -98,6 +100,40 @@ namespace YoridoriModifiers.MToonToLilToon
             {
                 MToonToLilToonPreviewUtility.RestartPreviewIfActive(component);
             }
+        }
+
+        internal static bool EnsureMeshSettingBonesDetected(
+            SerializedObject componentObject,
+            MToonToLilToonComponent component)
+        {
+            if (componentObject == null || component == null) return false;
+
+            var changed = false;
+            var overrideBoundsProp = componentObject.FindProperty(nameof(MToonToLilToonComponent.overrideBounds));
+            var boundsRootBoneProp = componentObject.FindProperty(nameof(MToonToLilToonComponent.boundsRootBone));
+            if (overrideBoundsProp.boolValue && boundsRootBoneProp.objectReferenceValue == null)
+            {
+                var detectedBoundsRootBone = component.ResolveAutomaticBoundsRootBone();
+                if (detectedBoundsRootBone != null)
+                {
+                    boundsRootBoneProp.objectReferenceValue = detectedBoundsRootBone;
+                    changed = true;
+                }
+            }
+
+            var overrideAnchorProp = componentObject.FindProperty(nameof(MToonToLilToonComponent.overrideAnchor));
+            var anchorOverrideProp = componentObject.FindProperty(nameof(MToonToLilToonComponent.anchorOverride));
+            if (overrideAnchorProp.boolValue && anchorOverrideProp.objectReferenceValue == null)
+            {
+                var detectedAnchorOverride = component.ResolveAutomaticAnchorOverride();
+                if (detectedAnchorOverride != null)
+                {
+                    anchorOverrideProp.objectReferenceValue = detectedAnchorOverride;
+                    changed = true;
+                }
+            }
+
+            return changed;
         }
 
         private static string BuildPreviewRelevantStateKey(MToonToLilToonComponent component)

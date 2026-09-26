@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using UnityEditor;
+using UnityEditor.Animations;
 using UnityEngine;
 using VRC.SDK3.Avatars.Components;
 using YoridoriModifiers.Core.Editor;
@@ -30,6 +31,8 @@ namespace YoridoriModifiers.FacialMapper
         private Language _language;
         private bool _settingsFoldout;
         private bool _advancedFoldout;
+        private double _nextCompatibilityCheck;
+        private string[] _unlinkedStates = Array.Empty<string>();
         private int _presetIndex;
         private List<FacialMapperPresetLoader.Preset> _presets;
 
@@ -68,6 +71,7 @@ namespace YoridoriModifiers.FacialMapper
             DrawTopRow(component);
             EditorGUILayout.Space(4);
             DrawPlacementStatus(component);
+            DrawCompatibilityStatus(component);
             DrawPresetRow(component);
             DrawPresetMemo();
             DrawSettings();
@@ -77,6 +81,24 @@ namespace YoridoriModifiers.FacialMapper
             DrawAdvanced();
 
             serializedObject.ApplyModifiedProperties();
+        }
+
+        private void DrawCompatibilityStatus(YMFacialMapper component)
+        {
+            if (EditorApplication.timeSinceStartup >= _nextCompatibilityCheck)
+            {
+                _nextCompatibilityCheck = EditorApplication.timeSinceStartup + 1;
+                var descriptor = component.GetComponentInParent<VRCAvatarDescriptor>(true);
+                var fx = descriptor?.baseAnimationLayers?.FirstOrDefault(l =>
+                    l.type == VRCAvatarDescriptor.AnimLayerType.FX).animatorController as AnimatorController;
+                _unlinkedStates = FacialMapperCompatibilityDiagnostics.FindUnlinkedControls(fx);
+            }
+            if (_unlinkedStates.Length == 0) return;
+            EditorGUILayout.HelpBox(T(
+                "現在のFXに、YMへ停止・復帰を引き継げないLayerControlがあります。対象: " + string.Join(", ", _unlinkedStates) +
+                "。Strip対象の表情レイヤーへの競合しないON/OFF制御が必要です。小物など表情以外の制御なら対応は不要です。MA統合前の事前診断であり、ビルド時に再確認します。",
+                "Some FX LayerControls cannot relay suppression to YM: " + string.Join(", ", _unlinkedStates) +
+                ". A compatible ON/OFF control of a stripped face layer is required. Unrelated controls need no action. This preview precedes MA merging; the build checks again."), MessageType.Warning);
         }
 
         private void DrawTopRow(YMFacialMapper component)

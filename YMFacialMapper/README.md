@@ -1,67 +1,52 @@
 # YM Facial Mapper
 
-テキストで指定した BlendShape / Shape Key を、VRChat のハンドサインに合わせて非破壊で適用する NDMF ツールです。
-VRoid、MMD など、決まった名前の Shape Key を持つアバターへ設定をコピーしやすくすることを目的にしています。
+BlendShape（Shape Key）の名前を指定して、VRChatのハンドサインに表情を割り当てるNDMFツールです。VRoidやMMDなど、共通のShape Key名を持つアバター間で設定を共有できます。
 
 ## 使い方
 
-1. AvatarRoot 配下に `Yoridori Modifiers/YM Facial Mapper` を追加します。
-2. Preset を選ぶか、各ハンドサインの Shape Key リストへ名前を入力します。
-3. 必要に応じて `Eyelid-L` / `Eyelid-R` / `Viseme` をONにします。
-4. ビルド時に NDMF が FX Animator に YM Facial Mapper 用レイヤーを追加します。
+1. アバター配下に `Yoridori Modifiers/YM Facial Mapper` を追加します。
+2. プリセットを選ぶか、各ハンドサインにShape Key名を入力します。
+3. 名前の隣でウェイト（0〜100、初期値100）を調整します。
+4. 必要に応じてEyelid／Visemeと左右の優先順位を設定します。
 
-Shape Key は1行に1つ指定します。名前の隣にある数値欄で 0～100 のウェイトを調整できます。ウェイトの初期値は100です。以前のバージョンで保存した設定やプリセットもそのまま使用できます。
+ビルド時に既存のジェスチャー表情を置き換えます。対象はGesture Controllerと、Gestureパラメータで動くFXレイヤーのうち、非0のBlendShapeカーブを含むレイヤーです。0固定の補正レイヤーは残し、対象レイヤー内のリセット用カーブは表情と一緒に除去します。
 
-ビルド時は、既存の Gesture Controller と Gesture パラメータで動く FX レイヤーに含まれる BlendShape カーブをビルド結果上で取り除き、YM Facial Mapper の表情へ置き換えます。元の Animator Controller と AnimationClip アセットは変更しません。
+顔メッシュはAvatar Descriptorの `VisemeSkinnedMesh` を優先し、未設定の場合はShape Key名の一致数から選びます。
 
-## Eyelid / Viseme
+## 表情の組み合わせ
 
-`Eyelid-L` / `Eyelid-R` / `Viseme` は、表情エントリ全体の排他タグ兼トラッキング停止タグです。
+左右の表情は同時に適用できます。Eyelid／VisemeをONにすると、そのグループを使う表情同士が排他になります。
 
-- `Eyelid-L` OFF / `Eyelid-R` OFF / `Viseme` OFF
-  - 排他なし。左右で同時適用できます。
-  - まばたきと口パクは止めません。
-- `Eyelid-L` ON
-  - Eyelid-L グループを占有します。
-  - 表情中はまばたきを止めます。
-- `Eyelid-R` ON
-  - Eyelid-R グループを占有します。
-  - 表情中はまばたきを止めます。
-- `Viseme` ON
-  - Viseme グループを占有します。
-  - 表情中は口パクを止めます。
-- 複数ON
-  - ONにしたグループをそれぞれ占有します。
-  - `Eyelid-L` または `Eyelid-R` のどちらかがONなら、表情中はまばたきを止めます。
-  - `Viseme` がONなら、表情中は口パクを止めます。
+| 設定 | 表情中の動作 |
+| --- | --- |
+| Eyelid-L／Eyelid-R | 標準の目線・まばたきを停止 |
+| Viseme | 標準の口パクを停止 |
+| すべてOFF | 排他なし |
 
-同じグループを占有する表情が左右同時に成立した場合、`排他衝突時の判定 / Conflict Resolution` で指定した手が優先されます。初期値は右手優先です。
+Eyelid-L／Rは左右の排他グループを区別する設定です。トラッキング停止は目全体に適用されます。
 
-## Jerry's Templates との併用
+同じグループが競合した場合は、`Conflict Resolution` で指定した手を優先します（初期値は右手）。同じShape Keyに異なるウェイトを指定した場合も、この優先順位に従います。
 
-Jerry's Templates の Modular Avatar 版と併用する場合、`FacialExpressionsDisabled` など既知の無効化パラメータを検出すると、そのパラメータがONの間は YM Facial Mapper の表情を止めます。
-Jerry's Templates 側のアセットやコンポーネントは変更しません。
+## プリセット
 
-YM Facial Mapper の `Viseme` がONのハンドサイン中は、Jerry's Templates の `Visemes Enabled` がONでも口パク/口トラッキングを止めます。
+同梱の `Presets.json` と `Assets/YM-Facial-Mapper-Presets.json` を読み込みます。プリセットを選ぶと、表情設定とメモが反映されます。
 
-MA Merge Animatorなどで統合されたFX Animatorにある`GestureLeft` / `GestureRight`がInt以外の場合は、条件式の不整合を防ぐためNDMF Build Reportへエラーを表示し、YM Facial Mapperレイヤーを追加しません。
+`Export` で名前を付けると、現在の設定とメモをユーザープリセットへ追加できます。メモには想定アバターや割り当て方などを記録できます。
 
-## Preset JSON
+## 外部ツールとの併用
 
-同梱の `Presets.json` に加えて、ユーザー設定として `Assets/YM-Facial-Mapper-Presets.json` を読み込みます。
-同名Presetがある場合も両方表示されます。
+Modular Avatarの処理後に、置き換えた元FXレイヤーへのLayerControlを検出し、YMの表情にも停止・復帰を引き継ぎます。抑制中はハンドサインによるTrackingControlを止め、解除時は現在のハンドサインへ復帰します。NK Installerのジェスチャー抑制も、この仕組みで連携します。
 
-Presetを選ぶと、設定値とメモ欄がInspectorへ反映されます。
-メモ欄はPresetの意図や想定アバター、左右の割り当て方などを記録するための自由記入欄です。
+継承対象はWeight 0／1のON・OFF制御です。中間Weightや同一State内で競合する指定は対象外で、元のフェード時間は引き継ぎません。複数Stateからの制御は、最後の書き込みが優先されます。
 
-`Export` を押すとプリセット名の入力ウィンドウが開きます。決定すると、現在の設定値とメモ欄の内容を `Assets/YM-Facial-Mapper-Presets.json` へ追加します。
-ファイルが存在しない場合は新規作成し、既に存在する場合は既存Presetを残したまま末尾へ追加します。
+抑制時のEyes設定は、Gesture依存レイヤー以外のFX Stateが指定した外部設定へ戻します。記録がない場合はTrackingを使います。連携にはAnimator内部Boolを使用し、Expression Parametersは増えません。
 
-## 制限
+継承元が見つからないLayerControlはInspectorとビルド時に警告します。InspectorはMA統合前の事前診断です。小物など、表情以外のレイヤーを操作するLayerControlなら対応は不要です。
 
-- 同じ Shape Key を複数の同時適用表情で指定した場合、Animator レイヤー順によって後のレイヤーが優先されます。
-- 顔メッシュは `VRCAvatarDescriptor.VisemeSkinnedMesh` を優先し、未設定の場合は指定Shape Keyの一致数から自動検出します。
+### Jerry’s Templates
+
+公開パラメータ `FacialExpressionsDisabled` にも対応します。Boolはtrue、Intは非0、Floatは0.5より大きい値で抑制します。LayerControlによる抑制と併存する場合は、どちらかが有効な間、YMの表情を停止します。
 
 ## ライセンス
 
-このプロジェクトは MIT License で提供されています。詳細は [../LICENSE](../LICENSE) を参照してください。
+[MIT License](../LICENSE)

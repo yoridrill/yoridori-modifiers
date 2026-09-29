@@ -33,13 +33,14 @@ public static class TexturePostProcessProcessor
 
             if (!processedTextureCache.TryGetValue(target.mainTexture, out Texture2D processedTexture))
             {
-                if (!TryCreateProcessedTexture(target.mainTexture, target.texturePostProcessMode, target.fillColor, trimmer, true, out processedTexture))
+                if (!TryCreateProcessedTexture(target.mainTexture, target.texturePostProcessMode, target.fillColor, trimmer, out processedTexture))
                 {
                     continue;
                 }
 
                 NdmfObjectRegistry.RegisterReplacement(target.mainTexture, processedTexture);
-                context?.AssetSaver.SaveAsset(processedTexture);
+                YMTextureRegistry.Register(processedTexture, target.mainTexture,
+                    YMTextureUsage.ColorWithAlpha, ToolName);
                 processedTextureCache[target.mainTexture] = processedTexture;
             }
 
@@ -110,7 +111,6 @@ public static class TexturePostProcessProcessor
         MeshTrimmerComponent.TexturePostProcessMode mode,
         Color fillColor,
         MeshTrimmerComponent trimmer,
-        bool compress,
         out Texture2D processed)
     {
         processed = null;
@@ -163,10 +163,6 @@ public static class TexturePostProcessProcessor
         {
             processed.SetPixels(pixels);
             processed.Apply(true, false);
-            if (compress)
-            {
-                GeneratedTextureUtility.CompressGeneratedTexture(processed, source.name);
-            }
             return true;
         }
         catch (UnityException ex)
@@ -185,7 +181,7 @@ public static class TexturePostProcessProcessor
         MeshTrimmerComponent trimmer,
         out Texture2D processed)
     {
-        return TryCreateProcessedTexture(source, mode, fillColor, trimmer, false, out processed);
+        return TryCreateProcessedTexture(source, mode, fillColor, trimmer, out processed);
     }
 
     private static Texture2D CreateWritableTexture(int width, int height, Texture2D source, bool linear)

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using nadena.dev.ndmf;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -11,6 +13,26 @@ namespace YoridoriModifiers.Core.Editor
     /// </summary>
     public static class NdmfObjectRegistry
     {
+        // ObjectRegistry tracks a single original. Preserve all inputs of material merges
+        // for downstream modifiers, without keeping assets alive between builds/previews.
+        private static readonly ConditionalWeakTable<Object, HashSet<ObjectReference>> Sources = new();
+
+        public static HashSet<ObjectReference> GetSourceReferences(Object obj)
+        {
+            if (obj == null) return new HashSet<ObjectReference>();
+            return Sources.TryGetValue(obj, out var sources)
+                ? new HashSet<ObjectReference>(sources)
+                : new HashSet<ObjectReference> { ObjectRegistry.GetReference(obj) };
+        }
+
+        public static void RegisterMergedSources(Object replacement, IEnumerable<Material> originals)
+        {
+            var sources = GetSourceReferences(replacement);
+            foreach (var original in originals) sources.UnionWith(GetSourceReferences(original));
+            Sources.Remove(replacement);
+            Sources.Add(replacement, sources);
+        }
+
         public static T Clone<T>(T original) where T : Object
         {
             if (original == null) throw new ArgumentNullException(nameof(original));
@@ -33,6 +55,8 @@ namespace YoridoriModifiers.Core.Editor
             if (replacement == null) throw new InvalidOperationException("A replacement factory returned null.");
 
             ObjectRegistry.RegisterReplacedObject(original, replacement);
+            Sources.Remove(replacement);
+            Sources.Add(replacement, GetSourceReferences(original));
             return replacement;
         }
     }

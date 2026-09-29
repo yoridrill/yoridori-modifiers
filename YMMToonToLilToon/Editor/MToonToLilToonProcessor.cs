@@ -717,7 +717,7 @@ namespace YoridoriModifiers.MToonToLilToon
             }
 
             InvertRgb(readable);
-            destination.SetTexture("_ShadowStrengthMask", CompressGeneratedAtlas(readable, "_ShadowStrengthMask"));
+            destination.SetTexture("_ShadowStrengthMask", PrepareGeneratedAtlas(readable, "_ShadowStrengthMask", texture as Texture2D));
             destination.SetTextureScale("_ShadowStrengthMask", Vector2.one);
             destination.SetTextureOffset("_ShadowStrengthMask", Vector2.zero);
             SetFloatIfAnyExists(destination, new[] { "_UseShadowMask", "_UseShadowStrengthMask" }, 1f);
@@ -745,10 +745,13 @@ namespace YoridoriModifiers.MToonToLilToon
             texture.Apply(false, false);
         }
 
-        private static Texture2D CompressGeneratedAtlas(Texture2D atlas, string propertyName, BuildTarget? buildTarget = null)
+        private static Texture2D PrepareGeneratedAtlas(Texture2D atlas, string propertyName,
+            Texture2D sourceTexture = null)
         {
             var isNormal = string.Equals(propertyName, "_BumpMap", System.StringComparison.OrdinalIgnoreCase);
-            return GeneratedTextureUtility.CompressGeneratedTexture(atlas, propertyName, isNormal, buildTarget);
+            return GeneratedTextureUtility.PrepareGeneratedTexture(atlas, propertyName, isNormal,
+                sourceTexture, "YM MToon to lilToon",
+                isNormal ? YMTextureUsage.NormalMap : YMTextureUsage.Mask);
         }
 
         private static void ValidateRendererMaterialTextureReferencesBeforeAao(MToonToLilToonComponent component, ConversionReport report)

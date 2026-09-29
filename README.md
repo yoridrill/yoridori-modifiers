@@ -19,6 +19,9 @@ Unity 2022.3 / VCC / ALCOM で作成した VRChat Avatars Project での利用�
 - `YM Hair Look Kit`
   - 髪マテリアルの結合、眉ステンシル、FakeShadow、輪郭線補正を非破壊で適用します。
   - `YM MToon to lilToon` と同じアバターにある場合は、変換後の lilToon マテリアルに対して処理できます。
+- `YM Outline Extender`
+  - Cutoutによる裾・袖口などの内部境界に、最終lilToonの輪郭線設定に合わせた線を追加します。
+  - Main TextureのRGBを引き継ぎ、Alphaをビルド時にSDFへ置き換えます。
 - `YM Eye Freeze`
   - Exメニューに Eye Look と Blink を一時停止し、目ボーンを初期状態で固定するモードを追加します。
   - カメラ目線化やターゲット追従は行いません。
@@ -48,6 +51,7 @@ https://yoridrill.github.io/vpm-repos/redirect.html
 - `Yoridori Modifiers/YM Mesh Trimmer`
 - `Yoridori Modifiers/YM MToon to lilToon`
 - `Yoridori Modifiers/YM Hair Look Kit`
+- `Yoridori Modifiers/YM Outline Extender`
 - `Yoridori Modifiers/YM Eye Freeze`
 - `Yoridori Modifiers/YM Facial Mapper`
 - `Yoridori Modifiers/YM VRoid Skirt Refine`
@@ -85,11 +89,16 @@ Yoridori Modifiers のどの `Reset Preview` からでも、各ツールの Prev
 - [YM Mesh Trimmer](./YMMeshTrimmer/README.md)
 - [YM MToon to lilToon](./YMMToonToLilToon/README.md)
 - [YM Hair Look Kit](./YMHairLookKit/README.md)
+- [YM Outline Extender](./YMOutlineExtender/README.md)
 - [YM Eye Freeze](./YMEyeFreeze/README.md)
 - [YM Facial Mapper](./YMFacialMapper/README.md)
 - [YM VRoid Skirt Refine](./YMVRoidSkirtRefine/README.md)
 
-ビルド時は、`YM Arm Patch`、`YM VRoid Skirt Refine`、`YM Mesh Trimmer`、`YM MToon to lilToon`、`YM Hair Look Kit`、`YM Eye Freeze`、`YM Facial Mapper` の順で処理します。
+ビルド時は、`YM Arm Patch`、`YM VRoid Skirt Refine`、`YM Mesh Trimmer`、`YM MToon to lilToon`、`YM Hair Look Kit`、`YM Outline Extender`、`YM Eye Freeze`、`YM Facial Mapper` の順で処理します。
+
+Textureを扱う処理は `YM Mesh Trimmer → TexTransTool Transforming → YM MToon to lilToon → YM Hair Look Kit → YM Outline Extender → TexTransTool Optimizing → YM Texture Finalizer → AAO` の順で実行します。各YM Modifierの生成Textureは無圧縮のまま後続へ渡し、Finalizerがその時点でAvatarから参照されているYM生成Textureだけを一度圧縮します。
+
+Finalizerは元TextureのPlatform Overrideを可能な範囲で継承し、既定ではPCのAlpha付きTextureをBC7、AndroidをASTC 6x6、SDF Alphaを含むTextureをPCではBC7、AndroidではASTC 4x4にします。PreviewではFinalizerを実行しません。
 
 ## ライセンス
 

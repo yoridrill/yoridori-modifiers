@@ -1,0 +1,6 @@
+{
+    "name": "YoridoriModifiers.OutlineExtender.Runtime",
+    "rootNamespace": "YoridoriModifiers.OutlineExtender",
+    "references": ["VRC.SDKBase"],
+    "autoReferenced": true
+}

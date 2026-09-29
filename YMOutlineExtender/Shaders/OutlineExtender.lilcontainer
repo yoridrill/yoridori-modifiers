@@ -1,0 +1,20 @@
+Shader "Hidden/yoridrill/lilToonOutlineExtender/CutoutOutline"
+{
+    Properties
+    {
+        lilProperties "Default"
+        lilProperties "DefaultCutout"
+        [HideInInspector] _YMSdfRange ("SDF distance range", Float) = 8
+        [HideInInspector] _YMWidthMultiplier ("Relative cutout outline width", Float) = 1
+    }
+    HLSLINCLUDE
+        #define LIL_RENDER 1
+        #define LIL_CUSTOM_PROPERTIES float _YMSdfRange; float _YMWidthMultiplier;
+    ENDHLSL
+    lilSubShaderTags {"RenderType" = "TransparentCutout" "Queue" = "AlphaTest"}
+    lilSubShaderInsert "OutlineExtender.lilblock"
+    lilSubShaderBRP "Default"
+    lilSubShaderURP "Default"
+    lilSubShaderHDRP "Default"
+    CustomEditor "lilToon.lilToonInspector"
+}

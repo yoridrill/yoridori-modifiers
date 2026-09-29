@@ -86,6 +86,7 @@ namespace YoridoriModifiers.HairLookKit
                 rep,
                 () => new Material(rep) { name = $"{rep.name}_Merged" });
             EnsureReferenceTrackableObjectFlags(mergedMaterial);
+            NdmfObjectRegistry.RegisterMergedSources(mergedMaterial, selectedForMerge);
             ForceMergedRenderType(mergedMaterial, rep, mergedOutputRenderType);
             buildContext?.AssetSaver.SaveAsset(mergedMaterial);
 

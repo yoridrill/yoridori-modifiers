@@ -65,10 +65,12 @@ namespace YoridoriModifiers.HairLookKit
 
             onProgress?.Invoke("Baking atlas...");
             var textures = new List<Texture2D>();
+            var sourceTextures = new List<Texture2D>();
             for (var i = 0; i < mergeIndices.Count; i++)
             {
                 var material = materials[mergeIndices[i]];
                 TryGetMainTextureWithTransform(material, out var texture, out var textureScale, out var offset);
+                sourceTextures.Add(texture as Texture2D);
                 var color = ResolveMaterialBaseColor(material);
                 var readable = TextureReadUtility.ToReadableTextureWithTransform(texture, textureScale, offset);
                 textures.Add(readable != null ? MultiplyTextureColorInPlace(readable, color) : NewSolidTexture(color));
@@ -92,8 +94,7 @@ namespace YoridoriModifiers.HairLookKit
             }
             atlas.Apply(true, false);
             BleedTransparentPixels(atlas, 2);
-            atlas = CompressGeneratedAtlas(atlas, "_MainTex");
-            buildContext?.AssetSaver.SaveAsset(atlas);
+            atlas = PrepareGeneratedAtlas(atlas, "_MainTex", sourceTextures);
             SetTextureIfAnyExists(mergedMaterial, new[] { "_MainTex", "_BaseMap" }, atlas);
             SetTextureScaleOffsetIfAnyExists(mergedMaterial, new[] { "_MainTex", "_BaseMap" }, Vector2.one, Vector2.zero);
             SetColorIfAnyExists(mergedMaterial, new[] { "_Color", "_BaseColor" }, Color.white);
@@ -155,6 +156,7 @@ namespace YoridoriModifiers.HairLookKit
             if (string.IsNullOrEmpty(destinationProperty)) return;
 
             var textures = new List<Texture2D>();
+            var sourceTextures = new List<Texture2D>();
             for (var i = 0; i < mergeIndices.Count; i++)
             {
                 var source = materials[mergeIndices[i]];
@@ -179,6 +181,7 @@ namespace YoridoriModifiers.HairLookKit
                 }
 
                 var readable = TextureReadUtility.ToReadableTextureWithTransform(texture, textureScale, offset, bakeKind == TextureBakeKind.NormalMap);
+                sourceTextures.Add(texture as Texture2D);
                 if (invertRgb && readable != null)
                 {
                     InvertRgb(readable);
@@ -222,8 +225,7 @@ namespace YoridoriModifiers.HairLookKit
                 BleedTransparentPixels(atlas, 2);
             }
 
-            atlas = CompressGeneratedAtlas(atlas, destinationProperty);
-            buildContext?.AssetSaver.SaveAsset(atlas);
+            atlas = PrepareGeneratedAtlas(atlas, destinationProperty, sourceTextures);
             mergedMaterial.SetTexture(destinationProperty, atlas);
             mergedMaterial.SetTextureScale(destinationProperty, Vector2.one);
             mergedMaterial.SetTextureOffset(destinationProperty, Vector2.zero);
@@ -481,10 +483,6 @@ namespace YoridoriModifiers.HairLookKit
                     var format = texture is Texture2D texture2D ? texture2D.format.ToString() : "(non-Texture2D)";
                     LogUtility.Info(ToolName, $"{mergedMaterial.name} {propertyName} format={format}");
                 }
-                if (texture is Texture2D t && t.format == TextureFormat.RGBA32)
-                {
-                    warnings?.Add($"{mergedMaterial.name}: {propertyName} remains RGBA32 after compression.");
-                }
             }
         }
 
@@ -498,10 +496,13 @@ namespace YoridoriModifiers.HairLookKit
             return color.r <= 0.001f && color.g <= 0.001f && color.b <= 0.001f;
         }
 
-        private static Texture2D CompressGeneratedAtlas(Texture2D atlas, string propertyName, BuildTarget? buildTarget = null)
+        private static Texture2D PrepareGeneratedAtlas(Texture2D atlas, string propertyName,
+            IEnumerable<Texture2D> sourceTextures = null)
         {
             var isNormal = string.Equals(propertyName, "_BumpMap", StringComparison.OrdinalIgnoreCase);
-            return GeneratedTextureUtility.CompressGeneratedTexture(atlas, propertyName, isNormal, buildTarget);
+            var sources = (sourceTextures ?? Enumerable.Empty<Texture2D>()).Where(t => t != null).Distinct().ToArray();
+            return GeneratedTextureUtility.PrepareGeneratedTexture(atlas, propertyName, isNormal,
+                sources, "YM Hair Look Kit");
         }
 
         private static Color NeutralNormalColor()

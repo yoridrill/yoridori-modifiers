@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -6,72 +8,33 @@ namespace YoridoriModifiers.Core.Editor
 {
     public static class GeneratedTextureUtility
     {
-        public static Texture2D CompressGeneratedTexture(Texture2D texture, string context, bool isNormalMap = false, BuildTarget? buildTarget = null)
-        {
-            if (texture == null) throw new InvalidOperationException($"CompressGeneratedTexture: texture is null ({context}).");
+        public static Texture2D PrepareGeneratedTexture(Texture2D texture, string context, bool isNormalMap = false,
+            Texture2D sourceTexture = null, string sourceModifier = "Yoridori Modifiers",
+            YMTextureUsage usage = YMTextureUsage.ColorWithAlpha)
+            => PrepareGeneratedTexture(texture, context, isNormalMap,
+                sourceTexture != null ? new[] { sourceTexture } : Array.Empty<Texture2D>(), sourceModifier, usage);
 
-            if (isNormalMap)
-            {
-                return GenerateNormalMapTexture(texture, context, buildTarget ?? EditorUserBuildSettings.activeBuildTarget);
-            }
+        public static Texture2D PrepareGeneratedTexture(Texture2D texture, string context, bool isNormalMap,
+            IEnumerable<Texture2D> sourceTextures, string sourceModifier = "Yoridori Modifiers",
+            YMTextureUsage usage = YMTextureUsage.ColorWithAlpha)
+        {
+            if (texture == null) throw new InvalidOperationException($"PrepareGeneratedTexture: texture is null ({context}).");
 
             ConfigureRuntimeGeneratedTexture(texture);
             texture.Apply(true, false);
-            if (texture.width % 4 != 0 || texture.height % 4 != 0)
-            {
-                LogUtility.Warning(
-                    "Yoridori Modifiers",
-                    "TextureCompression",
-                    $"Generated texture compression skipped for {context}; width and height must be multiples of 4. Keeping RGBA32.");
-                return texture;
-            }
-
-            EditorUtility.CompressTexture(texture, TextureFormat.DXT5, TextureCompressionQuality.Normal);
-            ConfigureRuntimeGeneratedTexture(texture);
-            if (texture.format == TextureFormat.RGBA32)
-            {
-                LogUtility.Warning(
-                    "Yoridori Modifiers",
-                    "TextureCompression",
-                    $"Generated texture compression failed for {context}; keeping RGBA32.");
-            }
-
+            var parents = (sourceTextures ?? Enumerable.Empty<Texture2D>()).Where(source => source != null);
+            YMTextureRegistry.Register(texture, parents,
+                isNormalMap ? YMTextureUsage.NormalMap : usage,
+                sourceModifier,
+                isNormalMap ? YMTextureCompressionQuality.High : YMTextureCompressionQuality.Normal);
             return texture;
         }
 
-        private static Texture2D GenerateNormalMapTexture(Texture2D texture, string context, BuildTarget buildTarget)
+        internal static void PackRgbNormalForDesktop(Texture2D texture)
         {
-            var output = new Texture2D(texture.width, texture.height, TextureFormat.RGBA32, true, true)
-            {
-                name = texture.name,
-                wrapMode = texture.wrapMode,
-                filterMode = texture.filterMode,
-                anisoLevel = texture.anisoLevel,
-            };
-            ConfigureRuntimeGeneratedTexture(output);
-
-            output.SetPixels32(PackRgbNormalPixelsForUnity(texture.GetPixels32(0)));
-            output.Apply(true, false);
-            if (output.width % 4 != 0 || output.height % 4 != 0)
-            {
-                LogUtility.Warning(
-                    "Yoridori Modifiers",
-                    "TextureCompression",
-                    $"Generated normal map compression skipped for {context}; width and height must be multiples of 4. Keeping RGBA32.");
-                return output;
-            }
-
-            EditorUtility.CompressTexture(output, TextureFormat.DXT5, TextureCompressionQuality.Normal);
-            ConfigureRuntimeGeneratedTexture(output);
-            if (output.format == TextureFormat.RGBA32)
-            {
-                LogUtility.Warning(
-                    "Yoridori Modifiers",
-                    "TextureCompression",
-                    $"Generated normal map compression failed for {context}; keeping RGBA32.");
-            }
-
-            return output;
+            if (texture == null) return;
+            texture.SetPixels32(PackRgbNormalPixelsForUnity(texture.GetPixels32(0)), 0);
+            texture.Apply(true, false);
         }
 
         public static void ConfigureRuntimeGeneratedTexture(Texture2D texture, bool streamingMipmaps = true, int streamingMipmapsPriority = 0)

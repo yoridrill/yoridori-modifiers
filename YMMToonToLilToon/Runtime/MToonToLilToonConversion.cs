@@ -852,7 +852,7 @@ namespace YoridoriModifiers.MToonToLilToon
             return Mathf.Clamp(offset, -9, 9);
         }
 
-        private static bool HasOutline(Material source)
+        public static bool HasOutline(Material source)
         {
             if (source == null) return false;
             var hasOutlineMode = ResolveOutlineWidthMode(source) > 0;

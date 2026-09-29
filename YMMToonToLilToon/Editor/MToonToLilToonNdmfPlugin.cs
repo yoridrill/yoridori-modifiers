@@ -19,6 +19,7 @@ namespace YoridoriModifiers.MToonToLilToon
             var sequence = InPhase(BuildPhase.Transforming)
                 .AfterPlugin("jp.yoridrill.ym-arm-patch")
                 .AfterPlugin("jp.yoridrill.ym-mesh-trimmer")
+                .AfterPlugin("net.rs64.tex-trans-tool")
                 .AfterPlugin("nadena.dev.modular-avatar")
                 .BeforePlugin("com.anatawa12.avatar-optimizer")
                 .BeforePlugin("com.github.kurotu.vrc-quest-tools");

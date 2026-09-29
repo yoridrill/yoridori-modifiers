@@ -1,0 +1,14 @@
+{
+    "name": "YoridoriModifiers.OutlineExtender.Editor",
+    "rootNamespace": "YoridoriModifiers.OutlineExtender",
+    "references": [
+        "YoridoriModifiers.OutlineExtender.Runtime",
+        "YoridoriModifiers.Core.Editor",
+        "YoridoriModifiers.MToonToLilToon.Runtime",
+        "YoridoriModifiers.MToonToLilToon.Editor",
+        "nadena.dev.ndmf",
+        "lilToon.Editor"
+    ],
+    "includePlatforms": ["Editor"],
+    "autoReferenced": true
+}

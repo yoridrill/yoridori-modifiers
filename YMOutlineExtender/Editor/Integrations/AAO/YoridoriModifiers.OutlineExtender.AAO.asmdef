@@ -1,0 +1,11 @@
+{
+    "name": "YoridoriModifiers.OutlineExtender.AAO",
+    "rootNamespace": "YoridoriModifiers.OutlineExtender.Integrations.AAO",
+    "references": ["com.anatawa12.avatar-optimizer.api.editor"],
+    "includePlatforms": ["Editor"],
+    "autoReferenced": true,
+    "defineConstraints": ["YM_HAS_AAO"],
+    "versionDefines": [
+        { "name": "com.anatawa12.avatar-optimizer", "expression": "1.8.0", "define": "YM_HAS_AAO" }
+    ]
+}

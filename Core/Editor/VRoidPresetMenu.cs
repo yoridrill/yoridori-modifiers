@@ -8,6 +8,7 @@ using YoridoriModifiers.FacialMapper;
 using YoridoriModifiers.HairLookKit;
 using YoridoriModifiers.MeshTrimmer;
 using YoridoriModifiers.MToonToLilToon;
+using YoridoriModifiers.OutlineExtender;
 using YoridoriModifiers.VRoidSkirtRefine;
 
 namespace YoridoriModifiers.Core.Editor
@@ -60,10 +61,13 @@ namespace YoridoriModifiers.Core.Editor
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM MToon to lilToon", false, -889)]
         private static void AddVRoidMToonToLilToon() => AddMToonToLilToonToRoot("Add YM MToon to lilToon with VRoid Defaults");
 
-        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Eye Freeze", false, -887)]
+        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Outline Extender", false, -887)]
+        private static void AddVRoidOutlineExtender() => AddOutlineExtenderToRoot("Add YM Outline Extender with VRoid Defaults");
+
+        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Eye Freeze", false, -886)]
         private static void AddVRoidEyeFreeze() => AddSingleComponentToRoot<YMEyeFreeze>("Add YM Eye Freeze with VRoid Defaults");
 
-        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Facial Mapper", false, -886)]
+        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Facial Mapper", false, -885)]
         private static void AddVRoidFacialMapper() => AddFacialMapperToRoot("Add YM Facial Mapper with VRoid Defaults");
 
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Arm Patch/(via VRM 0.0) Long Sleeves", false, -887)]
@@ -87,6 +91,7 @@ namespace YoridoriModifiers.Core.Editor
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM VRoid Skirt Refine", true)]
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Mesh Trimmer", true)]
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM MToon to lilToon", true)]
+        [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Outline Extender", true)]
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Eye Freeze", true)]
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Facial Mapper", true)]
         [MenuItem(BaseMenu + "Add Component with VRoid Defaults/YM Arm Patch/(via VRM 0.0) Long Sleeves", true)]
@@ -131,6 +136,8 @@ namespace YoridoriModifiers.Core.Editor
             var mtoon = Undo.AddComponent<MToonToLilToonComponent>(target);
             ConfigureMToonToLilToon(mtoon, avatarRoot);
             Undo.AddComponent<YMHairLookKitComponent>(target);
+            var outlineExtender = Undo.AddComponent<YMOutlineExtenderComponent>(target);
+            ConfigureOutlineExtender(outlineExtender);
             Undo.AddComponent<YMEyeFreeze>(target);
 
             EditorUtility.SetDirty(target);
@@ -181,6 +188,23 @@ namespace YoridoriModifiers.Core.Editor
             if (TryAddComponent(target, out MToonToLilToonComponent component))
             {
                 ConfigureMToonToLilToon(component, avatarRoot);
+            }
+
+            Undo.CollapseUndoOperations(undoGroup);
+            EditorUtility.SetDirty(target);
+        }
+
+        private static void AddOutlineExtenderToRoot(string undoName)
+        {
+            var target = Selection.activeGameObject;
+            if (target == null) return;
+
+            Undo.SetCurrentGroupName(undoName);
+            int undoGroup = Undo.GetCurrentGroup();
+
+            if (TryAddComponent(target, out YMOutlineExtenderComponent component))
+            {
+                ConfigureOutlineExtender(component);
             }
 
             Undo.CollapseUndoOperations(undoGroup);
@@ -241,6 +265,14 @@ namespace YoridoriModifiers.Core.Editor
             component.overrideBounds = true;
             component.overrideAnchor = true;
             component.AutoAssignMeshSettingBones();
+            EditorUtility.SetDirty(component);
+        }
+
+        private static void ConfigureOutlineExtender(YMOutlineExtenderComponent component)
+        {
+            if (component == null) return;
+            Undo.RecordObject(component, "Configure YM Outline Extender");
+            component.outlineWidthMultiplier = 0.7f;
             EditorUtility.SetDirty(component);
         }
 

@@ -15,6 +15,7 @@ namespace YoridoriModifiers.HairLookKit
         protected override void Configure()
         {
             InPhase(BuildPhase.Transforming)
+                .AfterPlugin("net.rs64.tex-trans-tool")
                 .AfterPlugin("jp.yoridrill.ym-mtoon-to-liltoon")
                 .BeforePlugin("com.github.kurotu.vrc-quest-tools")
                 .Run("Apply Hair Look Kit", Execute);

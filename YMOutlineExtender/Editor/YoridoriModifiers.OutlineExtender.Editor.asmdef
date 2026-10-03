@@ -7,8 +7,11 @@
         "YoridoriModifiers.MToonToLilToon.Runtime",
         "YoridoriModifiers.MToonToLilToon.Editor",
         "nadena.dev.ndmf",
-        "lilToon.Editor"
+        "lilToon.Editor",
+        "YoridoriModifiers.HairLookKit.Runtime"
     ],
-    "includePlatforms": ["Editor"],
+    "includePlatforms": [
+        "Editor"
+    ],
     "autoReferenced": true
 }

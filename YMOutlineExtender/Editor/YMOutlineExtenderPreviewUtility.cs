@@ -28,6 +28,8 @@ namespace YoridoriModifiers.OutlineExtender
         private static readonly HashSet<Object> SourceAssets = new();
         private static readonly HashSet<Object> TransientAssets = new();
         private static OutlineSdfCache _previewSdfCache = new();
+        private static OutlineBakeCache _previewBakeCache = new();
+        private static OutlineBoundaryPaddingCache _previewPaddingCache = new();
 
         static YMOutlineExtenderPreviewUtility()
         {
@@ -113,7 +115,7 @@ namespace YoridoriModifiers.OutlineExtender
                 var component = SelectPreferredComponent(_previewAvatar);
                 if (component != null && component.enabled && component.enableOutlineExtender)
                 {
-                    OutlineExtenderProcessor.ApplyPreview(component, _previewSdfCache);
+                    OutlineExtenderProcessor.ApplyPreview(component, _previewSdfCache, _previewBakeCache, _previewPaddingCache);
                     component.isPreviewing = true;
                 }
                 CollectReferencedAssets(_previewAvatar, TransientAssets, true);
@@ -142,7 +144,8 @@ namespace YoridoriModifiers.OutlineExtender
             Visibility.Restore();
             if (_previewRoot != null) Object.DestroyImmediate(_previewRoot);
             var cachedTextures = preserveSdfCache
-                ? new HashSet<Texture2D>(_previewSdfCache.Textures.Where(texture => texture != null))
+                ? new HashSet<Texture2D>(_previewSdfCache.Textures.Concat(_previewBakeCache.Textures).Concat(_previewPaddingCache.Textures)
+                    .Where(texture => texture != null))
                 : null;
             foreach (var asset in TransientAssets.Where(asset => asset != null))
                 if (!(asset is Texture2D texture) || cachedTextures == null || !cachedTextures.Contains(texture))
@@ -152,6 +155,10 @@ namespace YoridoriModifiers.OutlineExtender
             {
                 _previewSdfCache.DestroyTextures();
                 _previewSdfCache = new OutlineSdfCache();
+                _previewBakeCache.DestroyTextures();
+                _previewBakeCache = new OutlineBakeCache();
+                _previewPaddingCache.DestroyTextures();
+                _previewPaddingCache = new OutlineBoundaryPaddingCache();
             }
             SourceAssets.Clear();
             if (_sourceAvatarRoot != null) SyncPreviewFlag(_sourceAvatarRoot, false);
@@ -212,9 +219,7 @@ namespace YoridoriModifiers.OutlineExtender
                     foreach (var property in material.GetTexturePropertyNames())
                         AddAsset(material.GetTexture(property), result, transientOnly);
                 }
-                if (renderer is SkinnedMeshRenderer skinned) AddAsset(skinned.sharedMesh, result, transientOnly);
-                var filter = renderer.GetComponent<MeshFilter>();
-                if (filter != null) AddAsset(filter.sharedMesh, result, transientOnly);
+                AddAsset(OutlineRendererUtility.GetMesh(renderer), result, transientOnly);
             }
         }
 

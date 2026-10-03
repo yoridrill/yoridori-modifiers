@@ -74,7 +74,7 @@ namespace YoridoriModifiers.OutlineExtender
                 throw new OperationCanceledException("Outline Extender baking cancelled.");
         }
 
-        private static Color[] ReadPixels(Texture2D source, int mip, int width, int height)
+        internal static Color[] ReadPixels(Texture2D source, int mip, int width, int height)
         {
             if (source.isReadable)
             {

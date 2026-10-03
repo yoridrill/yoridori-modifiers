@@ -20,8 +20,8 @@ Unity 2022.3 / VCC / ALCOM で作成した VRChat Avatars Project での利用�
   - 髪マテリアルの結合、眉ステンシル、FakeShadow、輪郭線補正を非破壊で適用します。
   - `YM MToon to lilToon` と同じアバターにある場合は、変換後の lilToon マテリアルに対して処理できます。
 - `YM Outline Extender`
-  - Cutoutによる裾・袖口などの内部境界に、最終lilToonの輪郭線設定に合わせた線を追加します。
-  - Main TextureのRGBを引き継ぎ、Alphaをビルド時にSDFへ置き換えます。
+  - Cutoutによる裾・袖口などの内部境界に、最終Materialの輪郭線設定に合わせた線を追加します。
+  - MaterialごとにlilToon Custom Shader方式、または元Shaderを維持するBuild-time Bake方式を選択して併用できます。
 - `YM Eye Freeze`
   - Exメニューに Eye Look と Blink を一時停止し、目ボーンを初期状態で固定するモードを追加します。
   - カメラ目線化やターゲット追従は行いません。

@@ -9,7 +9,7 @@ Shader "Hidden/yoridrill/lilToonOutlineExtender/CutoutOutline"
     }
     HLSLINCLUDE
         #define LIL_RENDER 1
-        #define LIL_CUSTOM_PROPERTIES float _YMSdfRange; float _YMWidthMultiplier;
+        #define LIL_CUSTOM_PROPERTIES float _YMSdfRange; float _YMWidthMultiplier; float4 _MainTex_TexelSize;
     ENDHLSL
     lilSubShaderTags {"RenderType" = "TransparentCutout" "Queue" = "AlphaTest"}
     lilSubShaderInsert "OutlineExtender.lilblock"

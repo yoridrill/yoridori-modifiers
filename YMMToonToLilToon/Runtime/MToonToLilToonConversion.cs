@@ -856,18 +856,44 @@ namespace YoridoriModifiers.MToonToLilToon
         {
             if (source == null) return false;
             var hasOutlineMode = ResolveOutlineWidthMode(source) > 0;
-            var hasOutlineWidth = source.HasProperty("_OutlineWidth")
-                && source.GetFloat("_OutlineWidth") > 0f;
+            var hasOutlineWidth = source.HasProperty("_OutlineWidthFactor")
+                ? source.GetFloat("_OutlineWidthFactor") > 0f
+                : source.HasProperty("_OutlineWidth") && source.GetFloat("_OutlineWidth") > 0f;
             return hasOutlineMode && hasOutlineWidth;
         }
 
-        private static int ResolveOutlineWidthMode(Material source)
+        public static int ResolveOutlineWidthMode(Material source)
         {
             if (source == null) return 0;
             if (source.IsKeywordEnabled("MTOON_OUTLINE_WIDTH_WORLD")) return 1;
             if (source.IsKeywordEnabled("MTOON_OUTLINE_WIDTH_SCREEN")) return 2;
             if (source.HasProperty("_OutlineWidthMode")) return Mathf.RoundToInt(source.GetFloat("_OutlineWidthMode"));
             return 0;
+        }
+
+        public static float ResolveOutlineWidthInMeters(Material source)
+        {
+            if (!HasOutline(source)) return 0f;
+            // Some MToon10 implementations expose the glTF semantic name directly,
+            // while UniVRM stores outlineWidthFactor in `_OutlineWidth`. Both values
+            // are already meters and must not receive the legacy centimeter scale.
+            if (source.HasProperty("_OutlineWidthFactor"))
+                return Mathf.Max(0f, source.GetFloat("_OutlineWidthFactor"));
+            if (IsMToon10(source) && source.HasProperty("_OutlineWidth"))
+                return Mathf.Max(0f, source.GetFloat("_OutlineWidth"));
+            // Legacy MToon uses the same numeric scale that the converter copies to
+            // lilToon's _OutlineWidth, whose world-width unit is centimeters.
+            return source.HasProperty("_OutlineWidth")
+                ? Mathf.Max(0f, source.GetFloat("_OutlineWidth")) * 0.01f
+                : 0f;
+        }
+
+        public static Color ResolveOutlineColor(Material source)
+        {
+            if (source == null) return Color.black;
+            if (source.HasProperty("_OutlineColorFactor")) return source.GetColor("_OutlineColorFactor");
+            if (source.HasProperty("_OutlineColor")) return source.GetColor("_OutlineColor");
+            return Color.black;
         }
 
         private static int ResolveLegacyOutlineColorMode(Material source)

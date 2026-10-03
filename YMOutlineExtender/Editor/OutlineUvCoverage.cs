@@ -29,22 +29,22 @@ namespace YoridoriModifiers.OutlineExtender
             Signature = signature;
         }
 
-        internal static OutlineUvCoverage Build(GameObject root, Material material, Texture texture)
+        internal static OutlineUvCoverage Build(GameObject root, Material material, Texture texture,
+            string textureProperty = "_MainTex")
         {
             if (root == null || material == null || texture == null) return null;
-            var scale = material.GetTextureScale("_MainTex");
-            var offset = material.GetTextureOffset("_MainTex");
+            var scale = material.GetTextureScale(textureProperty);
+            var offset = material.GetTextureOffset(textureProperty);
             var result = new List<Triangle>();
             ulong hashA = 1469598103934665603UL;
             ulong hashB = 1099511628211UL;
             MixInt((int)texture.wrapModeU); MixInt((int)texture.wrapModeV);
+            MixInt(textureProperty != null ? textureProperty.GetHashCode() : 0);
             MixFloat(scale.x); MixFloat(scale.y); MixFloat(offset.x); MixFloat(offset.y);
 
             foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
             {
-                var mesh = renderer is SkinnedMeshRenderer skinned
-                    ? skinned.sharedMesh
-                    : renderer.GetComponent<MeshFilter>()?.sharedMesh;
+                var mesh = OutlineRendererUtility.GetMesh(renderer);
                 if (mesh == null) continue;
                 var materials = renderer.sharedMaterials;
                 var uv = new List<Vector2>();

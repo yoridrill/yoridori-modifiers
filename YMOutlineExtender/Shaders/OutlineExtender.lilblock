@@ -5,29 +5,32 @@
     // clip that contour unchanged. Shifting it by the old cutoff expands the hull
     // into a dark band, especially on materials whose original cutoff was not 0.5.
 #else
-    // Convert the Euclidean SDF to screen distance from its direct derivatives.
-    // This stays stable when perspective makes the UV Jacobian nearly singular.
-    // No additional texture sample is needed.
+    // Convert SDF texels to an isotropic screen distance using the Main UV
+    // footprint. The SDF value itself is never differentiated: this avoids the
+    // periodic width spikes seen on stretched, curved UV surfaces.
     // Capture the distance from the ONE existing main texture sample, before alpha AA.
     #define OVERRIDE_MAIN \
         LIL_GET_MAIN_TEX \
         float ymSignedDistance = (fd.col.a - 0.5) * (2.0 * _YMSdfRange); \
-        /* The screen derivative of a signed distance already contains texture \
-           density, tiling and perspective foreshortening. Using it directly avoids \
-           inverting the UV Jacobian, which becomes singular on edge-on triangles. */ \
-        float2 ymScreenGradient = float2(ddx(ymSignedDistance), ddy(ymSignedDistance)); \
-        float ymGradientLength = length(ymScreenGradient); \
+        float2 ymDxTexel = fd.ddxMain * _MainTex_TexelSize.zw; \
+        float2 ymDyTexel = fd.ddyMain * _MainTex_TexelSize.zw; \
+        /* Singular values of the screen-to-Main-texel Jacobian. Clamp its \
+           anisotropy explicitly, then use the geometric mean as an isotropic \
+           footprint. The SDF gradient is intentionally not involved. */ \
+        float ymSingularTrace = dot(ymDxTexel, ymDxTexel) + dot(ymDyTexel, ymDyTexel); \
+        float ymJacobianDet = ymDxTexel.x * ymDyTexel.y - ymDxTexel.y * ymDyTexel.x; \
+        float ymSingularDiscriminant = sqrt(max(ymSingularTrace * ymSingularTrace - 4.0 * ymJacobianDet * ymJacobianDet, 0.0)); \
+        float ymSMax = sqrt(max(0.5 * (ymSingularTrace + ymSingularDiscriminant), 1e-8)); \
+        float ymSMin = sqrt(max(0.5 * (ymSingularTrace - ymSingularDiscriminant), 0.0)); \
+        /* Empirically selected after comparing 2 / 4 / 8 on stretched VRoid UVs. */ \
+        ymSMin = max(ymSMin, ymSMax / 8.0); \
+        float ymTexelsPerPixel = sqrt(max(ymSMax * ymSMin, 1e-8)); \
         float ymObjectScale = length(float3(LIL_MATRIX_M._m01, LIL_MATRIX_M._m11, LIL_MATRIX_M._m21)); \
         float ymClipW = abs(lilTransformWStoCS(fd.positionWS).w); \
         float ymWorldWidth = max(0.0, _OutlineWidth) * max(0.0, _YMWidthMultiplier) * 0.01 * ymObjectScale \
             * lerp(1.0, saturate(length(lilHeadDirection(fd.positionWS))), _OutlineFixWidth); \
         float ymPixels = ymWorldWidth * abs(LIL_MATRIX_P._m11) * _ScreenParams.y * 0.5 / max(ymClipW, 1e-5); \
-        float ymScreenDistance = ymSignedDistance / max(ymGradientLength, 1e-4); \
-        /* At a UV/triangle discontinuity the derivative quad may span unrelated \
-           texels. The value is no longer a local distance derivative there and \
-           can make smoothstep cover pixels far away from a cutout contour. A true \
-           screen distance has an fwidth near one pixel, so cap only those invalid \
-           discontinuities while retaining sub-pixel AA at the real contour. */ \
+        float ymScreenDistance = ymSignedDistance / max(ymTexelsPerPixel, 1e-4); \
         float ymAA = clamp(fwidth(ymScreenDistance), 1e-4, 1.0); \
         float ymBody = smoothstep(-ymAA, ymAA, ymScreenDistance); \
         float ymOuter = smoothstep(-ymPixels - ymAA, -ymPixels + ymAA, ymScreenDistance); \
@@ -52,11 +55,7 @@
         LIL_APPLY_MAIN_TONECORRECTION \
         fd.col.rgb *= _Color.rgb;
 
-    // Same object-space width and distance correction as lilGetOutlineWidth, without
-    // its width-mask lookup. Project that physical width to the current camera.
-    // Dividing SDF by its direct screen gradient cancels texture size, tiling,
-    // UV density and perspective without an unstable inverse UV Jacobian.
-    // No fixed screen-pixel width or fixed SDF band is used.
+    // Color handling remains identical to the normal lilToon outline basis.
     #define BEFORE_DISTANCE_FADE \
         float3 ymOutlineColor = _OutlineColor.rgb; \
         YM_OUTLINE_LIGHTING \

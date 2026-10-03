@@ -16,6 +16,19 @@ namespace YoridoriModifiers.Core.Editor
         // ObjectRegistry tracks a single original. Preserve all inputs of material merges
         // for downstream modifiers, without keeping assets alive between builds/previews.
         private static readonly ConditionalWeakTable<Object, HashSet<ObjectReference>> Sources = new();
+        private static readonly ConditionalWeakTable<Object, HashSet<ObjectReference>> ControlSources = new();
+
+        // Some intentional merges expose only their representative's controls.
+        // Keep this separate from provenance, which still contains every input.
+        public static void RegisterControlSource(Object replacement, Object representative)
+        {
+            ControlSources.Remove(replacement);
+            ControlSources.Add(replacement, GetControlSourceReferences(representative));
+        }
+
+        public static HashSet<ObjectReference> GetControlSourceReferences(Object obj) => obj != null
+            && ControlSources.TryGetValue(obj, out var sources)
+                ? new HashSet<ObjectReference>(sources) : GetSourceReferences(obj);
 
         public static HashSet<ObjectReference> GetSourceReferences(Object obj)
         {
@@ -57,6 +70,9 @@ namespace YoridoriModifiers.Core.Editor
             ObjectRegistry.RegisterReplacedObject(original, replacement);
             Sources.Remove(replacement);
             Sources.Add(replacement, GetSourceReferences(original));
+            ControlSources.Remove(replacement);
+            if (ControlSources.TryGetValue(original, out var controls))
+                ControlSources.Add(replacement, new HashSet<ObjectReference>(controls));
             return replacement;
         }
     }

@@ -82,6 +82,7 @@ namespace YoridoriModifiers.MToonToLilToon
         private static readonly string[] ConvertibleShaderNamePrefixes =
         {
             "VRM10/MToon10",
+            "VRM10/Universal Render Pipeline/MToon10",
             "VRM/MToon",
         };
 
@@ -296,6 +297,7 @@ namespace YoridoriModifiers.MToonToLilToon
                 ApplyRimState(source, converted);
                 ApplyUvAnimationMapping(source, converted);
                 ApplyFeatureEnables(source, converted);
+                RegisterUnmappedProperties(source, report);
                 ApplyFallback(converted, renderType, hasOutline, useToonStandardFallback);
                 ApplyRenderQueue(source, converted, renderType);
                 ApplyTransparentMode(converted, renderType);
@@ -358,6 +360,13 @@ namespace YoridoriModifiers.MToonToLilToon
             }
 
             var hidden = Shader.Find(hiddenShaderName);
+            if (hidden == null && renderType == RenderType.Transparent && transparentWithZWrite)
+            {
+                // Standard lilToon uses the transparent shader with _ZWrite enabled,
+                // rather than separate TransparentZWrite shader variants.
+                hiddenShaderName = hasOutline ? "Hidden/lilToonTransparentOutline" : "Hidden/lilToonTransparent";
+                hidden = Shader.Find(hiddenShaderName);
+            }
             if (hidden == null && hasOutline)
             {
                 var nonOutlineName = hiddenShaderName
@@ -678,6 +687,24 @@ namespace YoridoriModifiers.MToonToLilToon
             SetIfExists(destination, "_UseNormalMap", useNormalMap ? 1f : 0f);
         }
 
+        private static void RegisterUnmappedProperties(Material source, ConversionReport report)
+        {
+            if (report == null) return;
+            // These lighting models have no faithful scalar equivalent in lilToon.
+            foreach (var property in new[] { "_GiEqualization", "_IndirectLightIntensity", "_LightColorAttenuation", "_ReceiveShadowRate" })
+            {
+                if (source.HasProperty(property)) report.RegisterUnsupported(property);
+            }
+            if (HasTexture(source, true, "_ReceiveShadowTexture"))
+                report.RegisterUnsupported("_ReceiveShadowTexture");
+            if (HasTexture(source, true, "_ShadingGradeTexture")
+                && HasNonDefaultFloat(source, new[] { "_ShadingGradeRate" }, 1f))
+                report.RegisterUnsupported("_ShadingGradeRate");
+            if (HasOutline(source) && ResolveOutlineWidthMode(source) == 2
+                && source.HasProperty("_OutlineScaledMaxDistance"))
+                report.RegisterUnsupported("_OutlineScaledMaxDistance");
+        }
+
         private static void ApplyOutlineState(Material source, Material destination)
         {
             if (source == null || destination == null) return;
@@ -932,6 +959,8 @@ namespace YoridoriModifiers.MToonToLilToon
             CopyFloat(source, destination, new[] { "_M_AlphaToMask", "_AlphaToMask" }, new[] { "_AlphaToMask" }, report);
 
             CopyTextureScaleOffset(source, destination, new[] { "_BaseMap", "_MainTex" }, new[] { "_MainTex", "_BaseMap" });
+            // MToon samples emission with the transformed main UV; lilToon starts from UV0.
+            CopyTextureScaleOffset(source, destination, new[] { "_BaseMap", "_MainTex" }, "_EmissionMap");
 
             var renderType = RenderTypeResolver.ResolveFromMaterial(source);
             ApplyAlphaMode(source, destination, renderType);
@@ -1118,6 +1147,7 @@ namespace YoridoriModifiers.MToonToLilToon
             if (emissionMap == null) return;
 
             SetTextureIfExists(destination, "_EmissionBlendMask", emissionMap);
+            CopyTextureScaleOffset(destination, destination, "_EmissionMap", "_EmissionBlendMask");
             SetTextureIfExists(destination, "_EmissionMap", null);
         }
 
@@ -1274,6 +1304,8 @@ namespace YoridoriModifiers.MToonToLilToon
                     ? source.GetFloat("_Cutoff")
                     : 0.5f;
 
+            // Opaque/Cutout keep the source threshold. MToon BLEND ignores it.
+            SetIfExists(destination, "_Cutoff", cutoff);
             switch (renderType)
             {
                 case RenderType.Opaque:
@@ -1287,7 +1319,15 @@ namespace YoridoriModifiers.MToonToLilToon
                     destination.EnableKeyword("_ALPHATEST_ON");
                     destination.DisableKeyword("_ALPHABLEND_ON");
                     destination.DisableKeyword("_ALPHAPREMULTIPLY_ON");
-                    SetIfExists(destination, "_Cutoff", cutoff);
+                    if (cutoff >= 1f)
+                    {
+                        // MToon clips its antialiased alpha against cutoff again:
+                        // raw alpha 1 at cutoff 1 becomes 0.5, then is discarded.
+                        // lilToon retains that 0.5. Preserve the fully hidden state
+                        // for both the surface and outline, including texture edges.
+                        ZeroAlphaIfExists(destination, "_Color");
+                        ZeroAlphaIfExists(destination, "_OutlineColor");
+                    }
                     SetIfExists(destination, "_UseClipping", 1f);
                     SetIfExists(destination, "_AlphaMode", 1f);
                     break;
@@ -1295,11 +1335,21 @@ namespace YoridoriModifiers.MToonToLilToon
                     destination.DisableKeyword("_ALPHATEST_ON");
                     destination.EnableKeyword("_ALPHABLEND_ON");
                     destination.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                    // MToon does not use _Cutoff for BLEND. Keep only a near-zero
+                    // discard threshold so ordinary translucent pixels survive.
                     SetIfExists(destination, "_Cutoff", 0.001f);
                     SetIfExists(destination, "_UseClipping", 0f);
                     SetIfExists(destination, "_AlphaMode", 2f);
                     break;
             }
+        }
+
+        private static void ZeroAlphaIfExists(Material material, string propertyName)
+        {
+            if (!material.HasProperty(propertyName)) return;
+            var color = material.GetColor(propertyName);
+            color.a = 0f;
+            material.SetColor(propertyName, color);
         }
 
         private static void ApplyBlendSetup(Material source, Material destination, RenderType renderType)

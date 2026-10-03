@@ -716,7 +716,8 @@ namespace YoridoriModifiers.MToonToLilToon
                 return;
             }
 
-            InvertRgb(readable);
+            var scale = source.HasProperty("_ShadingShiftTexScale") ? source.GetFloat("_ShadingShiftTexScale") : 1f;
+            BakeShadingShiftMask(readable, scale);
             destination.SetTexture("_ShadowStrengthMask", PrepareGeneratedAtlas(readable, "_ShadowStrengthMask", texture as Texture2D));
             destination.SetTextureScale("_ShadowStrengthMask", Vector2.one);
             destination.SetTextureOffset("_ShadowStrengthMask", Vector2.zero);
@@ -732,14 +733,16 @@ namespace YoridoriModifiers.MToonToLilToon
                 || shaderName == "VRM10/Universal Render Pipeline/MToon10";
         }
 
-        private static void InvertRgb(Texture2D texture)
+        private static void BakeShadingShiftMask(Texture2D texture, float scale)
         {
             if (texture == null) return;
             var pixels = texture.GetPixels();
             for (var i = 0; i < pixels.Length; i++)
             {
                 var p = pixels[i];
-                pixels[i] = new Color(1f - p.r, 1f - p.g, 1f - p.b, p.a);
+                // MToon uses only R, while lilToon consumes the RGB strength mask.
+                var strength = 1f - Mathf.Clamp01(p.r * scale);
+                pixels[i] = new Color(strength, strength, strength, p.a);
             }
             texture.SetPixels(pixels);
             texture.Apply(false, false);

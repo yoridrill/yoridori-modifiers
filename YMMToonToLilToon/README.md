@@ -101,6 +101,21 @@ MToon 1.0 / 互換 MToon マテリアルを lilToon へ変換するための Uni
   - Verbose Log
   - Reset Preview（保存済み Preview 復旧）
 
+## パラメータ移行の範囲
+
+- Opaque / Cutout の Cutoff は元の値を保持します。ただし Cutout の Cutoff が1以上の場合、MToonでの完全非表示を維持するため、変換後のメイン色と輪郭線色のアルファを0に補正します。lilToonはCutoff＝1でアルファ1の面を半透明相当として残すため、同じ数値のコピーだけでは非表示を維持できません。手動で再表示する場合はCutoffに加えて両色のアルファも戻してください。
+- Transparent の Cutoff は `0.001` に固定します。MToon の BLEND は元の Cutoff を描画に使わず、lilToon はその値以下のアルファを切り抜くため、元の値のコピーは半透明の見た目を壊します。
+- Built-in と URP の MToon 1.0、および旧 MToon を検出します。出力はプロジェクトに導入された lilToon を使用します。
+- TransparentWithZWrite は半透明シェーダーと ZWrite 有効の組み合わせを保持します。専用 ZWrite シェーダーが存在しない lilToon でも Opaque へのフォールバックを避けます。
+- メイン色・影色・法線と強度・発光色・MatCap・リム・輪郭線の色／幅／マスク・Cull・ZWrite を移行します。影境界／ぼかし、リム形状、輪郭線幅は lilToon 向けに換算します。MatCap の合成モードと照明設定は lilToon のデフォルトを使用します。
+- メイン UV の Tiling / Offset はメイン・輪郭線・発光へ引き継ぎます。MToon は各通常テクスチャを共通のメイン UV でサンプリングするため、個別テクスチャの未使用 Tiling / Offset は移行対象ではありません。
+- MToon 1.0 の Shading Shift テクスチャは R チャンネルと強度を使って反転した影強度マスクへ変換します。ただし MToon の影境界シフトと lilToon の影強度は異なるため、見た目は近似です。
+- `_GiEqualization`、旧 MToon の `_IndirectLightIntensity` / `_LightColorAttenuation` / `_ReceiveShadowRate` / `_ReceiveShadowTexture`、画面幅輪郭線の `_OutlineScaledMaxDistance` は完全な対応がなく、Unsupported Properties に記録します。旧 Shading Grade テクスチャも近似で、1以外の `_ShadingGradeRate` は未対応として記録します。
+- 影テクスチャがメインテクスチャと同じ場合は、影が過度に濃くなることを避けるため転送しません。既存処理では 8×8 テクスチャをダミーとして除外するため、そのサイズの実テクスチャにも制限があります。
+- UV スクロール／回転は換算します。マスク付き UV アニメーションはメインカラー 2nd での近似で、MToon のピクセルごとの速度制御を完全には再現しません。
+- Render Queue は上記「Render Queue」のポリシーに従って再構成します。旧 MToon の `_OutlineCullMode` は Front 固定、輪郭線テクスチャは色モードに関係なくメインテクスチャを使う既存の見た目調整を維持します。デバッグモード・MToon のバージョン値・Editor 専用設定は移行しません。
+- 有効な「lilToon 固有機能の一括設定」および顔影調整は移行値より優先します。2nd 影の不透明度は従来どおり 0 に固定します。
+
 ## 注意
 
 - lilToon は UV スクロールのマスクに対応していないため、メインカラー 2nd での疑似再現となります

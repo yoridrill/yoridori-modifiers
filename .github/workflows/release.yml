@@ -65,6 +65,8 @@ jobs:
             YMMToonToLilToon.meta
             YMMeshTrimmer
             YMMeshTrimmer.meta
+            YMOutlineExtender
+            YMOutlineExtender.meta
             YMVRoidSkirtRefine
             YMVRoidSkirtRefine.meta
           )
@@ -101,6 +103,8 @@ jobs:
           grep -Fxq "YMHairLookKit/" dist/zip-list.txt
           grep -Fxq "YMMToonToLilToon/" dist/zip-list.txt
           grep -Fxq "YMMeshTrimmer/" dist/zip-list.txt
+          grep -Fxq "YMOutlineExtender/" dist/zip-list.txt
+          grep -Fxq "YMOutlineExtender.meta" dist/zip-list.txt
           grep -Fxq "YMVRoidSkirtRefine/" dist/zip-list.txt
           ! grep -q ".DS_Store" dist/zip-list.txt
 
